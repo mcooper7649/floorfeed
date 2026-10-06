@@ -1,9 +1,9 @@
-import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import { Link } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { CollIcon } from '@/components/coll-icon';
 import { C } from '@/constants/brand';
 import { api, type FeedItem, type Take } from '@/lib/api';
 import { pct, shortAddr, signedSol, sol, timeAgo } from '@/lib/format';
@@ -67,11 +67,7 @@ export function TradeCard({ item }: { item: FeedItem }) {
 
       <Link href={{ pathname: '/collection/[symbol]', params: { symbol: item.collection.symbol } }} asChild>
       <Pressable style={s.trade}>
-        {item.image ? (
-          <Image source={item.image} style={s.img} contentFit="cover" transition={150} />
-        ) : (
-          <View style={[s.img, { backgroundColor: C.cardHi }]} />
-        )}
+        <CollIcon name={item.collection.name} uri={item.image} size={72} radius={12} />
         <View style={{ flex: 1, gap: 2 }}>
           <Text style={s.bought}>bought <Text style={s.coll}>{item.collection.name}</Text></Text>
           <Text style={s.price}>{sol(item.price, 3)}</Text>
@@ -117,7 +113,6 @@ const s = StyleSheet.create({
   following: { backgroundColor: 'transparent', borderWidth: 1, borderColor: C.border },
   followTxt: { color: C.bg, fontWeight: '700', fontSize: 13 },
   trade: { flexDirection: 'row', gap: 12, alignItems: 'center' },
-  img: { width: 72, height: 72, borderRadius: 12 },
   bought: { color: C.dim, fontSize: 13 },
   chev: { color: C.dim, fontSize: 26, fontWeight: '300', paddingHorizontal: 4 },
   coll: { color: C.text, fontWeight: '600' },

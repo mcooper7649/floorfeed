@@ -57,14 +57,6 @@ export function walletStats(wallet: string): WalletStats {
   };
 }
 
-export function leaderboard(limit = 50): WalletStats[] {
-  const rows = db
-    .prepare(`SELECT wallet FROM (${flipsSql})
-              GROUP BY wallet ORDER BY SUM(pnl) DESC LIMIT ?`)
-    .all(limit) as { wallet: string }[];
-  return rows.map((r) => walletStats(r.wallet));
-}
-
 // Best flippers of a single collection, scored on that collection's flips only.
 export function collectionFlippers(collection: string, limit = 5) {
   return db

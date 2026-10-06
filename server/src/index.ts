@@ -6,7 +6,8 @@ import { collectionDetail, listCollections } from "./collections.ts";
 import { collectionName, config } from "./config.ts";
 import { db } from "./db.ts";
 import { startIngest } from "./ingest.ts";
-import { leaderboard, walletStats } from "./pnl.ts";
+import { walletStats } from "./pnl.ts";
+import { traderLeaderboard, traderProfile } from "./traders.ts";
 
 type TradeRow = {
   signature: string;
@@ -105,9 +106,20 @@ app.get("/takes/:signature", async (req, reply) => {
 });
 
 app.get("/leaderboard", async (req) => {
-  const { limit } = z.object({ limit: z.coerce.number().int().min(1).max(100).default(50) })
-    .parse(req.query);
-  return leaderboard(limit);
+  const q = z.object({
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+    window: z.enum(["7", "30", "all"]).default("30"),
+    sort: z.enum(["pnl", "winrate", "roi", "flips"]).default("pnl"),
+    minFlips: z.coerce.number().int().min(1).max(50).default(3),
+    hideMM: z.enum(["0", "1"]).default("1"),
+  }).parse(req.query);
+  return traderLeaderboard({
+    windowDays: q.window === "all" ? null : Number(q.window),
+    sort: q.sort,
+    minFlips: q.minFlips,
+    hideMarketMakers: q.hideMM === "1",
+    limit: q.limit,
+  });
 });
 
 app.get("/wallets/:address", async (req) => {
@@ -117,6 +129,7 @@ app.get("/wallets/:address", async (req) => {
   ).all(address, address) as TradeRow[];
   return {
     stats: walletStats(address),
+    profile: traderProfile(address),
     trades: trades.map((t) => ({
       signature: t.signature,
       side: t.buyer === address ? "buy" : "sell",

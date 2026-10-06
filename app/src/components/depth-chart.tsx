@@ -37,7 +37,7 @@ export function DepthChart({ listings, floor }: { listings: { mint: string; pric
       <View style={s.readout}>
         {sel ? (
           <Text style={s.readCtx}>
-            <Text style={s.readVal}>{sel.price.toFixed(3)} ◎</Text>  #{active! + 1} cheapest · +{prem[active!].toFixed(1)}% over floor
+            <Text style={s.readVal}>{sel.price.toFixed(3)} SOL</Text>  #{active! + 1} cheapest · +{prem[active!].toFixed(1)}% over floor
           </Text>
         ) : (
           <Text style={s.readCtx}>Tap a column for the listing price</Text>

@@ -48,7 +48,14 @@ export function PriceChart({ sales, daily, floor, rangeDays, asOf, dimmed }: Pro
     const pts = daily.map((d) => ({ ...d, cx: x(d.day + DAY / 2), cy: y(d.median) }));
     const path = pts.map((p, i) => `${i ? 'L' : 'M'}${p.cx.toFixed(1)},${p.cy.toFixed(1)}`).join('');
     const xTicks = [t0, t0 + (t1 - t0) / 2, t1 - DAY].map((t) => ({ t, x: x(t + DAY / 2) }));
-    return { x, y, ticks, pts, path, xTicks, shown, hidden: sales.length - shown.length, yMax };
+    // The end label normally sits just above the last point. If that would
+    // overlap the floor label, push it away from the floor line instead.
+    const end = pts[pts.length - 1];
+    let endLabelY = end.cy - 8;
+    if (floor != null && Math.abs(endLabelY - (y(floor) + 4)) < 14) {
+      endLabelY = end.cy <= y(floor) ? end.cy - 18 : end.cy + 20;
+    }
+    return { x, y, ticks, pts, path, xTicks, shown, hidden: sales.length - shown.length, yMax, endLabelY };
   }, [width, sales, daily, floor, rangeDays, asOf]);
 
   const pick = (e: GestureResponderEvent) => {
@@ -74,7 +81,7 @@ export function PriceChart({ sales, daily, floor, rangeDays, asOf, dimmed }: Pro
       <View style={s.readout}>
         {sel ? (
           <>
-            <Text style={s.readVal}>{fmtSol(sel.median)} ◎</Text>
+            <Text style={s.readVal}>{fmtSol(sel.median)} SOL</Text>
             <Text style={s.readCtx}>
               median · {fmtDay(sel.day)} · {sel.count} sale{sel.count === 1 ? '' : 's'} · range {fmtSol(sel.low)}–{fmtSol(sel.high)}
             </Text>
@@ -82,7 +89,7 @@ export function PriceChart({ sales, daily, floor, rangeDays, asOf, dimmed }: Pro
         ) : (
           <Text style={s.readCtx}>
             {Platform.OS === 'web' ? 'Hover' : 'Touch'} the chart for daily detail
-            {geo?.hidden ? ` · ${geo.hidden} sale${geo.hidden === 1 ? '' : 's'} above ${fmtSol(geo.yMax)} ◎ not plotted` : ''}
+            {geo?.hidden ? ` · ${geo.hidden} sale${geo.hidden === 1 ? '' : 's'} above ${fmtSol(geo.yMax)} SOL not plotted` : ''}
           </Text>
         )}
       </View>
@@ -133,7 +140,8 @@ export function PriceChart({ sales, daily, floor, rangeDays, asOf, dimmed }: Pro
               <G>
                 <Circle cx={last.cx} cy={last.cy} r={6} fill={C.card} />
                 <Circle cx={last.cx} cy={last.cy} r={4} fill={C.accent} />
-                <SvgText fontFamily={FONT} x={last.cx + 9} y={last.cy - 8} fill={C.text} fontSize={12} fontWeight="700">{fmtSol(last.median)}</SvgText>
+                <SvgText fontFamily={FONT} x={last.cx + 9} y={geo.endLabelY}
+                  fill={C.text} fontSize={12} fontWeight="700">{fmtSol(last.median)}</SvgText>
               </G>
             )}
 

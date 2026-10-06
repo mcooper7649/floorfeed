@@ -1,4 +1,3 @@
-import { Image } from 'expo-image';
 import { Link, Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -70,8 +69,8 @@ export default function CollectionScreen() {
         <View style={s.tiles}>
           <Tile label="Floor" value={st.floor != null ? sol(st.floor) : '—'} />
           <Tile label="Listed" value={st.listed != null ? st.listed.toLocaleString() : '—'} />
-          <Tile label="Sales 24h" value={String(st.sales24h)} sub={st.volume24h ? `${fmtSol(st.volume24h)} ◎` : undefined} />
-          <Tile label="Volume 7d" value={st.volume7d != null ? `${Math.round(st.volume7d).toLocaleString()} ◎` : '—'} />
+          <Tile label="Sales 24h" value={String(st.sales24h)} sub={st.volume24h ? `${fmtSol(st.volume24h)} SOL` : undefined} />
+          <Tile label="Volume 7d" value={st.volume7d != null ? `${Math.round(st.volume7d).toLocaleString()} SOL` : '—'} />
         </View>
 
         <Pressable onPress={buyFloor} style={({ pressed }) => [s.cta, pressed && { opacity: 0.85 }]}>
@@ -151,7 +150,7 @@ export default function CollectionScreen() {
           {data.recentSales.map((r) => (
             <Link key={r.signature} href={{ pathname: '/wallet/[address]', params: { address: r.buyer } }} asChild>
               <Pressable style={s.listRow}>
-                {r.image ? <Image source={r.image} style={s.thumb} /> : <View style={s.thumb} />}
+                <CollIcon name={data.name} uri={r.image} size={36} radius={8} />
                 <View style={{ flex: 1 }}>
                   <Text style={s.rowTitle}>{shortAddr(r.buyer)}</Text>
                   <Text style={s.rowMeta}>{timeAgo(r.t)} ago</Text>
@@ -200,7 +199,6 @@ const s = StyleSheet.create({
   num: { flex: 1, textAlign: 'right' },
   listRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 },
   rank: { color: C.dim, width: 18, fontWeight: '800' },
-  thumb: { width: 36, height: 36, borderRadius: 8, backgroundColor: C.cardHi },
   rowTitle: { color: C.text, fontWeight: '700' },
   rowMeta: { color: C.dim, fontSize: 12 },
   rowVal: { color: C.text, fontWeight: '800', fontVariant: ['tabular-nums'] },

@@ -1,12 +1,12 @@
-import { Image } from 'expo-image';
 import { Link, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { CollIcon } from '@/components/coll-icon';
 import { Empty } from '@/components/screen';
 import { C } from '@/constants/brand';
 import { api, type WalletDetail } from '@/lib/api';
-import { shortAddr, signedSol, sol, timeAgo } from '@/lib/format';
+import { holdTime, pct, shortAddr, signedSol, sol, timeAgo } from '@/lib/format';
 import { useSession } from '@/lib/session';
 
 export default function WalletScreen() {
@@ -20,6 +20,7 @@ export default function WalletScreen() {
   if (error) return <Empty text={error} />;
   if (!data) return <ActivityIndicator style={{ marginTop: 40 }} color={C.accent} />;
   const st = data.stats;
+  const pf = data.profile;
   const isFollowing = following.has(address);
 
   return (
@@ -36,7 +37,25 @@ export default function WalletScreen() {
               <Stat label="Win rate" value={st.winRate == null ? '—' : `${Math.round(st.winRate * 100)}%`} />
               <Stat label="Flips" value={String(st.flips)} />
               <Stat label="Holding" value={String(st.openPositions)} />
+              <Stat label="ROI" value={pf.roiPct == null ? '—' : pct(pf.roiPct)}
+                color={pf.roiPct == null ? undefined : pf.roiPct >= 0 ? C.up : C.down} />
+              <Stat label="Avg / flip" value={pf.avgPnlSol == null ? '—' : signedSol(pf.avgPnlSol)} />
+              <Stat label="Avg hold" value={pf.avgHoldHours == null ? '—' : holdTime(pf.avgHoldHours)} />
+              <Stat label="Via AMM pools" value={`${Math.round(pf.poolShare * 100)}%`} />
             </View>
+            {pf.collections.length > 0 && (
+              <View style={s.chips}>
+                {pf.collections.map((c) => (
+                  <View key={c.symbol} style={s.chip}>
+                    <Text style={s.chipTxt}>{c.name}</Text>
+                    <Text style={s.chipMeta}>×{c.flips} · <Text style={{ color: c.pnlSol >= 0 ? C.up : C.down }}>{signedSol(c.pnlSol, 1)}</Text></Text>
+                  </View>
+                ))}
+              </View>
+            )}
+            {pf.likelyMarketMaker && (
+              <Text style={s.note}>{"Most of this wallet's trades run through AMM pools, so it's likely a market maker rather than a discretionary trader."}</Text>
+            )}
             <Pressable onPress={() => toggleFollow(address)} style={[s.follow, isFollowing && s.following]}>
               <Text style={[s.followTxt, isFollowing && { color: C.text }]}>
                 {isFollowing ? 'Following · get alerts on buys' : 'Follow this wallet'}
@@ -49,7 +68,7 @@ export default function WalletScreen() {
         renderItem={({ item: t }) => (
           <Link href={{ pathname: '/collection/[symbol]', params: { symbol: t.symbol } }} asChild>
           <Pressable style={s.row}>
-            {t.image ? <Image source={t.image} style={s.img} /> : <View style={s.img} />}
+            <CollIcon name={t.collection} uri={t.image} size={40} radius={8} />
             <View style={{ flex: 1 }}>
               <Text style={s.name}>{t.collection}</Text>
               <Text style={s.meta}>{timeAgo(t.blockTime)} ago</Text>
@@ -79,9 +98,13 @@ const s = StyleSheet.create({
   follow: { backgroundColor: C.accent, borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
   following: { backgroundColor: C.card, borderWidth: 1, borderColor: C.border },
   followTxt: { color: C.accentInk, fontWeight: '800' },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, borderWidth: 1, borderColor: C.border, paddingHorizontal: 10, paddingVertical: 4 },
+  chipTxt: { color: C.text, fontWeight: '600', fontSize: 12.5 },
+  chipMeta: { color: C.dim, fontSize: 12 },
+  note: { color: C.dim, fontSize: 12.5, lineHeight: 18 },
   section: { color: C.dim, fontSize: 11, fontWeight: '800', letterSpacing: 1, marginTop: 8 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
-  img: { width: 40, height: 40, borderRadius: 8, backgroundColor: C.cardHi },
   name: { color: C.text, fontWeight: '600' },
   meta: { color: C.dim, fontSize: 12 },
   side: { fontWeight: '800', fontSize: 11, letterSpacing: 0.5 },

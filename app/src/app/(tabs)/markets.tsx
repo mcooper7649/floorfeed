@@ -43,7 +43,7 @@ export default function MarketsScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={s.name} numberOfLines={1}>{item.name}</Text>
                 <Text style={s.meta}>
-                  {item.sales24h} sales 24h · {item.volume7d != null ? `${Math.round(item.volume7d).toLocaleString()} ◎ 7d` : '—'}
+                  {item.sales24h} sales 24h · {item.volume7d != null ? `${Math.round(item.volume7d).toLocaleString()} SOL 7d` : '—'}
                 </Text>
               </View>
               <Sparkline values={item.spark.map((p) => p.median)} />

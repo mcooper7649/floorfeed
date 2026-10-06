@@ -6,6 +6,9 @@
 
 A mobile social-trading app modeled on [FOMO](https://fomo.family) (the memecoin app) and rebuilt for NFTs.
 
+### [▶ Live demo: floorfeed.mycodedojo.com](https://floorfeed.mycodedojo.com)
+<sub>Paper trading on live Solana mainnet data. Best viewed at phone width.</sub>
+
 ![Expo SDK 57](https://img.shields.io/badge/Expo_SDK-57-000020?logo=expo&logoColor=white)
 ![React Native 0.86](https://img.shields.io/badge/React_Native-0.86-61DAFB?logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)
@@ -16,9 +19,14 @@ A mobile social-trading app modeled on [FOMO](https://fomo.family) (the memecoin
 <table>
   <tr>
     <td align="center"><img src="docs/screenshots/feed.png" width="200" alt="Feed screen"/><br/><sub><b>Feed</b>: live buys + AI takes</sub></td>
-    <td align="center"><img src="docs/screenshots/leaders.png" width="200" alt="Leaderboard screen"/><br/><sub><b>Leaders</b>: ranked by realized P&L</sub></td>
+    <td align="center"><img src="docs/screenshots/leaders.png" width="200" alt="Leaderboard screen"/><br/><sub><b>Leaders</b>: ROI, win rate, hold time, streaks</sub></td>
     <td align="center"><img src="docs/screenshots/wallet.png" width="200" alt="Wallet profile screen"/><br/><sub><b>Wallet</b>: track record + activity</sub></td>
     <td align="center"><img src="docs/screenshots/portfolio.png" width="200" alt="Portfolio screen"/><br/><sub><b>Portfolio</b>: paper copy-trades</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/markets.png" width="200" alt="Markets screen"/><br/><sub><b>Markets</b>: floors + 14-day trend</sub></td>
+    <td align="center" colspan="2"><img src="docs/screenshots/collection.png" width="200" alt="Collection page"/><br/><sub><b>Collection</b>: price history, floor depth, top flippers</sub></td>
+    <td></td>
   </tr>
 </table>
 
@@ -38,7 +46,7 @@ NFT trading has the same public data, but no product like this exists for it. Fl
 |---|---|
 | 📱 **Mobile** | Expo Router with **native tabs** (UITabBar on iOS, Material on Android), a pushed profile screen, haptics, pull-to-refresh, infinite scroll, and a web build from the same codebase |
 | 🧠 **AI** | Each trade gets a one-line context note from **Claude**, with server-side refusal fallback and per-trade caching. The same code falls back to a **local Ollama model**, so the demo costs nothing to run |
-| ⛓️ **Crypto** | Live Solana NFT sales and floor prices, **on-chain wallet P&L** computed by pairing buys and sells of the same mint, a flipper leaderboard, and a Helius webhook endpoint for wallet-level tracking |
+| ⛓️ **Crypto** | Live Solana NFT sales and floor prices, **on-chain wallet P&L** computed by pairing buys and sells of the same mint, a flipper leaderboard, **collection analytics** (30-day sale history, floor depth from live listings, per-collection flippers), and a Helius webhook endpoint for wallet-level tracking |
 
 ## How NFTs change the design
 
@@ -73,9 +81,19 @@ flowchart LR
 
 **P&L engine.** For every sale, SQL finds the seller's most recent earlier buy of the *same mint*. Each matched pair is a flip, and its profit is `sell − buy`. A wallet's win rate, realized P&L and open positions come from those pairs. Open positions are marked against the current floor.
 
+**Leaderboard.** Each wallet's flips are aggregated into a trader profile: realized P&L, **ROI** (profit ÷ cost of the NFTs it flipped), win rate, average profit per flip, **average hold time**, best and worst flip, current win streak, its top collections with per-collection P&L, last activity, and a cumulative P&L sparkline. Leaders can be filtered to 7 days, 30 days or all time, sorted by P&L, win rate, ROI or flip count, and need at least 3 flips to rank, so one lucky trade doesn't top the board. Wallets with ≥60% of their trades through AMM pools (Magic Eden MMM, Tensor) are flagged as **likely market makers** and hidden by default. They trade constantly and would otherwise crowd out the discretionary traders worth following.
+
 **AI takes.** Takes are generated on demand the first time a card is shown, then cached per trade signature. Concurrent requests for the same trade share one in-flight call. The model gets compact JSON (price, floor, 24h average, 7-day volume and the buyer's record) and a system prompt that asks for one specific, numeric sentence and **forbids buy/sell advice**. Claude runs at `low` effort with `fallbacks: "default"`, so a refused request is retried server-side on another model instead of failing. Example:
 
 > *Bought at 8.24 SOL, 2.7% under the 8.46 floor; buyer is 15-for-15 on tracked flips (+8.77 SOL realized), with Mad Lads doing 869 SOL weekly volume.*
+
+**Collection analytics.** On first start the server backfills about 30 days of sales per collection, as far back as the public API pages. Magic Eden has no public floor history, so the server records its own floor snapshots from then on. The collection page shows:
+
+- **Sale-price chart:** every sale as a gray dot, with the **daily median** as the one highlighted line and the current floor as a labeled reference. A crosshair snaps to the nearest day, and a table view is one tap away. Rare-trait sales can sit at 2–3× floor and flatten the chart, so the y-axis covers the 2nd–92nd percentile. Sales outside it are **counted in the caption, not pinned to the edge** where they'd look like real prices.
+- **Floor depth:** the 20 cheapest listings as columns of "% above floor", which answers "how thin is this floor?" A floor with three listings at 8 SOL and the next at 10 is about to move.
+- **Top flippers** scored on that collection's flips only, plus recent sales, all linked to wallet profiles.
+
+The chart colors were checked with a palette validator for contrast and colorblind separation on the dark surface.
 
 **Paper trading.** "Copy · buy floor" opens a position at the live floor price and records which trade inspired it. "Sell" closes it at the estimated bid. No wallet and no SOL are involved.
 
@@ -97,15 +115,16 @@ floorfeed/
 │       ├── app/                # Expo Router routes
 │       │   ├── (tabs)/         #   Feed · Leaders · Portfolio (native tabs)
 │       │   └── wallet/[address].tsx
-│       ├── components/         # TradeCard, Screen, tab bars (native + web)
+│       ├── components/         # TradeCard, PriceChart, DepthChart, Sparkline, tab bars (native + web)
 │       ├── constants/brand.ts  # Design tokens (dark-only palette)
 │       └── lib/                # API client, session (device id → Privy later), formatters
 ├── server/
 │   └── src/
 │       ├── index.ts            # REST routes
-│       ├── ingest.ts           # Magic Eden polling
+│       ├── ingest.ts           # Magic Eden polling, history backfill, floor snapshots
 │       ├── magiceden.ts        # Rate-limited API client
 │       ├── pnl.ts              # Flip matching, wallet stats, leaderboard
+│       ├── collections.ts      # Markets list, collection detail, daily aggregation
 │       ├── ai.ts               # Claude / Ollama takes with caching
 │       ├── db.ts               # SQLite schema
 │       └── config.ts           # Env + tracked collections
@@ -160,18 +179,37 @@ The feed fills within about 30 seconds of the server starting. Takes appear as c
 |---|---|---|
 | `GET` | `/feed?following=<userId>&before=<unix>` | Recent buys with the buyer's stats and a cached take; `following` filters to followed wallets |
 | `GET` | `/takes/:signature` | Generate or return the AI take for a trade |
-| `GET` | `/leaderboard` | Wallets ranked by realized flip P&L |
+| `GET` | `/leaderboard?window=7\|30\|all&sort=pnl\|winrate\|roi\|flips&hideMM=1` | Trader profiles (ROI, win rate, hold time, streak, top collections, P&L series) plus a summary |
+| `GET` | `/collections` | Tracked collections with floor, 24h sales, 7-day volume and a 14-day median sparkline |
+| `GET` | `/collections/:symbol?range=7\|30` | Stats, sales, daily aggregates, floor snapshots, cheapest listings, top flippers |
 | `GET` | `/wallets/:address` | A wallet's stats and its 50 most recent trades |
-| `GET` | `/collections` | Tracked collections with floor, listings and volume |
 | `GET` | `/follows/:userId` | Wallets a user follows |
 | `POST` · `DELETE` | `/follows` | Follow or unfollow a wallet |
 | `POST` | `/paper/buy` · `/paper/sell` | Open or close a paper position |
 | `GET` | `/paper/:userId` | Positions with realized and unrealized P&L |
 | `POST` | `/webhooks/helius` | Ingest `NFT_SALE` events from Helius |
 
+## Self-hosting
+
+The live demo runs on a home server behind Caddy:
+
+```
+https://floorfeed.example.com
+  ├── /api/*  → API container (prefix stripped)    docker build -t floorfeed-api server
+  └── /*      → static web build (any file server)  EXPO_PUBLIC_API_URL=/api npx expo export -p web
+```
+
+```bash
+docker run -d --name floorfeed-api --restart unless-stopped \
+  -p 8030:8030 --env-file server/.env -v floorfeed-data:/data floorfeed-api
+```
+
+The web export is a single-page app (`web.output: "single"`), so the file server needs to fall back to `index.html` for deep links like `/collection/mad_lads`. SQLite lives in the `floorfeed-data` volume.
+
 ## Roadmap
 
 - [x] **Phase 1:** live feed, leaderboard, wallet profiles, AI takes, paper copy-trading
+- [x] **Phase 1.5:** Markets tab, collection pages with price history, floor depth and per-collection flippers; live demo deployed
 - [ ] **Phase 2:** [Privy](https://privy.io) login with embedded Solana wallets (no seed phrase), Helius webhooks per followed wallet, push notifications when a followed wallet buys
 - [ ] **Phase 3:** real trades, devnet first: Tensor / Magic Eden buy-floor and instant-sell-to-bid transactions, signed by the user
 - [ ] **Phase 4:** a feed of new mints, "explain my portfolio" chat, EAS builds for TestFlight and Play
@@ -180,8 +218,11 @@ The feed fills within about 30 seconds of the server starting. Takes appear as c
 
 - **P&L only covers what has been ingested.** History before the server started isn't included, so early win rates are based on small samples.
 - **P&L is before fees.** Marketplace fees and creator royalties aren't deducted yet.
-- **Some top wallets aren't people.** Marketplace AMM pools (Magic Eden MMM, Tensor) buy and sell constantly and can rank high. Filtering known pool programs is planned.
+- **Market-maker detection is a heuristic.** Wallets with ≥60% of their trades through AMM pools are labeled *likely* market makers, and the threshold can misclassify active traders who happen to use pools.
 - **Paper sells use floor − 3%,** not a real bid, until Tensor bid data is wired in.
+- **Floor vs. listings:** Magic Eden's floor stat can sit slightly below its cheapest regular listing. Depth is measured against the reported floor.
+- **Floor history starts at first run.** Sale history is backfilled, but floor snapshots only build up from when the server started.
+- **Some NFT image hosts block cross-origin embedding** in the web build, so those collections show a letter placeholder (native apps are unaffected).
 - **AI takes are context, not advice.** The prompt rules out buy/sell recommendations, and every number the model sees comes from the API, not from the model's memory.
 
 ---

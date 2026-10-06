@@ -42,6 +42,7 @@ export type PaperPosition = {
 
 export type WalletDetail = {
   stats: WalletStats;
+  profile: TraderProfile;
   trades: {
     signature: string;
     side: 'buy' | 'sell';
@@ -51,6 +52,37 @@ export type WalletDetail = {
     price: number;
     blockTime: number;
   }[];
+};
+
+export type TraderProfile = {
+  wallet: string;
+  flips: number;
+  wins: number;
+  winRate: number | null;
+  realizedSol: number;
+  roiPct: number | null;
+  avgPnlSol: number | null;
+  avgHoldHours: number | null;
+  bestFlip: { collection: string; symbol: string; pnlSol: number } | null;
+  worstFlipSol: number | null;
+  streak: number;
+  collections: { symbol: string; name: string; flips: number; pnlSol: number }[];
+  trades: number;
+  poolShare: number;
+  likelyMarketMaker: boolean;
+  lastActive: number | null;
+  openPositions: number;
+  unrealizedSol: number;
+  series: number[];
+};
+
+export type LeaderWindow = '7' | '30' | 'all';
+export type LeaderSort = 'pnl' | 'winrate' | 'roi' | 'flips';
+
+export type Leaderboard = {
+  windowDays: number | null;
+  summary: { wallets: number; flips: number; realizedSol: number; profitableWallets: number; hiddenMarketMakers: number };
+  rows: TraderProfile[];
 };
 
 export type CollectionSummary = {
@@ -116,7 +148,8 @@ export const api = {
   take: (signature: string) => req<Take | null>(`/takes/${signature}`),
   collections: () => req<CollectionSummary[]>('/collections'),
   collection: (symbol: string, range: number) => req<CollectionDetail>(`/collections/${symbol}?range=${range}`),
-  leaderboard: () => req<WalletStats[]>('/leaderboard?limit=50'),
+  leaderboard: (p: { window: LeaderWindow; sort: LeaderSort; hideMM: boolean }) =>
+    req<Leaderboard>(`/leaderboard?limit=50&window=${p.window}&sort=${p.sort}&hideMM=${p.hideMM ? 1 : 0}`),
   wallet: (address: string) => req<WalletDetail>(`/wallets/${address}`),
   follows: (userId: string) => req<string[]>(`/follows/${userId}`),
   follow: (userId: string, wallet: string) => send('POST', '/follows', { userId, wallet }),
