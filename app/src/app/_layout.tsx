@@ -22,6 +22,7 @@ export default function RootLayout() {
         <Stack screenOptions={{ contentStyle: { backgroundColor: C.bg } }}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="wallet/[address]" options={{ title: 'Wallet', headerBackTitle: 'Back' }} />
+          <Stack.Screen name="collection/[symbol]" options={{ title: 'Collection', headerBackTitle: 'Back' }} />
         </Stack>
       </SessionProvider>
     </ThemeProvider>

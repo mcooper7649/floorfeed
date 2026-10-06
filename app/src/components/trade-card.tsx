@@ -65,7 +65,8 @@ export function TradeCard({ item }: { item: FeedItem }) {
         </Pressable>
       </View>
 
-      <View style={s.trade}>
+      <Link href={{ pathname: '/collection/[symbol]', params: { symbol: item.collection.symbol } }} asChild>
+      <Pressable style={s.trade}>
         {item.image ? (
           <Image source={item.image} style={s.img} contentFit="cover" transition={150} />
         ) : (
@@ -81,7 +82,9 @@ export function TradeCard({ item }: { item: FeedItem }) {
             {timeAgo(item.blockTime)} ago
           </Text>
         </View>
-      </View>
+        <Text style={s.chev}>›</Text>
+      </Pressable>
+      </Link>
 
       {takeState !== 'none' && (
         <View style={s.take}>
@@ -116,6 +119,7 @@ const s = StyleSheet.create({
   trade: { flexDirection: 'row', gap: 12, alignItems: 'center' },
   img: { width: 72, height: 72, borderRadius: 12 },
   bought: { color: C.dim, fontSize: 13 },
+  chev: { color: C.dim, fontSize: 26, fontWeight: '300', paddingHorizontal: 4 },
   coll: { color: C.text, fontWeight: '600' },
   price: { color: C.text, fontSize: 22, fontWeight: '800', fontVariant: ['tabular-nums'] },
   take: { backgroundColor: '#A78BFA14', borderRadius: 12, padding: 10, gap: 4, borderLeftWidth: 3, borderLeftColor: C.ai },

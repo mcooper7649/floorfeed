@@ -30,6 +30,14 @@ CREATE TABLE IF NOT EXISTS collections (
   updated_at  INTEGER
 );
 
+CREATE TABLE IF NOT EXISTS collection_snapshots (
+  symbol TEXT NOT NULL,
+  ts     INTEGER NOT NULL,          -- unix ms
+  floor  REAL,
+  listed INTEGER,
+  PRIMARY KEY (symbol, ts)
+);
+
 CREATE TABLE IF NOT EXISTS takes (
   signature  TEXT PRIMARY KEY,
   text       TEXT NOT NULL,
@@ -43,6 +51,8 @@ CREATE TABLE IF NOT EXISTS follows (
   PRIMARY KEY (user_id, wallet)
 );
 
+CREATE INDEX IF NOT EXISTS trades_collection_time ON trades(collection, block_time);
+
 CREATE TABLE IF NOT EXISTS paper_positions (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id     TEXT NOT NULL,
@@ -54,3 +64,8 @@ CREATE TABLE IF NOT EXISTS paper_positions (
   closed_at   INTEGER
 );
 `);
+
+// Columns added after the first release; ALTER is a no-op error if present.
+for (const col of ["image TEXT", "description TEXT"]) {
+  try { db.exec(`ALTER TABLE collections ADD COLUMN ${col}`); } catch {}
+}

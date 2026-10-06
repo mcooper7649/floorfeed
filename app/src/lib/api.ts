@@ -46,10 +46,49 @@ export type WalletDetail = {
     signature: string;
     side: 'buy' | 'sell';
     collection: string;
+    symbol: string;
     image: string | null;
     price: number;
     blockTime: number;
   }[];
+};
+
+export type CollectionSummary = {
+  symbol: string;
+  name: string;
+  image: string | null;
+  floor: number | null;
+  listed: number | null;
+  volume7d: number | null;
+  sales24h: number;
+  volume24h: number;
+  spark: { day: number; median: number }[];
+};
+
+export type DailyPoint = { day: number; low: number; median: number; high: number; count: number };
+
+export type CollectionDetail = {
+  symbol: string;
+  name: string;
+  image: string | null;
+  description: string | null;
+  stats: {
+    floor: number | null;
+    listed: number | null;
+    avg24h: number | null;
+    volume7d: number | null;
+    sales24h: number;
+    volume24h: number;
+  };
+  rangeDays: number;
+  asOf: number; // server time (unix s) the window ends at
+  historyStartsAt: number | null;
+  sales: { signature: string; price: number; t: number }[];
+  daily: DailyPoint[];
+  floorHistory: { ts: number; floor: number | null }[];
+  listings: { mint: string; price: number }[];
+  topFlippers: { wallet: string; flips: number; wins: number; realizedSol: number }[];
+  recentSales: { signature: string; mint: string; buyer: string; price: number; t: number; image: string | null }[];
 };
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
@@ -75,6 +114,8 @@ export const api = {
     return req<FeedItem[]>(`/feed?${q}`);
   },
   take: (signature: string) => req<Take | null>(`/takes/${signature}`),
+  collections: () => req<CollectionSummary[]>('/collections'),
+  collection: (symbol: string, range: number) => req<CollectionDetail>(`/collections/${symbol}?range=${range}`),
   leaderboard: () => req<WalletStats[]>('/leaderboard?limit=50'),
   wallet: (address: string) => req<WalletDetail>(`/wallets/${address}`),
   follows: (userId: string) => req<string[]>(`/follows/${userId}`),

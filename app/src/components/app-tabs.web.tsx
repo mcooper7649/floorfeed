@@ -12,6 +12,7 @@ export default function AppTabs() {
       <TabList asChild>
         <PillBar>
           <TabTrigger name="index" href="/" asChild><TabButton>Feed</TabButton></TabTrigger>
+          <TabTrigger name="markets" href="/markets" asChild><TabButton>Markets</TabButton></TabTrigger>
           <TabTrigger name="leaderboard" href="/leaderboard" asChild><TabButton>Leaders</TabButton></TabTrigger>
           <TabTrigger name="portfolio" href="/portfolio" asChild><TabButton>Portfolio</TabButton></TabTrigger>
         </PillBar>

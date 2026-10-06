@@ -64,3 +64,18 @@ export function leaderboard(limit = 50): WalletStats[] {
     .all(limit) as { wallet: string }[];
   return rows.map((r) => walletStats(r.wallet));
 }
+
+// Best flippers of a single collection, scored on that collection's flips only.
+export function collectionFlippers(collection: string, limit = 5) {
+  return db
+    .prepare(`SELECT s.seller AS wallet, COUNT(*) AS flips, SUM(s.price > b.price) AS wins,
+                     SUM(s.price - b.price) AS realizedSol
+              FROM trades s
+              JOIN trades b ON b.signature = (
+                SELECT signature FROM trades
+                WHERE mint = s.mint AND buyer = s.seller AND block_time < s.block_time
+                ORDER BY block_time DESC LIMIT 1)
+              WHERE s.collection = ?
+              GROUP BY s.seller ORDER BY realizedSol DESC LIMIT ?`)
+    .all(collection, limit) as { wallet: string; flips: number; wins: number; realizedSol: number }[];
+}

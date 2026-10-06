@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Link, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -47,7 +47,8 @@ export default function WalletScreen() {
         }
         ListEmptyComponent={<Empty text="No tracked trades." />}
         renderItem={({ item: t }) => (
-          <View style={s.row}>
+          <Link href={{ pathname: '/collection/[symbol]', params: { symbol: t.symbol } }} asChild>
+          <Pressable style={s.row}>
             {t.image ? <Image source={t.image} style={s.img} /> : <View style={s.img} />}
             <View style={{ flex: 1 }}>
               <Text style={s.name}>{t.collection}</Text>
@@ -55,7 +56,8 @@ export default function WalletScreen() {
             </View>
             <Text style={[s.side, { color: t.side === 'buy' ? C.up : C.down }]}>{t.side.toUpperCase()}</Text>
             <Text style={s.price}>{sol(t.price, 3)}</Text>
-          </View>
+          </Pressable>
+          </Link>
         )}
       />
     </>

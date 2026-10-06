@@ -1,3 +1,4 @@
+import { Link } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
@@ -44,13 +45,15 @@ export default function PortfolioScreen() {
         ListEmptyComponent={<Empty text="Tap “Copy · buy floor” on a trade in the feed to open a paper position." />}
         renderItem={({ item: p }) => (
           <View style={s.row}>
-            <View style={{ flex: 1 }}>
+            <Link href={{ pathname: '/collection/[symbol]', params: { symbol: p.collection.symbol } }} asChild>
+            <Pressable style={{ flex: 1 }}>
               <Text style={s.name}>{p.collection.name}</Text>
               <Text style={s.meta}>
                 in {sol(p.entryPrice)}{p.exitPrice != null ? ` · out ${sol(p.exitPrice)}` : ''}
                 {p.copiedFrom ? ' · copied' : ''}
               </Text>
-            </View>
+            </Pressable>
+            </Link>
             <Text style={[s.pnl, { color: p.pnlSol >= 0 ? C.up : C.down }]}>{signedSol(p.pnlSol, 3)}</Text>
             {p.open ? (
               <Pressable onPress={() => sell(p.id)} style={s.sell}><Text style={s.sellTxt}>Sell</Text></Pressable>

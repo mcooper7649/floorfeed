@@ -2,6 +2,7 @@ import cors from "@fastify/cors";
 import Fastify from "fastify";
 import { z } from "zod";
 import { cachedTake, getTake } from "./ai.ts";
+import { collectionDetail, listCollections } from "./collections.ts";
 import { collectionName, config } from "./config.ts";
 import { db } from "./db.ts";
 import { startIngest } from "./ingest.ts";
@@ -33,10 +34,15 @@ app.get("/health", async () => ({
   trades: (db.prepare("SELECT COUNT(*) n FROM trades").get() as { n: number }).n,
 }));
 
-app.get("/collections", async () =>
-  db.prepare("SELECT * FROM collections ORDER BY volume_7d DESC").all()
-    .map((c: any) => ({ ...c, name: collectionName(c.symbol) })),
-);
+app.get("/collections", async () => listCollections());
+
+app.get("/collections/:symbol", async (req, reply) => {
+  const { symbol } = req.params as { symbol: string };
+  const { range } = z.object({ range: z.coerce.number().int().refine((d) => [1, 7, 30].includes(d)).default(7) })
+    .parse(req.query);
+  const detail = await collectionDetail(symbol, range);
+  return detail ?? reply.code(404).send({ error: "unknown collection" });
+});
 
 // Feed of recent buys. `following=<userId>` limits it to wallets that user follows;
 // `before=<unix>` paginates.
@@ -115,6 +121,7 @@ app.get("/wallets/:address", async (req) => {
       signature: t.signature,
       side: t.buyer === address ? "buy" : "sell",
       collection: collectionName(t.collection),
+      symbol: t.collection,
       image: t.image,
       price: t.price,
       blockTime: t.block_time,

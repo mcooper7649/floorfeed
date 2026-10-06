@@ -18,12 +18,14 @@ function throttled<T>(fn: () => Promise<T>): Promise<T> {
   return run;
 }
 
-async function get<T>(path: string, attempt = 0): Promise<T> {
+// 429s retry with a short backoff; `retries: 0` for nice-to-have calls so they
+// never hold up the shared queue.
+async function get<T>(path: string, { retries = 2 } = {}, attempt = 0): Promise<T> {
   return throttled(async () => {
     const res = await fetch(BASE + path, { signal: AbortSignal.timeout(15_000) });
-    if (res.status === 429 && attempt < 3) {
-      await new Promise((r) => setTimeout(r, 20_000 * (attempt + 1)));
-      return get<T>(path, attempt + 1);
+    if (res.status === 429 && attempt < retries) {
+      await new Promise((r) => setTimeout(r, 10_000 * (attempt + 1)));
+      return get<T>(path, { retries }, attempt + 1);
     }
     if (!res.ok) throw new Error(`ME ${res.status} ${path}`);
     return (await res.json()) as T;
@@ -66,9 +68,23 @@ export async function getStats(symbol: string): Promise<CollectionStats> {
   };
 }
 
-export async function getSales(symbol: string, limit = 100): Promise<MeActivity[]> {
+export async function getSales(symbol: string, limit = 100, offset = 0): Promise<MeActivity[]> {
   const rows = await get<MeActivity[]>(
-    `/collections/${symbol}/activities?offset=0&limit=${limit}&type=buyNow`,
+    `/collections/${symbol}/activities?offset=${offset}&limit=${limit}&type=buyNow`,
   );
   return rows.filter((r) => r.buyer && r.seller && r.price > 0);
+}
+
+export async function getCollectionMeta(symbol: string) {
+  const m = await get<{ name?: string; image?: string; description?: string }>(`/collections/${symbol}`, { retries: 0 });
+  return { image: m.image ?? null, description: m.description ?? null };
+}
+
+// Cheapest active listings, ascending by price (SOL).
+export async function getListings(symbol: string, limit = 20): Promise<{ mint: string; price: number }[]> {
+  const rows = await get<{ tokenMint: string; price: number }[]>(
+    `/collections/${symbol}/listings?offset=0&limit=${limit}`, { retries: 0 },
+  );
+  return rows.filter((r) => r.price > 0).map((r) => ({ mint: r.tokenMint, price: r.price }))
+    .sort((a, b) => a.price - b.price);
 }
