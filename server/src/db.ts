@@ -66,6 +66,12 @@ CREATE TABLE IF NOT EXISTS paper_positions (
 `);
 
 // Columns added after the first release; ALTER is a no-op error if present.
-for (const col of ["image TEXT", "description TEXT"]) {
+for (const col of [
+  "image TEXT", "description TEXT",
+  // multi-chain (OpenSea-sourced collections)
+  "chain TEXT NOT NULL DEFAULT 'solana'", "currency TEXT NOT NULL DEFAULT 'SOL'",
+  "owners INTEGER", "supply INTEGER", "volume_24h_ext REAL", "sales_24h_ext INTEGER",
+  "volume_30d REAL", "external_url TEXT",
+]) {
   try { db.exec(`ALTER TABLE collections ADD COLUMN ${col}`); } catch {}
 }

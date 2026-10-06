@@ -1,15 +1,17 @@
 import { Link, Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { ChainBadge } from '@/components/chain-badge';
 import { CollIcon } from '@/components/coll-icon';
+import { FloorLine } from '@/components/floor-line';
 import { DepthChart } from '@/components/depth-chart';
 import { PriceChart } from '@/components/price-chart';
 import { Empty } from '@/components/screen';
 import { C } from '@/constants/brand';
 import { MaxContentWidth } from '@/constants/theme';
 import { api, type CollectionDetail } from '@/lib/api';
-import { shortAddr, signedSol, sol, timeAgo } from '@/lib/format';
+import { amt, shortAddr, signedSol, sol, timeAgo, usdCompact } from '@/lib/format';
 import { fmtDay, fmtSol } from '@/lib/scale';
 import { useSession } from '@/lib/session';
 
@@ -50,6 +52,8 @@ export default function CollectionScreen() {
   if (!data) return <ActivityIndicator style={{ marginTop: 40 }} color={C.accent} />;
 
   const st = data.stats;
+  const cur = data.currency;
+  const evm = data.chain !== 'solana';
   const within5 = st.floor ? data.listings.filter((l) => l.price <= st.floor! * 1.05).length : 0;
   const rangeStart = data.asOf - data.rangeDays * 86_400;
   const partial = data.historyStartsAt != null && data.historyStartsAt > rangeStart + 86_400;
@@ -67,16 +71,47 @@ export default function CollectionScreen() {
         </View>
 
         <View style={s.tiles}>
-          <Tile label="Floor" value={st.floor != null ? sol(st.floor) : '—'} />
-          <Tile label="Listed" value={st.listed != null ? st.listed.toLocaleString() : '—'} />
-          <Tile label="Sales 24h" value={String(st.sales24h)} sub={st.volume24h ? `${fmtSol(st.volume24h)} SOL` : undefined} />
-          <Tile label="Volume 7d" value={st.volume7d != null ? `${Math.round(st.volume7d).toLocaleString()} SOL` : '—'} />
+          <Tile label="Floor" value={st.floor != null ? amt(st.floor, cur) : '—'}
+            sub={st.floorUsd != null ? usdCompact(st.floorUsd) : undefined} />
+          {evm
+            ? <Tile label="Owners" value={st.owners != null ? st.owners.toLocaleString() : '—'}
+                sub={st.supply ? `${st.supply.toLocaleString()} supply` : undefined} />
+            : <Tile label="Listed" value={st.listed != null ? st.listed.toLocaleString() : '—'} />}
+          <Tile label="Sales 24h" value={st.sales24h.toLocaleString()} sub={st.volume24h ? amt(st.volume24h, cur) : undefined} />
+          <Tile label="Volume 7d" value={st.volume7d != null ? amt(st.volume7d, cur, st.volume7d >= 10 ? 0 : 2) : '—'}
+            sub={evm && st.volume30d != null ? `${amt(st.volume30d, cur, 0)} 30d` : undefined} />
         </View>
 
-        <Pressable onPress={buyFloor} style={({ pressed }) => [s.cta, pressed && { opacity: 0.85 }]}>
-          <Text style={s.ctaTxt}>{buy ?? `Buy floor${st.floor ? ` · ${sol(st.floor)}` : ''} (paper)`}</Text>
-        </Pressable>
+        <View style={s.badgeRow}>
+          <ChainBadge chain={data.chain} />
+          <Text style={s.desc}>{data.category} · data from {data.source === 'opensea' ? 'OpenSea' : 'Magic Eden'}</Text>
+        </View>
 
+        {evm ? (
+          <Pressable onPress={() => Linking.openURL(data.externalUrl)} style={({ pressed }) => [s.ctaAlt, pressed && { opacity: 0.85 }]}>
+            <Text style={s.ctaAltTxt}>View on OpenSea ↗</Text>
+          </Pressable>
+        ) : (
+          <Pressable onPress={buyFloor} style={({ pressed }) => [s.cta, pressed && { opacity: 0.85 }]}>
+            <Text style={s.ctaTxt}>{buy ?? `Buy floor${st.floor ? ` · ${sol(st.floor)}` : ''} (paper)`}</Text>
+          </Pressable>
+        )}
+
+        {evm ? (
+          <View style={s.card}>
+            <Text style={s.cardTitle}>Floor history</Text>
+            {data.floorHistory.filter((f) => f.floor != null).length >= 2 ? (
+              <FloorLine points={data.floorHistory.filter((f) => f.floor != null) as { ts: number; floor: number }[]} currency={cur} />
+            ) : (
+              <Text style={s.desc}>{"FloorFeed records this collection's floor every 10 minutes; the chart fills in as snapshots build up."}</Text>
+            )}
+            <Text style={s.desc}>
+              Individual sales, listings and flipper stats for {data.chain === 'polygon' ? 'Polygon' : data.chain === 'base' ? 'Base' : 'Ethereum'} collections need an OpenSea API key (free), which is not configured yet.
+            </Text>
+          </View>
+        ) : null}
+
+        {!evm && <>
         {/* One filter row, above everything it scopes */}
         <View style={s.filters}>
           {RANGES.map((r) => (
@@ -160,6 +195,7 @@ export default function CollectionScreen() {
             </Link>
           ))}
         </View>
+        </>}
       </ScrollView>
     </>
   );
@@ -182,6 +218,9 @@ const s = StyleSheet.create({
   tile: { flexGrow: 1, flexBasis: '45%', backgroundColor: C.card, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: C.border },
   tileLabel: { color: C.dim, fontSize: 12, fontWeight: '600' },
   tileVal: { color: C.text, fontSize: 20, fontWeight: '800', marginTop: 2 },
+  badgeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  ctaAlt: { borderRadius: 12, paddingVertical: 13, alignItems: 'center', borderWidth: 1, borderColor: C.border, backgroundColor: C.card },
+  ctaAltTxt: { color: C.text, fontWeight: '800', fontSize: 15 },
   cta: { backgroundColor: C.accent, borderRadius: 12, paddingVertical: 13, alignItems: 'center' },
   ctaTxt: { color: C.accentInk, fontWeight: '800', fontSize: 15 },
   filters: { flexDirection: 'row', gap: 8, alignItems: 'center' },

@@ -3,7 +3,7 @@ import Fastify from "fastify";
 import { z } from "zod";
 import { cachedTake, getTake } from "./ai.ts";
 import { collectionDetail, listCollections } from "./collections.ts";
-import { collectionName, config } from "./config.ts";
+import { collectionName, config, isEvm } from "./config.ts";
 import { db } from "./db.ts";
 import { startIngest } from "./ingest.ts";
 import { walletStats } from "./pnl.ts";
@@ -172,6 +172,8 @@ app.post("/paper/buy", async (req, reply) => {
     collection: z.string(),
     copiedFrom: z.string().optional(),
   }).parse(req.body);
+  // The paper portfolio is denominated in SOL; EVM collections are browse-only for now.
+  if (isEvm(b.collection)) return reply.code(422).send({ error: "Paper trading is Solana-only for now" });
   const floor = floorOf(b.collection);
   if (!floor) return reply.code(409).send({ error: "no floor price yet" });
   const r = db.prepare(

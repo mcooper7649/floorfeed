@@ -4,32 +4,51 @@ const BASE = "https://api-mainnet.magiceden.dev/v2";
 const MIN_GAP_MS = 1500;
 const LAMPORTS = 1e9;
 
+// One request at a time, MIN_GAP_MS apart. Jobs carry a priority so a
+// user opening a collection page jumps ahead of background polling.
+type Job = { run: () => Promise<unknown>; priority: number; resolve: (v: unknown) => void; reject: (e: unknown) => void };
+const queue: Job[] = [];
 let last = 0;
-let chain: Promise<unknown> = Promise.resolve();
+let pumping = false;
 
-function throttled<T>(fn: () => Promise<T>): Promise<T> {
-  const run = chain.then(async () => {
+async function pump() {
+  if (pumping) return;
+  pumping = true;
+  while (queue.length) {
+    let best = 0;
+    for (let i = 1; i < queue.length; i++) if (queue[i].priority > queue[best].priority) best = i;
+    const job = queue.splice(best, 1)[0];
     const wait = last + MIN_GAP_MS - Date.now();
     if (wait > 0) await new Promise((r) => setTimeout(r, wait));
     last = Date.now();
-    return fn();
-  });
-  chain = run.catch(() => {});
-  return run;
+    try { job.resolve(await job.run()); } catch (err) { job.reject(err); }
+  }
+  pumping = false;
 }
 
-// 429s retry with a short backoff; `retries: 0` for nice-to-have calls so they
-// never hold up the shared queue.
-async function get<T>(path: string, { retries = 2 } = {}, attempt = 0): Promise<T> {
-  return throttled(async () => {
-    const res = await fetch(BASE + path, { signal: AbortSignal.timeout(15_000) });
-    if (res.status === 429 && attempt < retries) {
-      await new Promise((r) => setTimeout(r, 10_000 * (attempt + 1)));
-      return get<T>(path, { retries }, attempt + 1);
-    }
-    if (!res.ok) throw new Error(`ME ${res.status} ${path}`);
-    return (await res.json()) as T;
+function schedule<T>(run: () => Promise<T>, priority: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    queue.push({ run, priority, resolve: resolve as (v: unknown) => void, reject });
+    void pump();
   });
+}
+
+export const PRIORITY = { background: 0, prefetch: 5, user: 10 } as const;
+
+// 429s back off inside the job, holding the queue: everyone slows down
+// together instead of hammering the API. `retries: 0` for cosmetic calls.
+async function get<T>(path: string, { retries = 2, priority = 0 } = {}): Promise<T> {
+  return schedule(async () => {
+    for (let attempt = 0; ; attempt++) {
+      const res = await fetch(BASE + path, { signal: AbortSignal.timeout(15_000) });
+      if (res.status === 429 && attempt < retries) {
+        await new Promise((r) => setTimeout(r, 10_000 * (attempt + 1)));
+        continue;
+      }
+      if (!res.ok) throw new Error(`ME ${res.status} ${path}`);
+      return (await res.json()) as T;
+    }
+  }, priority);
 }
 
 export type MeActivity = {
@@ -68,9 +87,9 @@ export async function getStats(symbol: string): Promise<CollectionStats> {
   };
 }
 
-export async function getSales(symbol: string, limit = 100, offset = 0): Promise<MeActivity[]> {
+export async function getSales(symbol: string, limit = 100, offset = 0, priority = 0): Promise<MeActivity[]> {
   const rows = await get<MeActivity[]>(
-    `/collections/${symbol}/activities?offset=${offset}&limit=${limit}&type=buyNow`,
+    `/collections/${symbol}/activities?offset=${offset}&limit=${limit}&type=buyNow`, { priority },
   );
   return rows.filter((r) => r.buyer && r.seller && r.price > 0);
 }
@@ -83,7 +102,7 @@ export async function getCollectionMeta(symbol: string) {
 // Cheapest active listings, ascending by price (SOL).
 export async function getListings(symbol: string, limit = 20): Promise<{ mint: string; price: number }[]> {
   const rows = await get<{ tokenMint: string; price: number }[]>(
-    `/collections/${symbol}/listings?offset=0&limit=${limit}`, { retries: 0 },
+    `/collections/${symbol}/listings?offset=0&limit=${limit}`, { retries: 0, priority: PRIORITY.user },
   );
   return rows.filter((r) => r.price > 0).map((r) => ({ mint: r.tokenMint, price: r.price }))
     .sort((a, b) => a.price - b.price);

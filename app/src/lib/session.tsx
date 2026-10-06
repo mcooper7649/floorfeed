@@ -12,15 +12,20 @@ type Session = {
   // Bumped after paper trades so the Portfolio tab refetches.
   portfolioVersion: number;
   bumpPortfolio: () => void;
+  // Collection watchlist, kept on the device.
+  watchlist: Set<string>;
+  toggleWatch: (symbol: string) => void;
 };
 
 const Ctx = createContext<Session | null>(null);
 const KEY = 'floorfeed.userId';
+const WATCH_KEY = 'floorfeed.watchlist';
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [userId, setUserId] = useState<string | null>(null);
   const [following, setFollowing] = useState<Set<string>>(new Set());
   const [portfolioVersion, setPortfolioVersion] = useState(0);
+  const [watchlist, setWatchlist] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     (async () => {
@@ -30,6 +35,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         await AsyncStorage.setItem(KEY, id);
       }
       setUserId(id);
+      const saved = await AsyncStorage.getItem(WATCH_KEY).catch(() => null);
+      if (saved) setWatchlist(new Set(JSON.parse(saved) as string[]));
       api.follows(id).then((w) => setFollowing(new Set(w))).catch(() => {});
     })();
   }, []);
@@ -51,8 +58,18 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const bumpPortfolio = useCallback(() => setPortfolioVersion((v) => v + 1), []);
 
+  const toggleWatch = useCallback((symbol: string) => {
+    setWatchlist((prev) => {
+      const next = new Set(prev);
+      if (next.has(symbol)) next.delete(symbol);
+      else next.add(symbol);
+      AsyncStorage.setItem(WATCH_KEY, JSON.stringify([...next])).catch(() => {});
+      return next;
+    });
+  }, []);
+
   return (
-    <Ctx value={{ userId, following, toggleFollow, portfolioVersion, bumpPortfolio }}>
+    <Ctx value={{ userId, following, toggleFollow, portfolioVersion, bumpPortfolio, watchlist, toggleWatch }}>
       {children}
     </Ctx>
   );

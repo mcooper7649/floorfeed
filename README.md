@@ -24,7 +24,7 @@ A mobile social-trading app modeled on [FOMO](https://fomo.family) (the memecoin
     <td align="center"><img src="docs/screenshots/portfolio.png" width="200" alt="Portfolio screen"/><br/><sub><b>Portfolio</b>: paper copy-trades</sub></td>
   </tr>
   <tr>
-    <td align="center"><img src="docs/screenshots/markets.png" width="200" alt="Markets screen"/><br/><sub><b>Markets</b>: floors + 14-day trend</sub></td>
+    <td align="center"><img src="docs/screenshots/markets.png" width="200" alt="Markets screen"/><br/><sub><b>Markets</b>: 74 collections, 4 chains, 7 categories</sub></td>
     <td align="center" colspan="2"><img src="docs/screenshots/collection.png" width="200" alt="Collection page"/><br/><sub><b>Collection</b>: price history, floor depth, top flippers</sub></td>
     <td></td>
   </tr>
@@ -46,7 +46,7 @@ NFT trading has the same public data, but no product like this exists for it. Fl
 |---|---|
 | 📱 **Mobile** | Expo Router with **native tabs** (UITabBar on iOS, Material on Android), a pushed profile screen, haptics, pull-to-refresh, infinite scroll, and a web build from the same codebase |
 | 🧠 **AI** | Each trade gets a one-line context note from **Claude**, with server-side refusal fallback and per-trade caching. The same code falls back to a **local Ollama model**, so the demo costs nothing to run |
-| ⛓️ **Crypto** | Live Solana NFT sales and floor prices, **on-chain wallet P&L** computed by pairing buys and sells of the same mint, a flipper leaderboard, **collection analytics** (30-day sale history, floor depth from live listings, per-collection flippers), and a Helius webhook endpoint for wallet-level tracking |
+| ⛓️ **Crypto** | A **multi-chain market**: 74 collections on Solana (Magic Eden), Ethereum, Base and Polygon (OpenSea), ranked in USD and browsable by category (PFP, Art, Gaming, Assets, Domains, Memberships, Utility). Live Solana NFT sales and floor prices, **on-chain wallet P&L** computed by pairing buys and sells of the same mint, a flipper leaderboard, **collection analytics** (30-day sale history, floor depth from live listings, per-collection flippers), and a Helius webhook endpoint for wallet-level tracking |
 
 ## How NFTs change the design
 
@@ -87,6 +87,10 @@ flowchart LR
 
 > *Bought at 8.24 SOL, 2.7% under the 8.46 floor; buyer is 15-for-15 on tracked flips (+8.77 SOL realized), with Mad Lads doing 869 SOL weekly volume.*
 
+**Markets.** Two sources feed one market view. Solana collections come from Magic Eden. Ethereum, Base and Polygon collections come from OpenSea's keyless stats API: floor, owners, supply and 24h/7d/30d volume. Every amount stays in its native currency (SOL, ETH, USDC), and CoinGecko prices convert to USD so collections on different chains can be ranked together. The screen has a 7-day market total, a cross-chain Trending carousel (24h USD volume), a category grid, search, chain and category filters, a device-local ★ watchlist, and sorting by volume, 24h floor change, floor or 24h sales.
+
+To fit inside Magic Eden's strict public rate limit, Solana collections are **tiered**. The top 20 by volume get full sales polling (feed, charts, flippers). The rest get stats only, and their sales load **on demand** when someone opens the collection: the first page right away, then deeper history in the background. All Magic Eden calls go through one **priority queue**, so a user opening a page jumps ahead of background polling.
+
 **Collection analytics.** On first start the server backfills about 30 days of sales per collection, as far back as the public API pages. Magic Eden has no public floor history, so the server records its own floor snapshots from then on. The collection page shows:
 
 - **Sale-price chart:** every sale as a gray dot, with the **daily median** as the one highlighted line and the current floor as a labeled reference. A crosshair snaps to the nearest day, and a table view is one tap away. Rare-trait sales can sit at 2–3× floor and flatten the chart, so the y-axis covers the 2nd–92nd percentile. Sales outside it are **counted in the caption, not pinned to the edge** where they'd look like real prices.
@@ -104,7 +108,7 @@ The chart colors were checked with a palette validator for contrast and colorbli
 | App | Expo SDK 57, React Native 0.86, React 19, Expo Router (native tabs + stack), expo-image, expo-haptics, React Compiler |
 | Server | Node 22, Fastify 5, better-sqlite3 (WAL), Zod validation, tsx |
 | AI | Anthropic TypeScript SDK (`claude-opus-5-5`), Ollama HTTP API as a free fallback |
-| Data | Magic Eden public API (Solana NFT sales + stats), Helius enhanced-transaction webhooks |
+| Data | Magic Eden public API (Solana), OpenSea API v2 (Ethereum, Base, Polygon), CoinGecko (USD prices), Helius enhanced-transaction webhooks |
 
 ## Project structure
 
@@ -166,6 +170,7 @@ The feed fills within about 30 seconds of the server starting. Takes appear as c
 | `OLLAMA_URL` | `http://localhost:11434` | Used when no Anthropic key is set |
 | `OLLAMA_MODEL` | `nimble:latest` | Any instruction-tuned model works |
 | `HELIUS_WEBHOOK_SECRET` | none | If set, required as the `Authorization` header on `/webhooks/helius` |
+| `OPENSEA_API_KEY` | none | Optional. Makes OpenSea stats reliable (keyless access is intermittent) and is the prerequisite for EVM sales/listings |
 
 **`app/.env`**
 
@@ -180,8 +185,8 @@ The feed fills within about 30 seconds of the server starting. Takes appear as c
 | `GET` | `/feed?following=<userId>&before=<unix>` | Recent buys with the buyer's stats and a cached take; `following` filters to followed wallets |
 | `GET` | `/takes/:signature` | Generate or return the AI take for a trade |
 | `GET` | `/leaderboard?window=7\|30\|all&sort=pnl\|winrate\|roi\|flips&hideMM=1` | Trader profiles (ROI, win rate, hold time, streak, top collections, P&L series) plus a summary |
-| `GET` | `/collections` | Tracked collections with floor, 24h sales, 7-day volume and a 14-day median sparkline |
-| `GET` | `/collections/:symbol?range=7\|30` | Stats, sales, daily aggregates, floor snapshots, cheapest listings, top flippers |
+| `GET` | `/collections` | All 74 collections: chain, currency, category, tier, floor (native + USD), owners/listed, 24h and 7-day volume, floor change, sparkline |
+| `GET` | `/collections/:symbol?range=7\|30` | Solana: stats, sales, daily aggregates, floor snapshots, cheapest listings, top flippers. EVM: stats, owners, supply, 30-day volume, floor snapshots |
 | `GET` | `/wallets/:address` | A wallet's stats and its 50 most recent trades |
 | `GET` | `/follows/:userId` | Wallets a user follows |
 | `POST` · `DELETE` | `/follows` | Follow or unfollow a wallet |
@@ -210,6 +215,8 @@ The web export is a single-page app (`web.output: "single"`), so the file server
 
 - [x] **Phase 1:** live feed, leaderboard, wallet profiles, AI takes, paper copy-trading
 - [x] **Phase 1.5:** Markets tab, collection pages with price history, floor depth and per-collection flippers; live demo deployed
+- [x] **Phase 1.6:** multi-chain market (Ethereum, Base, Polygon via OpenSea), categories, trending, search, watchlist; detailed trader leaderboard
+- [ ] **Next data sources:** OpenSea key (EVM sales feed, listings, flippers), Tensor key (the other half of Solana volume, real collection bids for instant-sell), Helius (wallet-level tracking, compressed NFTs)
 - [ ] **Phase 2:** [Privy](https://privy.io) login with embedded Solana wallets (no seed phrase), Helius webhooks per followed wallet, push notifications when a followed wallet buys
 - [ ] **Phase 3:** real trades, devnet first: Tensor / Magic Eden buy-floor and instant-sell-to-bid transactions, signed by the user
 - [ ] **Phase 4:** a feed of new mints, "explain my portfolio" chat, EAS builds for TestFlight and Play
@@ -221,6 +228,8 @@ The web export is a single-page app (`web.output: "single"`), so the file server
 - **Market-maker detection is a heuristic.** Wallets with ≥60% of their trades through AMM pools are labeled *likely* market makers, and the threshold can misclassify active traders who happen to use pools.
 - **Paper sells use floor − 3%,** not a real bid, until Tensor bid data is wired in.
 - **Floor vs. listings:** Magic Eden's floor stat can sit slightly below its cheapest regular listing. Depth is measured against the reported floor.
+- **EVM collections are stats-only.** OpenSea's keyless API gives collection stats but not sales, listings or rankings, so EVM collections have no sales chart, flippers or paper trading (the paper portfolio is SOL-denominated). Keyless access is also intermittent, so failed refreshes keep the last good values.
+- **The collection list is curated, not discovered.** Neither public API offers a usable "top collections" ranking without a key, so the 74 collections are a hand-checked list.
 - **Floor history starts at first run.** Sale history is backfilled, but floor snapshots only build up from when the server started.
 - **Some NFT image hosts block cross-origin embedding** in the web build, so those collections show a letter placeholder (native apps are unaffected).
 - **AI takes are context, not advice.** The prompt rules out buy/sell recommendations, and every number the model sees comes from the API, not from the model's memory.

@@ -85,15 +85,30 @@ export type Leaderboard = {
   rows: TraderProfile[];
 };
 
+export type Chain = 'solana' | 'ethereum' | 'base' | 'polygon';
+export type MarketCategory = 'PFP' | 'Art' | 'Gaming' | 'Assets' | 'Domains' | 'Memberships' | 'Utility';
+
 export type CollectionSummary = {
   symbol: string;
   name: string;
+  chain: Chain;
+  currency: string; // native currency of floor/volume amounts (SOL, ETH)
+  source: 'magiceden' | 'opensea';
+  category: MarketCategory;
+  live: boolean; // full sales tracking (feed, charts, flippers)
   image: string | null;
   floor: number | null;
+  floorUsd: number | null;
   listed: number | null;
+  owners: number | null;
+  avg24h: number | null;
   volume7d: number | null;
-  sales24h: number;
-  volume24h: number;
+  volume7dUsd: number | null;
+  change24hPct: number | null;
+  change7dPct: number | null;
+  sales24h: number | null;
+  volume24h: number | null;
+  volume24hUsd: number | null;
   spark: { day: number; median: number }[];
 };
 
@@ -102,6 +117,12 @@ export type DailyPoint = { day: number; low: number; median: number; high: numbe
 export type CollectionDetail = {
   symbol: string;
   name: string;
+  chain: Chain;
+  currency: string;
+  source: 'magiceden' | 'opensea';
+  externalUrl: string;
+  category: MarketCategory;
+  live: boolean;
   image: string | null;
   description: string | null;
   stats: {
@@ -111,6 +132,10 @@ export type CollectionDetail = {
     volume7d: number | null;
     sales24h: number;
     volume24h: number;
+    owners?: number | null;
+    supply?: number | null;
+    volume30d?: number | null;
+    floorUsd?: number | null;
   };
   rangeDays: number;
   asOf: number; // server time (unix s) the window ends at
