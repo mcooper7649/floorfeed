@@ -21,7 +21,37 @@ const insertSnapshot = db.prepare(
   `INSERT OR IGNORE INTO collection_snapshots (symbol, ts, floor, listed) VALUES (?, ?, ?, ?)`,
 );
 const needsMeta = db.prepare(`SELECT image IS NULL AS missing FROM collections WHERE symbol = ?`);
-const setMeta = db.prepare(`UPDATE collections SET image = ?, description = ? WHERE symbol = ?`);
+
+// Official metadata (logo, description) for Solana collections. Magic Eden's
+// metadata endpoint rate-limits hard, so each collection is retried on a
+// backoff (1 day, doubling to a week) instead of every stats cycle.
+const DAY_MS = 86_400_000;
+const metaState = db.prepare(
+  `SELECT image_source AS source, meta_checked_at AS checkedAt, meta_failures AS failures FROM collections WHERE symbol = ?`,
+);
+const setOfficialMeta = db.prepare(`
+  UPDATE collections SET image = COALESCE(?, image), description = COALESCE(?, description),
+    image_source = CASE WHEN ? IS NOT NULL THEN 'official' ELSE image_source END,
+    meta_checked_at = ?, meta_failures = 0
+  WHERE symbol = ?`);
+const markMetaFailed = db.prepare(
+  `UPDATE collections SET meta_checked_at = ?, meta_failures = meta_failures + 1 WHERE symbol = ?`,
+);
+function metaDue(symbol: string, now: number) {
+  const m = metaState.get(symbol) as { source: string | null; checkedAt: number | null; failures: number } | undefined;
+  if (!m || m.source === "official") return false;
+  if (m.checkedAt == null) return true;
+  return now - m.checkedAt >= Math.min(DAY_MS * 2 ** Math.max(0, m.failures - 1), 7 * DAY_MS);
+}
+
+// Until official art arrives, pin one recent sale's image so the collection
+// keeps a stable picture (no API call: it comes from stored trades).
+const fillSaleImages = db.prepare(`
+  UPDATE collections SET image_source = 'sale', image = (
+    SELECT image FROM trades WHERE collection = collections.symbol AND image IS NOT NULL
+    ORDER BY block_time DESC LIMIT 1)
+  WHERE image IS NULL AND chain = 'solana'
+    AND EXISTS (SELECT 1 FROM trades WHERE collection = collections.symbol AND image IS NOT NULL)`);
 
 // Live tier = top collections by current 7-day volume (static order until stats exist).
 const byVolume = db.prepare(`SELECT symbol FROM collections ORDER BY COALESCE(volume_7d, 0) DESC`);
@@ -33,7 +63,8 @@ export function liveSymbols(): string[] {
 }
 
 export async function refreshStats() {
-  let metaBudget = 3; // drip-fill missing images: the metadata endpoint 429s easily
+  fillSaleImages.run();
+  let metaBudget = 3; // at most a few metadata calls per cycle, on top of the backoff
   for (const { symbol } of COLLECTIONS) {
     try {
       const stats = await getStats(symbol);
@@ -41,12 +72,15 @@ export async function refreshStats() {
       upsertStats.run({ symbol, ...stats, now });
       // Magic Eden has no public floor history, so we build our own.
       insertSnapshot.run(symbol, now, stats.floor, stats.listed);
-      if (metaBudget > 0 && (needsMeta.get(symbol) as { missing: number } | undefined)?.missing) {
+      if (metaBudget > 0 && metaDue(symbol, now)) {
         metaBudget--;
-        // Metadata is cosmetic and its endpoint is heavily rate-limited: one try.
+        // One try per due collection; a failure pushes the next try out.
         await getCollectionMeta(symbol)
-          .then((meta) => setMeta.run(meta.image, meta.description, symbol))
-          .catch(() => {});
+          .then((meta) => setOfficialMeta.run(meta.image, meta.description, meta.image, now, symbol))
+          .catch((err: Error) => {
+            markMetaFailed.run(now, symbol);
+            console.warn(`[meta] ${symbol}: ${err.message} (will retry later)`);
+          });
       }
     } catch (err) {
       console.warn(`[stats] ${symbol}:`, (err as Error).message);
@@ -137,7 +171,7 @@ const upsertEvm = db.prepare(`
     owners=excluded.owners, volume_7d=excluded.volume_7d, volume_24h_ext=excluded.volume_24h_ext,
     sales_24h_ext=excluded.sales_24h_ext, volume_30d=excluded.volume_30d, updated_at=excluded.updated_at`);
 const setEvmInfo = db.prepare(
-  `UPDATE collections SET image = ?, description = ?, supply = ?, external_url = ? WHERE symbol = ?`,
+  `UPDATE collections SET image = ?, description = ?, supply = ?, external_url = ?, image_source = 'official' WHERE symbol = ?`,
 );
 
 export async function refreshEvmStats() {

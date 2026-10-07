@@ -72,6 +72,10 @@ for (const col of [
   "chain TEXT NOT NULL DEFAULT 'solana'", "currency TEXT NOT NULL DEFAULT 'SOL'",
   "owners INTEGER", "supply INTEGER", "volume_24h_ext REAL", "sales_24h_ext INTEGER",
   "volume_30d REAL", "external_url TEXT",
+  // metadata bookkeeping: 'official' (marketplace metadata) or 'sale' (art
+  // from a recent sale, used until official metadata arrives), plus a
+  // retry backoff so failed lookups aren't repeated every cycle
+  "image_source TEXT", "meta_checked_at INTEGER", "meta_failures INTEGER NOT NULL DEFAULT 0",
 ]) {
   try { db.exec(`ALTER TABLE collections ADD COLUMN ${col}`); } catch {}
 }
