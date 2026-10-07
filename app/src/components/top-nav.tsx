@@ -2,6 +2,7 @@ import { Link, router, usePathname } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { WalletButton } from '@/components/wallet-button';
 import { C } from '@/constants/brand';
 import { useLayout } from '@/lib/layout';
 
@@ -66,6 +67,7 @@ export function TopNav({ back }: { back?: boolean }) {
               autoCapitalize="none"
               accessibilityLabel="Search collections"
             />
+            <WalletButton />
           </>
         )}
       </View>
@@ -75,7 +77,7 @@ export function TopNav({ back }: { back?: boolean }) {
 
 const s = StyleSheet.create({
   bar: { backgroundColor: '#0B0B10F2', borderBottomWidth: 1, borderBottomColor: C.border, zIndex: 10 },
-  inner: { width: '100%', alignSelf: 'center', height: 64, flexDirection: 'row', alignItems: 'center', gap: 28 },
+  inner: { width: '100%', alignSelf: 'center', height: 64, flexDirection: 'row', alignItems: 'center', gap: 20 },
   back: { marginRight: -14, paddingRight: 4 },
   backTxt: { color: C.text, fontSize: 34, fontWeight: '300', lineHeight: 36 },
   brand: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -87,7 +89,7 @@ const s = StyleSheet.create({
   linkOn: { backgroundColor: C.cardHi },
   linkTxt: { color: C.dim, fontWeight: '700', fontSize: 15 },
   search: {
-    width: 320, backgroundColor: C.card, borderRadius: 12, borderWidth: 1, borderColor: C.border,
+    width: 280, backgroundColor: C.card, borderRadius: 12, borderWidth: 1, borderColor: C.border,
     color: C.text, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14,
   },
 });

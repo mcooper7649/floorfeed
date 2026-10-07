@@ -2,6 +2,7 @@ import cors from "@fastify/cors";
 import Fastify from "fastify";
 import { z } from "zod";
 import { cachedTake, getTake } from "./ai.ts";
+import { ADDRESS_RE, capabilities, solBalance } from "./chain.ts";
 import { collectionDetail, listCollections } from "./collections.ts";
 import { collectionName, config, isEvm } from "./config.ts";
 import { db } from "./db.ts";
@@ -36,6 +37,33 @@ app.get("/health", async () => ({
 }));
 
 app.get("/collections", async () => listCollections());
+
+// --- Wallet + trading ------------------------------------------------------
+
+app.get("/capabilities", async () => capabilities());
+
+app.get("/chain/balance/:address", async (req, reply) => {
+  const { address } = req.params as { address: string };
+  if (!ADDRESS_RE.test(address)) return reply.code(400).send({ error: "Not a Solana address" });
+  try {
+    return await solBalance(address);
+  } catch (err) {
+    return reply.code(502).send({ error: (err as Error).message });
+  }
+});
+
+// Builds an unsigned buy transaction for the user's wallet to sign. The
+// marketplace API calls need keys we don't have yet, so this reports that
+// plainly instead of pretending. See docs/WALLET_AND_TRADING.md.
+app.post("/trade/buy-tx", async (_req, reply) => {
+  const caps = capabilities();
+  if (!caps.buy.enabled) {
+    return reply.code(501).send({
+      error: "Buying isn't enabled yet: FloorFeed needs a Magic Eden or Tensor API key to build buy transactions.",
+    });
+  }
+  return reply.code(501).send({ error: "Buy transactions are not implemented yet." });
+});
 
 app.get("/collections/:symbol", async (req, reply) => {
   const { symbol } = req.params as { symbol: string };

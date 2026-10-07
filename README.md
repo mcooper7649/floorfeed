@@ -176,6 +176,9 @@ The feed fills within about 30 seconds of the server starting. Takes appear as c
 | `OLLAMA_MODEL` | `nimble:latest` | Any instruction-tuned model works |
 | `HELIUS_WEBHOOK_SECRET` | none | If set, required as the `Authorization` header on `/webhooks/helius` |
 | `OPENSEA_API_KEY` | none | Optional. Makes OpenSea stats reliable (keyless access is intermittent) and is the prerequisite for EVM sales/listings |
+| `SOLANA_RPC_URL` | public mainnet RPC | Wallet balances now; sends and simulation later. A Helius URL is recommended |
+| `MAGICEDEN_API_KEY` | none | Enables real buys of Magic Eden listings ([plan](docs/WALLET_AND_TRADING.md)) |
+| `TENSOR_API_KEY` | none | Enables real buys of Tensor listings |
 
 **`app/.env`**
 
@@ -223,6 +226,7 @@ The web export is a single-page app (`web.output: "single"`), so the file server
 - [x] **Phase 1.6:** multi-chain market (Ethereum, Base, Polygon via OpenSea), categories, trending, search, watchlist; detailed trader leaderboard
 - [x] **Phase 1.7:** desktop web layout (top nav with search, multi-column grids, sortable markets table), OpenSea-style collection pages (banner, listing and sales art grids with rarity ranks), rolling-median price chart with volume panel and hover tooltips, 24H range, resized NFT images via image CDNs
 - [ ] **Next data sources:** OpenSea key (EVM sales feed, listings, flippers), Tensor key (the other half of Solana volume, real collection bids for instant-sell), Helius (wallet-level tracking, compressed NFTs)
+- [ ] **Wallets & real buys (in progress, [plan](docs/WALLET_AND_TRADING.md)):** web wallet connect (Phantom, Solflare, Backpack) and balances are live; buys need Magic Eden / Tensor keys; Privy email wallets next
 - [ ] **Phase 2:** [Privy](https://privy.io) login with embedded Solana wallets (no seed phrase), Helius webhooks per followed wallet, push notifications when a followed wallet buys
 - [ ] **Phase 3:** real trades, devnet first: Tensor / Magic Eden buy-floor and instant-sell-to-bid transactions, signed by the user
 - [ ] **Phase 4:** a feed of new mints, "explain my portfolio" chat, EAS builds for TestFlight and Play

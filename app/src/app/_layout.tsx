@@ -6,6 +6,7 @@ import { StatusBar } from 'expo-status-bar';
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { C } from '@/constants/brand';
 import { SessionProvider } from '@/lib/session';
+import { WalletProvider } from '@/lib/wallet';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -20,6 +21,7 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={theme}>
       <SessionProvider>
+      <WalletProvider>
         <StatusBar style="light" />
         <AnimatedSplashOverlay />
         <Stack screenOptions={{ contentStyle: { backgroundColor: C.bg } }}>
@@ -28,6 +30,7 @@ export default function RootLayout() {
           <Stack.Screen name="wallet/[address]" options={{ title: 'Wallet', headerBackTitle: 'Back', headerShown: !web }} />
           <Stack.Screen name="collection/[symbol]" options={{ title: 'Collection', headerBackTitle: 'Back', headerShown: !web }} />
         </Stack>
+      </WalletProvider>
       </SessionProvider>
     </ThemeProvider>
   );

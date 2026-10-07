@@ -4,6 +4,13 @@ export const config = {
   ollamaUrl: process.env.OLLAMA_URL ?? "http://localhost:11434",
   ollamaModel: process.env.OLLAMA_MODEL ?? "nimble:latest",
   heliusWebhookSecret: process.env.HELIUS_WEBHOOK_SECRET ?? "",
+  // Wallet + trading. The public RPC is fine for balance reads at demo
+  // volume; set a Helius (or other) RPC URL for anything heavier.
+  solanaRpcUrl: process.env.SOLANA_RPC_URL ?? "https://api.mainnet-beta.solana.com",
+  // Buy transactions are built by the marketplaces and need their API keys.
+  // Without one, buying stays disabled and the app says so.
+  magicEdenApiKey: process.env.MAGICEDEN_API_KEY ?? "",
+  tensorApiKey: process.env.TENSOR_API_KEY ?? "",
   // How often to pull fresh trades / floor prices from Magic Eden.
   // Sales for the live tier; stats for the whole universe (~40 calls).
   activityPollMs: 3 * 60_000,

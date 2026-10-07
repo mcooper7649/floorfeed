@@ -167,7 +167,11 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 const send = (method: string, path: string, body: unknown) =>
   req<any>(path, { method, body: JSON.stringify(body) });
 
+export type Capabilities = { buy: { enabled: boolean; magiceden: boolean; tensor: boolean }; rpc: 'public' | 'custom' };
+
 export const api = {
+  capabilities: () => req<Capabilities>('/capabilities'),
+  balance: (address: string) => req<{ lamports: number; sol: number }>(`/chain/balance/${address}`),
   feed: (p: { before?: number; following?: string } = {}) => {
     const q = new URLSearchParams({ limit: '25' });
     if (p.before) q.set('before', String(p.before));

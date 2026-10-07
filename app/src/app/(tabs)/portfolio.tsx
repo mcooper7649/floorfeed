@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import { Empty, Screen } from '@/components/screen';
+import { WalletCard } from '@/components/wallet-card';
 import { C } from '@/constants/brand';
 import { api, type PaperPosition } from '@/lib/api';
 import { signedSol, sol } from '@/lib/format';
@@ -30,6 +31,7 @@ export default function PortfolioScreen() {
 
   return (
     <Screen title="Portfolio" subtitle="Paper mode: no real SOL moves">
+      <WalletCard />
       <View style={s.summary}>
         <Text style={s.label}>TOTAL P&L</Text>
         <Text style={[s.big, { color: total >= 0 ? C.up : C.down }]}>{signedSol(total, 3)}</Text>
