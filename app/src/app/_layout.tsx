@@ -1,5 +1,6 @@
 import { DarkTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { Platform } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
@@ -7,6 +8,8 @@ import { C } from '@/constants/brand';
 import { SessionProvider } from '@/lib/session';
 
 SplashScreen.preventAutoHideAsync();
+
+const web = Platform.OS === 'web';
 
 const theme = {
   ...DarkTheme,
@@ -21,8 +24,9 @@ export default function RootLayout() {
         <AnimatedSplashOverlay />
         <Stack screenOptions={{ contentStyle: { backgroundColor: C.bg } }}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="wallet/[address]" options={{ title: 'Wallet', headerBackTitle: 'Back' }} />
-          <Stack.Screen name="collection/[symbol]" options={{ title: 'Collection', headerBackTitle: 'Back' }} />
+          {/* Web draws its own header (TopNav) on these pages */}
+          <Stack.Screen name="wallet/[address]" options={{ title: 'Wallet', headerBackTitle: 'Back', headerShown: !web }} />
+          <Stack.Screen name="collection/[symbol]" options={{ title: 'Collection', headerBackTitle: 'Back', headerShown: !web }} />
         </Stack>
       </SessionProvider>
     </ThemeProvider>

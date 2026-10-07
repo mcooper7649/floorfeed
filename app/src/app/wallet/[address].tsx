@@ -1,12 +1,14 @@
 import { Link, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { CollIcon } from '@/components/coll-icon';
 import { Empty } from '@/components/screen';
+import { TopNav } from '@/components/top-nav';
 import { C } from '@/constants/brand';
 import { api, type WalletDetail } from '@/lib/api';
 import { holdTime, pct, shortAddr, signedSol, sol, timeAgo } from '@/lib/format';
+import { useLayout } from '@/lib/layout';
 import { useSession } from '@/lib/session';
 
 export default function WalletScreen() {
@@ -14,34 +16,38 @@ export default function WalletScreen() {
   const { following, toggleFollow } = useSession();
   const [data, setData] = useState<WalletDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { wide, pad, maxWidth } = useLayout();
 
   useEffect(() => { api.wallet(address).then(setData).catch((e) => setError(e.message)); }, [address]);
 
-  if (error) return <Empty text={error} />;
-  if (!data) return <ActivityIndicator style={{ marginTop: 40 }} color={C.accent} />;
+  const nav = Platform.OS === 'web' && <TopNav back />;
+  if (error) return <View style={s.fill}>{nav}<Empty text={error} /></View>;
+  if (!data) return <View style={s.fill}>{nav}<ActivityIndicator style={{ marginTop: 40 }} color={C.accent} /></View>;
   const st = data.stats;
   const pf = data.profile;
   const isFollowing = following.has(address);
 
   return (
-    <>
+    <View style={s.fill}>
       <Stack.Screen options={{ title: shortAddr(address) }} />
+      {nav}
       <FlatList
         data={data.trades}
         keyExtractor={(t) => t.signature + t.side}
-        contentContainerStyle={{ padding: 16, paddingBottom: 60 }}
+        contentContainerStyle={{ padding: pad, paddingBottom: 60, width: '100%', maxWidth, alignSelf: 'center' }}
         ListHeaderComponent={
           <View style={{ gap: 12, marginBottom: 12 }}>
+            {Platform.OS === 'web' && <Text style={[s.title, wide && { fontSize: 32 }]}>{shortAddr(address)}</Text>}
             <View style={s.grid}>
-              <Stat label="Realized" value={signedSol(st.realizedSol)} color={st.realizedSol >= 0 ? C.up : C.down} />
-              <Stat label="Win rate" value={st.winRate == null ? '—' : `${Math.round(st.winRate * 100)}%`} />
-              <Stat label="Flips" value={String(st.flips)} />
-              <Stat label="Holding" value={String(st.openPositions)} />
-              <Stat label="ROI" value={pf.roiPct == null ? '—' : pct(pf.roiPct)}
+              <Stat wide={wide} label="Realized" value={signedSol(st.realizedSol)} color={st.realizedSol >= 0 ? C.up : C.down} />
+              <Stat wide={wide} label="Win rate" value={st.winRate == null ? '—' : `${Math.round(st.winRate * 100)}%`} />
+              <Stat wide={wide} label="Flips" value={String(st.flips)} />
+              <Stat wide={wide} label="Holding" value={String(st.openPositions)} />
+              <Stat wide={wide} label="ROI" value={pf.roiPct == null ? '—' : pct(pf.roiPct)}
                 color={pf.roiPct == null ? undefined : pf.roiPct >= 0 ? C.up : C.down} />
-              <Stat label="Avg / flip" value={pf.avgPnlSol == null ? '—' : signedSol(pf.avgPnlSol)} />
-              <Stat label="Avg hold" value={pf.avgHoldHours == null ? '—' : holdTime(pf.avgHoldHours)} />
-              <Stat label="Via AMM pools" value={`${Math.round(pf.poolShare * 100)}%`} />
+              <Stat wide={wide} label="Avg / flip" value={pf.avgPnlSol == null ? '—' : signedSol(pf.avgPnlSol)} />
+              <Stat wide={wide} label="Avg hold" value={pf.avgHoldHours == null ? '—' : holdTime(pf.avgHoldHours)} />
+              <Stat wide={wide} label="Via AMM pools" value={`${Math.round(pf.poolShare * 100)}%`} />
             </View>
             {pf.collections.length > 0 && (
               <View style={s.chips}>
@@ -56,7 +62,7 @@ export default function WalletScreen() {
             {pf.likelyMarketMaker && (
               <Text style={s.note}>{"Most of this wallet's trades run through AMM pools, so it's likely a market maker rather than a discretionary trader."}</Text>
             )}
-            <Pressable onPress={() => toggleFollow(address)} style={[s.follow, isFollowing && s.following]}>
+            <Pressable onPress={() => toggleFollow(address)} style={[s.follow, isFollowing && s.following, wide && { alignSelf: 'flex-start', paddingHorizontal: 32 }]}>
               <Text style={[s.followTxt, isFollowing && { color: C.text }]}>
                 {isFollowing ? 'Following · get alerts on buys' : 'Follow this wallet'}
               </Text>
@@ -68,7 +74,7 @@ export default function WalletScreen() {
         renderItem={({ item: t }) => (
           <Link href={{ pathname: '/collection/[symbol]', params: { symbol: t.symbol } }} asChild>
           <Pressable style={s.row}>
-            <CollIcon name={t.collection} uri={t.image} size={40} radius={8} />
+            <CollIcon name={t.collection} uri={t.image} size={52} radius={10} />
             <View style={{ flex: 1 }}>
               <Text style={s.name}>{t.collection}</Text>
               <Text style={s.meta}>{timeAgo(t.blockTime)} ago</Text>
@@ -79,18 +85,20 @@ export default function WalletScreen() {
           </Link>
         )}
       />
-    </>
+    </View>
   );
 }
 
-const Stat = ({ label, value, color }: { label: string; value: string; color?: string }) => (
-  <View style={s.stat}>
+const Stat = ({ label, value, color, wide }: { label: string; value: string; color?: string; wide?: boolean }) => (
+  <View style={[s.stat, wide && { flexBasis: '22%' }]}>
     <Text style={s.statLabel}>{label}</Text>
     <Text style={[s.statVal, color ? { color } : null]}>{value}</Text>
   </View>
 );
 
 const s = StyleSheet.create({
+  fill: { flex: 1, backgroundColor: C.bg },
+  title: { color: C.text, fontSize: 24, fontWeight: '800', fontVariant: ['tabular-nums'] },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   stat: { flexGrow: 1, flexBasis: '45%', backgroundColor: C.card, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: C.border },
   statLabel: { color: C.dim, fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },

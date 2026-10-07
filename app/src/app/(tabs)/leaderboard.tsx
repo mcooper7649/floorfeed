@@ -6,6 +6,7 @@ import { TraderCard } from '@/components/trader-card';
 import { C } from '@/constants/brand';
 import { api, type Leaderboard, type LeaderSort, type LeaderWindow } from '@/lib/api';
 import { signedSol } from '@/lib/format';
+import { useLayout } from '@/lib/layout';
 import { useSession } from '@/lib/session';
 
 const WINDOWS: { key: LeaderWindow; label: string }[] = [
@@ -24,6 +25,8 @@ export default function LeaderboardScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { wide, pad } = useLayout();
+  const cols = wide ? 2 : 1;
 
   const fetchRows = useCallback(() => {
     api.leaderboard({ window: win, sort, hideMM })
@@ -42,7 +45,7 @@ export default function LeaderboardScreen() {
     <Screen title="Leaders" subtitle="Wallets ranked on completed flips (buy → sell of the same NFT), gross of fees">
       {/* Fixed-height wrapper: a horizontal ScrollView collapses its height on web */}
       <View style={s.filterBar}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filters}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[s.filters, { paddingHorizontal: pad }]}>
         {WINDOWS.map((w) => (
           <Chip key={w.key} label={w.label} on={win === w.key} onPress={() => change(() => setWin(w.key))} />
         ))}
@@ -56,7 +59,7 @@ export default function LeaderboardScreen() {
       </View>
 
       {sm && (
-        <Text style={s.summary}>
+        <Text style={[s.summary, { paddingHorizontal: pad }]}>
           {sm.wallets} wallets with 3+ flips · {sm.flips.toLocaleString()} flips · {sm.profitableWallets} profitable ·{' '}
           <Text style={{ color: sm.realizedSol >= 0 ? C.up : C.down }}>{signedSol(sm.realizedSol, 1)}</Text> combined
           {sm.hiddenMarketMakers ? ` · ${sm.hiddenMarketMakers} likely market makers hidden` : ''}
@@ -68,15 +71,20 @@ export default function LeaderboardScreen() {
       ) : (
         <FlatList
           style={{ opacity: loading ? 0.5 : 1 }}
+          key={cols}
           data={data?.rows ?? []}
           keyExtractor={(r) => r.wallet}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 120 }}
-          ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+          numColumns={cols}
+          columnWrapperStyle={cols > 1 ? { gap: 16 } : undefined}
+          contentContainerStyle={{ paddingHorizontal: pad, paddingBottom: 120 }}
+          ItemSeparatorComponent={() => <View style={{ height: cols > 1 ? 16 : 12 }} />}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={C.accent} />}
           ListEmptyComponent={<Empty text={error ?? 'No wallets with 3+ completed flips in this window yet.'} />}
           renderItem={({ item, index }) => (
-            <TraderCard t={item} rank={index + 1} following={following.has(item.wallet)}
-              onToggleFollow={() => toggleFollow(item.wallet)} />
+            <View style={{ flex: 1 / cols }}>
+              <TraderCard t={item} rank={index + 1} following={following.has(item.wallet)}
+                onToggleFollow={() => toggleFollow(item.wallet)} />
+            </View>
           )}
         />
       )}

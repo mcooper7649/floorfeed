@@ -5,6 +5,7 @@ import { Empty, Screen } from '@/components/screen';
 import { TradeCard } from '@/components/trade-card';
 import { C } from '@/constants/brand';
 import { api, type FeedItem } from '@/lib/api';
+import { columnsFor, useLayout } from '@/lib/layout';
 import { useSession } from '@/lib/session';
 
 type Mode = 'all' | 'following';
@@ -17,6 +18,8 @@ export default function FeedScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const { wide, pad, contentWidth } = useLayout();
+  const cols = wide ? columnsFor(contentWidth, 290, 16, 4) : 1;
 
   const load = useCallback(async (before?: number) => {
     if (mode === 'following' && !userId) return [];
@@ -47,7 +50,7 @@ export default function FeedScreen() {
 
   return (
     <Screen title="FloorFeed" subtitle="Live Solana NFT buys from wallets with a track record">
-      <View style={s.seg}>
+      <View style={[s.seg, { paddingHorizontal: pad }]}>
         {(['all', 'following'] as const).map((m) => (
           <Pressable key={m} onPress={() => switchMode(m)} style={[s.segBtn, mode === m && s.segOn]}>
             <Text style={[s.segTxt, mode === m && { color: C.bg }]}>
@@ -60,11 +63,18 @@ export default function FeedScreen() {
         <ActivityIndicator style={{ marginTop: 40 }} color={C.accent} />
       ) : (
         <FlatList
+          key={cols}
           data={items}
           keyExtractor={(t) => t.signature}
-          renderItem={({ item }) => <TradeCard item={item} />}
-          contentContainerStyle={s.list}
-          ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+          numColumns={cols}
+          columnWrapperStyle={cols > 1 ? { gap: 16 } : undefined}
+          renderItem={({ item }) => (
+            cols > 1
+              ? <View style={{ flex: 1 / cols }}><TradeCard item={item} tile /></View>
+              : <TradeCard item={item} />
+          )}
+          contentContainerStyle={[s.list, { paddingHorizontal: pad }]}
+          ItemSeparatorComponent={() => <View style={{ height: cols > 1 ? 16 : 12 }} />}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={C.accent} />}
           onEndReached={more}
           onEndReachedThreshold={0.5}
@@ -80,9 +90,9 @@ export default function FeedScreen() {
 }
 
 const s = StyleSheet.create({
-  seg: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingBottom: 10 },
+  seg: { flexDirection: 'row', gap: 8, paddingBottom: 10 },
   segBtn: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, backgroundColor: C.card, borderWidth: 1, borderColor: C.border },
   segOn: { backgroundColor: C.accent, borderColor: C.accent },
   segTxt: { color: C.text, fontWeight: '600', fontSize: 13 },
-  list: { paddingHorizontal: 16, paddingBottom: 120 },
+  list: { paddingBottom: 120 },
 });

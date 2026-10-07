@@ -7,7 +7,7 @@
 A mobile social-trading app modeled on [FOMO](https://fomo.family) (the memecoin app) and rebuilt for NFTs.
 
 ### [▶ Live demo: floorfeed.mycodedojo.com](https://floorfeed.mycodedojo.com)
-<sub>Paper trading on live Solana mainnet data. Best viewed at phone width.</sub>
+<sub>Paper trading on live Solana mainnet data. Responsive: phone layout on mobile, multi-column layout on desktop.</sub>
 
 ![Expo SDK 57](https://img.shields.io/badge/Expo_SDK-57-000020?logo=expo&logoColor=white)
 ![React Native 0.86](https://img.shields.io/badge/React_Native-0.86-61DAFB?logo=react&logoColor=black)
@@ -29,6 +29,11 @@ A mobile social-trading app modeled on [FOMO](https://fomo.family) (the memecoin
     <td></td>
   </tr>
 </table>
+
+<img src="docs/screenshots/desktop-collection.png" width="820" alt="Collection page on desktop: price chart with rolling median, volume panel and hover tooltip; floor depth; top flippers"/><br/>
+<sub><b>Desktop collection page</b>: rolling-median price chart with a volume panel, floor depth, flippers, and listing art below</sub>
+
+<img src="docs/screenshots/desktop-markets.png" width="405" alt="Markets on desktop"/> <img src="docs/screenshots/desktop-feed.png" width="405" alt="Feed on desktop"/>
 
 <sub>Screenshots show live mainnet data from October 2026.</sub>
 
@@ -216,6 +221,7 @@ The web export is a single-page app (`web.output: "single"`), so the file server
 - [x] **Phase 1:** live feed, leaderboard, wallet profiles, AI takes, paper copy-trading
 - [x] **Phase 1.5:** Markets tab, collection pages with price history, floor depth and per-collection flippers; live demo deployed
 - [x] **Phase 1.6:** multi-chain market (Ethereum, Base, Polygon via OpenSea), categories, trending, search, watchlist; detailed trader leaderboard
+- [x] **Phase 1.7:** desktop web layout (top nav with search, multi-column grids, sortable markets table), OpenSea-style collection pages (banner, listing and sales art grids with rarity ranks), rolling-median price chart with volume panel and hover tooltips, 24H range, resized NFT images via image CDNs
 - [ ] **Next data sources:** OpenSea key (EVM sales feed, listings, flippers), Tensor key (the other half of Solana volume, real collection bids for instant-sell), Helius (wallet-level tracking, compressed NFTs)
 - [ ] **Phase 2:** [Privy](https://privy.io) login with embedded Solana wallets (no seed phrase), Helius webhooks per followed wallet, push notifications when a followed wallet buys
 - [ ] **Phase 3:** real trades, devnet first: Tensor / Magic Eden buy-floor and instant-sell-to-bid transactions, signed by the user

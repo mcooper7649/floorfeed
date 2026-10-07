@@ -112,7 +112,10 @@ export type CollectionSummary = {
   spark: { day: number; median: number }[];
 };
 
-export type DailyPoint = { day: number; low: number; median: number; high: number; count: number };
+export type Listing = { mint: string; price: number; name: string | null; image: string | null; rank: number | null };
+
+// One chart bucket (hour, 6 hours or day; see CollectionDetail.bucketSec). `day` is the bucket start.
+export type DailyPoint = { day: number; low: number; median: number; high: number; count: number; volume: number };
 
 export type CollectionDetail = {
   symbol: string;
@@ -138,12 +141,13 @@ export type CollectionDetail = {
     floorUsd?: number | null;
   };
   rangeDays: number;
+  bucketSec: number;
   asOf: number; // server time (unix s) the window ends at
   historyStartsAt: number | null;
   sales: { signature: string; price: number; t: number }[];
   daily: DailyPoint[];
   floorHistory: { ts: number; floor: number | null }[];
-  listings: { mint: string; price: number }[];
+  listings: Listing[];
   topFlippers: { wallet: string; flips: number; wins: number; realizedSol: number }[];
   recentSales: { signature: string; mint: string; buyer: string; price: number; t: number; image: string | null }[];
 };

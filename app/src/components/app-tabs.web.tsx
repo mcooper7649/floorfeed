@@ -1,16 +1,22 @@
 import { Tabs, TabList, TabTrigger, TabSlot, type TabTriggerSlotProps, type TabListProps } from 'expo-router/ui';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { TopNav } from '@/components/top-nav';
 import { C } from '@/constants/brand';
 import { MaxContentWidth } from '@/constants/theme';
+import { useLayout } from '@/lib/layout';
 
-// Web gets a floating pill tab bar at the bottom, like the native bar.
+// Narrow web gets a floating pill tab bar at the bottom, like the native bar.
+// Wide web gets a top header instead; the tab list stays mounted (it
+// registers the routes) but hidden.
 export default function AppTabs() {
+  const { wide } = useLayout();
   return (
-    <Tabs>
-      <TabSlot style={{ height: '100%' }} />
+    <Tabs style={{ flex: 1 }}>
+      {wide && <TopNav />}
+      <TabSlot style={{ flex: 1 }} />
       <TabList asChild>
-        <PillBar>
+        <PillBar hidden={wide}>
           <TabTrigger name="index" href="/" asChild><TabButton>Feed</TabButton></TabTrigger>
           <TabTrigger name="markets" href="/markets" asChild><TabButton>Markets</TabButton></TabTrigger>
           <TabTrigger name="leaderboard" href="/leaderboard" asChild><TabButton>Leaders</TabButton></TabTrigger>
@@ -29,9 +35,9 @@ function TabButton({ children, isFocused, ...props }: TabTriggerSlotProps) {
   );
 }
 
-function PillBar(props: TabListProps) {
+function PillBar({ hidden, ...props }: TabListProps & { hidden?: boolean }) {
   return (
-    <View {...props} style={s.wrap}>
+    <View {...props} style={StyleSheet.flatten([s.wrap, hidden && { display: 'none' }])}>
       <View style={s.bar}>{props.children}</View>
     </View>
   );

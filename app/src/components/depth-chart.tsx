@@ -2,17 +2,19 @@ import { useState } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import Svg, { Line, Path, Text as SvgText } from 'react-native-svg';
 
+import { CollIcon } from '@/components/coll-icon';
 import { C } from '@/constants/brand';
+import type { Listing } from '@/lib/api';
 import { linear, niceTicks } from '@/lib/scale';
 
 // Floor depth: how far above the floor each of the cheapest listings sits.
 // Columns grow from a 0% baseline (= the floor), one series in one color.
-const PLOT_H = 120;
 const AXIS_H = 20;
 const FONT = Platform.select({ web: 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif', default: undefined });
 const PAD = { top: 8, left: 36, right: 4 };
 
-export function DepthChart({ listings, floor }: { listings: { mint: string; price: number }[]; floor: number }) {
+export function DepthChart({ listings, floor, tall }: { listings: Listing[]; floor: number; tall?: boolean }) {
+  const PLOT_H = tall ? 170 : 120;
   const [width, setWidth] = useState(0);
   const [active, setActive] = useState<number | null>(null);
   const prem = listings.map((l) => ((l.price - floor) / floor) * 100);
@@ -21,8 +23,12 @@ export function DepthChart({ listings, floor }: { listings: { mint: string; pric
   const y = linear(0, yMax, PAD.top + PLOT_H, PAD.top);
   const n = listings.length;
   const slot = width ? (width - PAD.left - PAD.right) / Math.max(n, 1) : 0;
-  const bw = Math.min(24, slot - 2); // capped thickness, >= 2px surface gap
+  const bw = Math.min(tall ? 32 : 24, slot - 2); // capped thickness, >= 2px surface gap
   const sel = active != null ? listings[active] : null;
+  const pickAt = (lx: number) => {
+    const i = Math.floor((lx - PAD.left) / slot);
+    setActive(i >= 0 && i < n ? i : null);
+  };
 
   // Column with a 4px rounded data-end and a square baseline.
   const col = (x: number, top: number, w: number) => {
@@ -36,21 +42,29 @@ export function DepthChart({ listings, floor }: { listings: { mint: string; pric
     <View>
       <View style={s.readout}>
         {sel ? (
-          <Text style={s.readCtx}>
-            <Text style={s.readVal}>{sel.price.toFixed(3)} SOL</Text>  #{active! + 1} cheapest · +{prem[active!].toFixed(1)}% over floor
-          </Text>
+          <View style={s.selRow}>
+            <CollIcon name={sel.name ?? '#'} uri={sel.image} size={40} radius={8} />
+            <View style={{ flex: 1 }}>
+              <Text style={s.readCtx} numberOfLines={1}>
+                <Text style={s.readVal}>{sel.price.toFixed(3)} SOL</Text>  +{prem[active!].toFixed(1)}% over floor
+              </Text>
+              <Text style={s.readCtx} numberOfLines={1}>
+                {sel.name ?? 'Listing'} · #{active! + 1} cheapest{sel.rank ? ` · rarity rank ${sel.rank.toLocaleString()}` : ''}
+              </Text>
+            </View>
+          </View>
         ) : (
-          <Text style={s.readCtx}>Tap a column for the listing price</Text>
+          <Text style={s.readCtx}>{Platform.OS === 'web' ? 'Hover' : 'Tap'} a column for the listing</Text>
         )}
       </View>
       <View
         style={{ height: PAD.top + PLOT_H + AXIS_H }}
         onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
         onStartShouldSetResponder={() => true}
-        onResponderGrant={(e) => {
-          const i = Math.floor((e.nativeEvent.locationX - PAD.left) / slot);
-          setActive(i >= 0 && i < n ? i : null);
-        }}
+        onResponderGrant={(e) => pickAt(e.nativeEvent.locationX)}
+        {...(Platform.OS === 'web'
+          ? { onPointerMove: (e: any) => pickAt(e.nativeEvent.offsetX), onPointerLeave: () => setActive(null) }
+          : {})}
         accessibilityRole="image"
         accessibilityLabel={`Cheapest ${n} listings, up to ${prem[n - 1]?.toFixed(0)} percent above floor`}>
         {width > 0 && (
@@ -76,7 +90,8 @@ export function DepthChart({ listings, floor }: { listings: { mint: string; pric
 }
 
 const s = StyleSheet.create({
-  readout: { minHeight: 28, justifyContent: 'center' },
+  readout: { minHeight: 48, justifyContent: 'center' },
+  selRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   readVal: { color: C.text, fontSize: 15, fontWeight: '800' },
   readCtx: { color: C.dim, fontSize: 12.5 },
 });

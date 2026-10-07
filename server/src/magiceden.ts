@@ -100,10 +100,25 @@ export async function getCollectionMeta(symbol: string) {
 }
 
 // Cheapest active listings, ascending by price (SOL).
-export async function getListings(symbol: string, limit = 20): Promise<{ mint: string; price: number }[]> {
-  const rows = await get<{ tokenMint: string; price: number }[]>(
+export type Listing = { mint: string; price: number; name: string | null; image: string | null; rank: number | null };
+
+type MeListing = {
+  tokenMint: string;
+  price: number;
+  extra?: { img?: string };
+  token?: { name?: string; image?: string };
+  rarity?: { moonrank?: { rank?: number }; meInstant?: { rank?: number }; howrare?: { rank?: number } };
+};
+
+export async function getListings(symbol: string, limit = 20): Promise<Listing[]> {
+  const rows = await get<MeListing[]>(
     `/collections/${symbol}/listings?offset=0&limit=${limit}`, { retries: 0, priority: PRIORITY.user },
   );
-  return rows.filter((r) => r.price > 0).map((r) => ({ mint: r.tokenMint, price: r.price }))
-    .sort((a, b) => a.price - b.price);
+  return rows.filter((r) => r.price > 0).map((r) => ({
+    mint: r.tokenMint,
+    price: r.price,
+    name: r.token?.name ?? null,
+    image: r.extra?.img ?? r.token?.image ?? null,
+    rank: r.rarity?.meInstant?.rank ?? r.rarity?.moonrank?.rank ?? r.rarity?.howrare?.rank ?? null,
+  })).sort((a, b) => a.price - b.price);
 }

@@ -2,7 +2,7 @@ import { COLLECTIONS, EVM_COLLECTIONS, collectionName, isEvm } from "./config.ts
 import { toUsd } from "./prices.ts";
 import { ensureSales, liveSymbols } from "./ingest.ts";
 import { db } from "./db.ts";
-import { getListings } from "./magiceden.ts";
+import { getListings, type Listing } from "./magiceden.ts";
 import { collectionFlippers } from "./pnl.ts";
 
 type CollectionRow = {
@@ -32,15 +32,22 @@ const median = (xs: number[]) => {
 };
 
 // Group sales into UTC days: low / median / high / count per day.
-function daily(sales: { t: number; price: number }[]) {
-  const byDay = new Map<number, number[]>();
+// Chart buckets: hourly for 1D, 6-hourly for 7D, daily beyond. `day` is the
+// bucket start (kept for API compatibility).
+export const bucketFor = (rangeDays: number) => (rangeDays <= 1 ? 3600 : rangeDays <= 7 ? 6 * 3600 : DAY);
+
+function daily(sales: { t: number; price: number }[], bucket = DAY) {
+  const byBucket = new Map<number, number[]>();
   for (const s of sales) {
-    const d = Math.floor(s.t / DAY) * DAY;
-    (byDay.get(d) ?? byDay.set(d, []).get(d)!).push(s.price);
+    const d = Math.floor(s.t / bucket) * bucket;
+    (byBucket.get(d) ?? byBucket.set(d, []).get(d)!).push(s.price);
   }
-  return [...byDay.entries()]
+  return [...byBucket.entries()]
     .sort(([a], [b]) => a - b)
-    .map(([day, ps]) => ({ day, low: Math.min(...ps), median: median(ps), high: Math.max(...ps), count: ps.length }));
+    .map(([day, ps]) => ({
+      day, low: Math.min(...ps), median: median(ps), high: Math.max(...ps), count: ps.length,
+      volume: ps.reduce((a, p) => a + p, 0),
+    }));
 }
 
 const salesSince = db.prepare(
@@ -178,6 +185,7 @@ function evmDetail(slug: string, rangeDays: number) {
       floorUsd: toUsd(c.floor ?? null, currency),
     },
     rangeDays,
+    bucketSec: bucketFor(rangeDays),
     asOf: now,
     historyStartsAt: null,
     sales: [],
@@ -190,7 +198,7 @@ function evmDetail(slug: string, rangeDays: number) {
 }
 
 // Listings change constantly but the API is rate-limited: cache per collection.
-const listingCache = new Map<string, { at: number; data: { mint: string; price: number }[] }>();
+const listingCache = new Map<string, { at: number; data: Listing[] }>();
 async function cheapestListings(symbol: string) {
   const hit = listingCache.get(symbol);
   if (hit && Date.now() - hit.at < 120_000) return hit.data;
@@ -237,15 +245,16 @@ export async function collectionDetail(symbol: string, rangeDays: number) {
       volume24h: w.vol,
     },
     rangeDays,
+    bucketSec: bucketFor(rangeDays),
     asOf: now,
     historyStartsAt: firstTracked,
     sales: sales.map(({ signature, price, t }) => ({ signature, price, t })),
-    daily: daily(sales),
+    daily: daily(sales, bucketFor(rangeDays)),
     floorHistory: db.prepare(
       `SELECT ts, floor FROM collection_snapshots WHERE symbol = ? AND ts >= ? ORDER BY ts`,
     ).all(symbol, (now - rangeDays * DAY) * 1000),
     listings: await cheapestListings(symbol),
     topFlippers: collectionFlippers(symbol, 5),
-    recentSales: sales.slice(-15).reverse(),
+    recentSales: sales.slice(-24).reverse(),
   };
 }
