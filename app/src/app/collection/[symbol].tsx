@@ -47,6 +47,18 @@ export default function CollectionScreen() {
   }, [symbol, range]);
   useEffect(fetchData, [fetchData]);
 
+  // A Solana collection opened before its history arrived: the server is
+  // paging Magic Eden in the background, so check back a few times.
+  const pollKey = `${symbol}:${range}`;
+  const [pollState, setPollState] = useState({ key: pollKey, n: 0 });
+  const polls = pollState.key === pollKey ? pollState.n : 0; // resets per collection/range
+  const thin = !!data && data.chain === 'solana' && data.daily.length < 2;
+  useEffect(() => {
+    if (!thin || polls >= 4) return;
+    const t = setTimeout(() => { setPollState({ key: pollKey, n: polls + 1 }); fetchData(); }, 8000);
+    return () => clearTimeout(t);
+  }, [thin, polls, pollKey, fetchData]);
+
   // Refetch keeps the frame: the old render stays (dimmed) until new data lands.
   const pickRange = (r: number) => { if (r !== range) { setLoading(true); setRange(r); } };
 
@@ -90,7 +102,12 @@ export default function CollectionScreen() {
         </Pressable>
       )}>
       {data.daily.length < 2 ? (
-        <Text style={s.desc}>Not enough sales in this range yet.</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          {thin && polls < 4 && <ActivityIndicator size="small" color={C.accent} />}
+          <Text style={s.desc}>
+            {thin && polls < 4 ? 'Loading sales history from Magic Eden…' : 'Not enough sales in this range yet.'}
+          </Text>
+        </View>
       ) : table ? (
         <View>
           <View style={s.tRow}>

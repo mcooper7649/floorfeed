@@ -106,6 +106,15 @@ function saveSales(symbol: string, rows: MeActivity[]) {
   return added;
 }
 
+// Collections outside the live tier, refreshed a couple per poll in
+// rotation (each about every 30 min) so their charts don't go stale.
+const ROTATE_PER_POLL = 2;
+let rotation = 0;
+const restSymbols = () => {
+  const live = new Set(liveSymbols());
+  return COLLECTIONS.map((c) => c.symbol).filter((s) => !live.has(s));
+};
+
 export async function refreshSales() {
   let added = 0;
   for (const symbol of liveSymbols()) {
@@ -115,7 +124,30 @@ export async function refreshSales() {
       console.warn(`[sales] ${symbol}:`, (err as Error).message);
     }
   }
+  const rest = restSymbols();
+  for (let i = 0; i < ROTATE_PER_POLL && rest.length; i++) {
+    const symbol = rest[rotation++ % rest.length];
+    added += await catchUp(symbol, PRIORITY.background);
+  }
   if (added) console.log(`[sales] +${added} trades`);
+}
+
+// Newest sales first, paging back until a page overlaps what's stored
+// (or the API's ~500 offset limit), so there's no gap after a quiet spell.
+async function catchUp(symbol: string, priority: number) {
+  let added = 0;
+  for (let offset = 0; offset <= 500; offset += 100) {
+    try {
+      const rows = await getSales(symbol, 100, offset, priority);
+      const n = saveSales(symbol, rows);
+      added += n;
+      if (rows.length < 100 || n < rows.length) break;
+    } catch (err) {
+      console.warn(`[sales] ${symbol}@${offset}:`, (err as Error).message);
+      break;
+    }
+  }
+  return added;
 }
 
 // One-time history fill so collection charts have ~a month of sales from day one.
@@ -126,7 +158,7 @@ const countFor = db.prepare(`SELECT COUNT(*) n FROM trades WHERE collection = ?`
 async function backfillOne(symbol: string, priority: number = PRIORITY.background) {
   if ((countFor.get(symbol) as { n: number }).n >= BACKFILL_TARGET) return;
   let added = 0;
-  for (let offset = 100; offset <= 500; offset += 100) {
+  for (let offset = 0; offset <= 500; offset += 100) {
     try {
       const rows = await getSales(symbol, 100, offset, priority);
       if (!rows.length) break;
@@ -139,8 +171,11 @@ async function backfillOne(symbol: string, priority: number = PRIORITY.backgroun
   console.log(`[backfill] ${symbol}: +${added}`);
 }
 
+// Live tier first, then every other Solana collection, so a chart has
+// history before anyone opens it.
 export async function backfillSales() {
   for (const symbol of liveSymbols()) await backfillOne(symbol);
+  for (const symbol of restSymbols()) await backfillOne(symbol);
 }
 
 // Collections outside the live tier get sales when someone opens them: the
@@ -151,14 +186,9 @@ export async function ensureSales(symbol: string) {
   const at = lastOnDemand.get(symbol) ?? 0;
   if (Date.now() - at < 10 * 60_000) return;
   lastOnDemand.set(symbol, Date.now());
-  try {
-    const n = saveSales(symbol, await getSales(symbol, 100, 0, PRIORITY.user));
-    if (n) console.log(`[on-demand] ${symbol}: +${n}`);
-  } catch (err) {
-    console.warn(`[on-demand] ${symbol}:`, (err as Error).message);
-    lastOnDemand.delete(symbol);
-    return;
-  }
+  const n = await catchUp(symbol, PRIORITY.user);
+  if (n) console.log(`[on-demand] ${symbol}: +${n}`);
+  else if (!(countFor.get(symbol) as { n: number }).n) lastOnDemand.delete(symbol); // failed: let the next visit retry
   void backfillOne(symbol, PRIORITY.prefetch);
 }
 
