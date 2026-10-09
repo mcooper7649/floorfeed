@@ -4,6 +4,7 @@ import Svg, { Circle, G, Line, Path, Text as SvgText } from 'react-native-svg';
 
 import { C } from '@/constants/brand';
 import type { DailyPoint } from '@/lib/api';
+import { DAY, fmtWhen, priceSeries, type Sale } from '@/lib/price-series';
 import { fmtSol, linear, niceTicks } from '@/lib/scale';
 
 // Two stacked panels on one time axis (never two y-scales on one plot):
@@ -13,22 +14,14 @@ import { fmtSol, linear, niceTicks } from '@/lib/scale';
 //    a bucket holds one rare-trait sale; the rolling window doesn't;
 //  - volume: SOL traded per bucket, single-series bars.
 // One crosshair spans both; the tooltip follows it.
-const DAY = 86_400;
 const AXIS_H = 22;
 const GAP = 24; // between the panels (holds the volume label)
 const PAD = { top: 12, right: 52, left: 44 };
 const FONT = Platform.select({ web: 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif', default: undefined });
 const TIP_W = 220;
 
-const median = (xs: number[]) => {
-  const a = [...xs].sort((p, q) => p - q);
-  const m = a.length >> 1;
-  return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
-};
-const windowFor = (rangeDays: number) => (rangeDays <= 1 ? 3 * 3600 : DAY);
-
 type Props = {
-  sales: { signature: string; price: number; t: number }[];
+  sales: Sale[];
   buckets: DailyPoint[];
   bucketSec: number;
   floor: number | null;
@@ -36,14 +29,6 @@ type Props = {
   asOf: number;
   dimmed?: boolean;
   tall?: boolean;
-};
-
-const fmtWhen = (t: number, bucketSec: number) => {
-  const d = new Date(t * 1000);
-  if (bucketSec >= DAY) return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
-  const day = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-  const hr = (x: Date) => x.toLocaleTimeString(undefined, { hour: 'numeric' });
-  return bucketSec === 3600 ? `${day}, ${hr(d)}` : `${day}, ${hr(d)}–${hr(new Date((t + bucketSec) * 1000))}`;
 };
 
 // Time ticks at round steps, at most `max` of them.
@@ -69,24 +54,7 @@ export function PriceChart({ sales, buckets, bucketSec, floor, rangeDays, asOf, 
 
   const geo = useMemo(() => {
     if (!width || !buckets.length) return null;
-    const t1 = Math.ceil(asOf / bucketSec) * bucketSec;
-    const t0 = t1 - rangeDays * DAY;
-    // Rare-trait sales can sit at 2–3× floor and flatten everything else. The
-    // y-domain covers the 2nd–92nd percentile (plus every median and the floor);
-    // sales outside it are left off the plot and counted in the caption,
-    // never pinned to the edge where they'd read as real values.
-    const sorted = sales.map((s) => s.price).sort((a, b) => a - b);
-    const q = (p: number) => sorted[Math.min(sorted.length - 1, Math.floor(p * (sorted.length - 1)))];
-    // Rolling median at each bucket's end over the trailing window.
-    const W = windowFor(rangeDays);
-    const byT = [...sales].sort((a, b) => a.t - b.t);
-    const rolled = buckets.map((d) => {
-      const end = d.day + bucketSec;
-      const inWin = byT.filter((x) => x.t > end - W && x.t <= end).map((x) => x.price);
-      return { ...d, roll: inWin.length ? median(inWin) : d.median };
-    });
-    const lo = Math.min(q(0.02), floor ?? Infinity, ...rolled.map((d) => d.roll));
-    const hi = Math.max(q(0.92), floor ?? -Infinity, ...rolled.map((d) => d.roll));
+    const { t0, t1, slots, lo, hi } = priceSeries(sales, buckets, bucketSec, floor, rangeDays, asOf);
     const ticks = niceTicks(lo, hi, tall ? 5 : 4);
     const yMin = ticks[0];
     const yMax = ticks[ticks.length - 1];
@@ -98,8 +66,8 @@ export function PriceChart({ sales, buckets, bucketSec, floor, rangeDays, asOf, 
     const slot = x(t0 + bucketSec) - x(t0);
     const bw = Math.max(1, Math.min(18, slot - 2)); // >= 2px surface gap between bars
     const shown = sales.filter((s) => s.price >= yMin && s.price <= yMax && s.t >= t0);
-    const pts = rolled.filter((d) => d.day >= t0 - bucketSec)
-      .map((d) => ({ ...d, cx: x(d.day + bucketSec / 2), cy: y(d.roll) }));
+    const pts = slots.filter((d) => d.roll != null)
+      .map((d) => ({ ...d, roll: d.roll!, cx: x(d.day + bucketSec / 2), cy: y(d.roll!) }));
     const path = pts.map((p, i) => `${i ? 'L' : 'M'}${p.cx.toFixed(1)},${p.cy.toFixed(1)}`).join('');
     const xt = timeTicks(t0, t1, Math.max(3, Math.floor((width - PAD.left - PAD.right) / 110)));
     const end = pts[pts.length - 1];
