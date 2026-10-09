@@ -46,8 +46,14 @@ function PrivyLoader({ children }: { children: ReactNode }) {
   const loginWhenReady = useRef(false);
 
   const load = useCallback(() => {
+    // The token getter is set before React re-renders: effects run child-first,
+    // so the session's /auth/session call would otherwise go out without a token.
+    const onState = (s: PrivyState) => {
+      setTokenGetter(s.userId ? s.getAccessToken : null);
+      setPrivy(s);
+    };
     mounting.current ??= importUrl(`/privy/${ENTRY}`).then((b) =>
-      b.mount({ appId: APP_ID, theme: C.bg as `#${string}`, accent: C.accent as `#${string}`, onState: setPrivy }),
+      b.mount({ appId: APP_ID, theme: C.bg as `#${string}`, accent: C.accent as `#${string}`, onState }),
     );
     return mounting.current;
   }, []);
@@ -73,11 +79,6 @@ function PrivyLoader({ children }: { children: ReactNode }) {
       loginWhenReady.current = false;
       privy.login();
     }
-  }, [privy]);
-
-  useEffect(() => {
-    setTokenGetter(privy?.userId ? privy.getAccessToken : null);
-    return () => setTokenGetter(null);
   }, [privy]);
 
   const value: AuthState = privy

@@ -17,11 +17,16 @@ export const isPrivyId = (userId: string) => userId.startsWith("did:privy:");
 // The Privy user id (token subject) for this request, or null.
 export async function privyUser(req: FastifyRequest): Promise<string | null> {
   const m = /^Bearer (.+)$/.exec(req.headers.authorization ?? "");
-  if (!m || !jwks) return null;
+  if (!m || !jwks) {
+    req.log.warn({ auth: m ? "privy not configured" : "no bearer token" }, "auth rejected");
+    return null;
+  }
   try {
     const { payload } = await jwtVerify(m[1], jwks, { issuer: "privy.io", audience: config.privyAppId });
     return typeof payload.sub === "string" ? payload.sub : null;
-  } catch {
+  } catch (e) {
+    // Reason only (expired, bad audience, …), never the token itself.
+    req.log.warn({ auth: (e as { code?: string }).code ?? String(e) }, "auth rejected");
     return null;
   }
 }
