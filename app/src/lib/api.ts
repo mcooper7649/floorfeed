@@ -29,6 +29,33 @@ export type FeedItem = {
   take: Take | null;
 };
 
+// Event feed (GET /events). Trader identity: .sol name, avatar = art of an
+// NFT they hold, tier from flip record ("mm" = likely AMM market maker).
+export type Tier = 'elite' | 'pro' | 'mm' | 'new' | null;
+export type Trader = {
+  wallet: string;
+  name: string | null;
+  avatar: string | null;
+  tier: Tier;
+  flips: number;
+  wins: number;
+  winRate: number | null;
+  realizedSol: number;
+  quality: number;
+};
+type EventColl = { symbol: string; name: string; floor: number | null };
+type EventBase = { id: string; t: number; collection: EventColl; score?: number };
+export type BuyEvent = EventBase & { kind: 'buy'; signature: string; mint: string; image: string | null; price: number;
+  vsFloorPct: number | null; wallet: Trader; take: Take | null };
+export type FlipEvent = EventBase & { kind: 'flip'; signature: string; mint: string; image: string | null; buy: number;
+  sell: number; pnl: number; pnlPct: number; holdHours: number; wallet: Trader; buyer: Trader };
+export type SweepEvent = EventBase & { kind: 'sweep'; wallet: Trader; count: number; total: number; avg: number;
+  images: string[]; vsFloorPct: number | null };
+export type ClusterEvent = EventBase & { kind: 'cluster'; wallets: Trader[]; count: number; buys: number; avg: number;
+  images: string[]; vsFloorPct: number | null; since: number };
+export type FeedEvent = BuyEvent | FlipEvent | SweepEvent | ClusterEvent;
+export type FeedView = 'top' | 'latest' | 'wins';
+
 export type PaperPosition = {
   id: number;
   collection: { symbol: string; name: string; floor: number | null };
@@ -206,6 +233,12 @@ export const api = {
     if (p.before) q.set('before', String(p.before));
     if (p.following) q.set('following', p.following);
     return req<FeedItem[]>(`/feed?${q}`);
+  },
+  events: (p: { view: FeedView; before?: number; following?: string }) => {
+    const q = new URLSearchParams({ view: p.view, limit: '30' });
+    if (p.before) q.set('before', String(p.before));
+    if (p.following) q.set('following', p.following);
+    return req<{ view: FeedView; events: FeedEvent[]; next: number | null }>(`/events?${q}`);
   },
   take: (signature: string) => req<Take | null>(`/takes/${signature}`),
   collections: () => req<CollectionSummary[]>('/collections'),

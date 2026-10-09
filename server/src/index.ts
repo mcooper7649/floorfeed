@@ -8,9 +8,11 @@ import { ADDRESS_RE, capabilities, hasDas, holdings, solBalance } from "./chain.
 import { cheapestListings, collectionDetail, listCollections } from "./collections.ts";
 import { collectionName, config, isEvm } from "./config.ts";
 import { db } from "./db.ts";
+import { feedEvents } from "./feed.ts";
 import { startIngest } from "./ingest.ts";
 import { KINDS, generate, nextPost, reportResult, startSocial, xLength, type Kind } from "./social.ts";
 import { walletStats } from "./pnl.ts";
+import { startNames } from "./sns.ts";
 import { traderLeaderboard, traderProfile } from "./traders.ts";
 
 type TradeRow = {
@@ -152,6 +154,23 @@ app.get("/feed", async (req, reply) => {
       take: cachedTake(t.signature) ?? null,
     };
   });
+});
+
+// Event feed: ranked ("top"), chronological ("latest") or profitable flips
+// ("wins"); buys, flips, sweeps and multi-wallet clusters. `following=<userId>`
+// keeps events involving wallets that user follows.
+app.get("/events", async (req, reply) => {
+  const q = z.object({
+    view: z.enum(["top", "latest", "wins"]).default("top"),
+    limit: z.coerce.number().int().min(1).max(60).default(30),
+    before: z.coerce.number().int().optional(),
+    following: z.string().optional(),
+  }).parse(req.query);
+  if (q.following && !(await authorize(req, reply, q.following))) return;
+  const followed = q.following
+    ? new Set((db.prepare("SELECT wallet FROM follows WHERE user_id = ?").all(q.following) as { wallet: string }[]).map((r) => r.wallet))
+    : undefined;
+  return feedEvents({ view: q.view, before: q.before, limit: q.limit, followed });
 });
 
 // AI take, generated lazily and cached per trade.
@@ -371,4 +390,5 @@ app.get("/social/preview", async (req, reply) => {
 // and so Magic Eden's rate limit.
 if (process.env.INGEST !== "0") startIngest();
 startSocial();
+startNames();
 await app.listen({ host: "0.0.0.0", port: config.port });
