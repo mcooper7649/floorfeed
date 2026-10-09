@@ -4,6 +4,11 @@ export const config = {
   ollamaUrl: process.env.OLLAMA_URL ?? "http://localhost:11434",
   ollamaModel: process.env.OLLAMA_MODEL ?? "nimble:latest",
   heliusWebhookSecret: process.env.HELIUS_WEBHOOK_SECRET ?? "",
+  heliusApiKey: process.env.HELIUS_API_KEY ?? "",
+  // Privy verifies user access tokens server-side; the secret never ships
+  // to the app (only the public app ID does).
+  privyAppId: process.env.PRIVY_APP_ID ?? "",
+  privyAppSecret: process.env.PRIVY_APP_SECRET ?? "",
   // Wallet + trading. The public RPC is fine for balance reads at demo
   // volume; set a Helius (or other) RPC URL for anything heavier.
   solanaRpcUrl: process.env.SOLANA_RPC_URL ?? "https://api.mainnet-beta.solana.com",
