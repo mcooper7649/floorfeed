@@ -110,7 +110,7 @@ function avatars(wallets: string[]) {
   return out;
 }
 
-function traders(wallets: string[]) {
+export function traders(wallets: string[]) {
   const uniq = [...new Set(wallets)];
   const stats = allStats();
   const names = getNames(uniq);

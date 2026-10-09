@@ -68,6 +68,7 @@ export type PaperPosition = {
 };
 
 export type WalletDetail = {
+  identity?: Trader; // absent from older API builds
   stats: WalletStats;
   profile: TraderProfile;
   trades: {
@@ -253,6 +254,7 @@ export const api = {
     req<{ positions: PaperPosition[]; realizedSol: number; unrealizedSol: number }>(`/paper/${userId}`),
   buyFloor: (userId: string, collection: string, copiedFrom?: string) =>
     send('POST', '/paper/buy', { userId, collection, copiedFrom }) as Promise<{ entryPrice: number }>,
+  resetPaper: (userId: string) => send('POST', '/paper/reset', { userId }) as Promise<{ deleted: number }>,
   sell: (userId: string, positionId: number) =>
     send('POST', '/paper/sell', { userId, positionId }) as Promise<{ exitPrice: number }>,
 };

@@ -8,11 +8,11 @@ import { ADDRESS_RE, capabilities, hasDas, holdings, solBalance } from "./chain.
 import { cheapestListings, collectionDetail, listCollections } from "./collections.ts";
 import { collectionName, config, isEvm } from "./config.ts";
 import { db } from "./db.ts";
-import { feedEvents } from "./feed.ts";
+import { feedEvents, traders } from "./feed.ts";
 import { startIngest } from "./ingest.ts";
 import { KINDS, generate, nextPost, reportResult, startSocial, xLength, type Kind } from "./social.ts";
 import { walletStats } from "./pnl.ts";
-import { startNames } from "./sns.ts";
+import { nameFor, startNames } from "./sns.ts";
 import { traderLeaderboard, traderProfile } from "./traders.ts";
 
 type TradeRow = {
@@ -217,7 +217,9 @@ app.get("/wallets/:address", async (req) => {
   const trades = db.prepare(
     `${tradeSelect} WHERE t.buyer = ? OR t.seller = ? ORDER BY t.block_time DESC LIMIT 50`,
   ).all(address, address) as TradeRow[];
+  await nameFor(address);
   return {
+    identity: traders([address]).get(address)!,
     stats: walletStats(address),
     profile: traderProfile(address),
     trades: trades.map((t) => ({
@@ -299,6 +301,14 @@ app.post("/paper/sell", async (req, reply) => {
   db.prepare("UPDATE paper_positions SET exit_price = ?, closed_at = ? WHERE id = ?")
     .run(exit, Date.now(), b.positionId);
   return { exitPrice: exit };
+});
+
+// Wipes the user's paper positions (open and closed): a fresh start for stats.
+app.post("/paper/reset", async (req, reply) => {
+  const b = z.object({ userId: z.string().min(1) }).parse(req.body);
+  if (!(await authorize(req, reply, b.userId))) return;
+  const r = db.prepare("DELETE FROM paper_positions WHERE user_id = ?").run(b.userId);
+  return { deleted: r.changes };
 });
 
 app.get("/paper/:userId", async (req, reply) => {

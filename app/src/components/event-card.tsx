@@ -142,25 +142,35 @@ function CopyCta({ symbol, floor, copiedFrom }: { symbol: string; floor: number 
 
 const collHref = (symbol: string) => ({ pathname: '/collection/[symbol]' as const, params: { symbol } });
 
-// Up to four distinct artworks: on tiles a square (1 full, 2 halves, 3–4 as
-// a 2×2 grid), on list cards a strip.
+// Up to four distinct artworks, never leaving an empty cell.
+// Tiles: a square (1 full · 2 halves · 3 = one large + two stacked · 4 = 2×2).
+// List cards: a full-width banner split evenly between the images.
 function Mosaic({ images, name, tile, badge }: { images: string[]; name: string; tile?: boolean; badge?: ReactNode }) {
-  const imgs = images.slice(-4);
-  if (tile) {
-    const cell = imgs.length <= 1 ? s.cellFull : imgs.length === 2 ? s.cellHalf : s.cellQuarter;
+  const imgs: (string | null)[] = images.length ? images.slice(-4) : [null];
+  const art = (u: string | null, px = 256) => <NftImage uri={u} name={name} ratio={null} px={px} />;
+  if (!tile) {
     return (
-      <View style={s.mosaic}>
-        {(imgs.length ? imgs : [null]).map((u, i) => (
-          <View key={i} style={cell}><NftImage uri={u} name={name} ratio={null} px={imgs.length <= 1 ? 512 : 256} /></View>
-        ))}
-        {imgs.length === 3 && <View style={[s.cellQuarter, { backgroundColor: C.cardHi }]} />}
-        {badge}
+      <View style={s.banner}>
+        {imgs.map((u, i) => <View key={i} style={s.bannerCell}>{art(u, imgs.length === 1 ? 512 : 256)}</View>)}
       </View>
     );
   }
+  const n = imgs.length;
   return (
-    <View style={s.strip}>
-      {imgs.map((u, i) => <CollIcon key={i} name={name} uri={u} size={64} radius={12} />)}
+    <View style={s.mosaic}>
+      {n === 1 && <View style={s.cellFull}>{art(imgs[0], 512)}</View>}
+      {n === 2 && imgs.map((u, i) => <View key={i} style={s.cellHalf}>{art(u, 384)}</View>)}
+      {n === 3 && (
+        <>
+          <View style={s.cellHalf}>{art(imgs[0], 384)}</View>
+          <View style={s.cellHalf}>
+            <View style={s.cellStack}>{art(imgs[1])}</View>
+            <View style={s.cellStack}>{art(imgs[2])}</View>
+          </View>
+        </>
+      )}
+      {n === 4 && imgs.map((u, i) => <View key={i} style={s.cellQuarter}>{art(u)}</View>)}
+      {badge}
     </View>
   );
 }
@@ -446,6 +456,8 @@ const s = StyleSheet.create({
   cellFull: { width: '100%', height: '100%' },
   cellHalf: { width: '50%', height: '100%' },
   cellQuarter: { width: '50%', height: '50%' },
-  strip: { flexDirection: 'row', gap: 8 },
+  cellStack: { width: '100%', height: '50%' },
+  banner: { flexDirection: 'row', height: 132, gap: 4, borderRadius: 14, overflow: 'hidden' },
+  bannerCell: { flex: 1, height: '100%' },
   stack: { flexDirection: 'row' },
 });

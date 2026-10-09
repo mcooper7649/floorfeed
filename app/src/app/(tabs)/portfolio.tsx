@@ -112,13 +112,35 @@ function PaperPortfolio() {
     bumpPortfolio();
   };
 
+  // Two taps to reset (no blocking confirm dialogs on web); the arm expires.
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    if (!armed) return;
+    const t = setTimeout(() => setArmed(false), 4000);
+    return () => clearTimeout(t);
+  }, [armed]);
+  const reset = async () => {
+    if (!userId) return;
+    if (!armed) return setArmed(true);
+    setArmed(false);
+    await api.resetPaper(userId).catch(() => {});
+    bumpPortfolio();
+  };
+
   const total = (data?.realizedSol ?? 0) + (data?.unrealizedSol ?? 0);
 
   return (
     <Screen title="Portfolio" subtitle="Paper mode: no real SOL moves">
       <WalletCard />
       <View style={s.summary}>
-        <Text style={s.label}>TOTAL P&L</Text>
+        <View style={s.labelRow}>
+          <Text style={s.label}>TOTAL P&L</Text>
+          {!!data?.positions.length && (
+            <Pressable onPress={reset} style={armed ? s.resetArmed : s.reset}>
+              <Text style={[s.resetTxt, armed && { color: C.down }]}>{armed ? 'Tap again to wipe all paper trades' : 'Reset paper stats'}</Text>
+            </Pressable>
+          )}
+        </View>
         <Text style={[s.big, { color: total >= 0 ? C.up : C.down }]}>{signedSol(total, 3)}</Text>
         <Text style={s.meta}>
           {signedSol(data?.realizedSol ?? 0, 3)} realized · {signedSol(data?.unrealizedSol ?? 0, 3)} open (marked at est. bid)
@@ -157,6 +179,10 @@ function PaperPortfolio() {
 const s = StyleSheet.create({
   summary: { marginHorizontal: 16, marginBottom: 8, padding: 16, borderRadius: 18, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, gap: 4 },
   label: { color: C.dim, fontSize: 11, fontWeight: '800', letterSpacing: 1 },
+  labelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  reset: { borderRadius: 999, borderWidth: 1, borderColor: C.border, paddingHorizontal: 10, paddingVertical: 4 },
+  resetArmed: { borderRadius: 999, borderWidth: 1, borderColor: C.down, paddingHorizontal: 10, paddingVertical: 4 },
+  resetTxt: { color: C.dim, fontSize: 12, fontWeight: '700' },
   big: { fontSize: 32, fontWeight: '800', fontVariant: ['tabular-nums'] },
   meta: { color: C.dim, fontSize: 12.5 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },

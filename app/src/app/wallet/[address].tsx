@@ -4,6 +4,7 @@ import { ActivityIndicator, FlatList, Platform, Pressable, StyleSheet, Text, Vie
 
 import { CollIcon } from '@/components/coll-icon';
 import { Empty } from '@/components/screen';
+import { Avatar, TierBadge } from '@/components/event-card';
 import { TopNav } from '@/components/top-nav';
 import { C } from '@/constants/brand';
 import { api, type WalletDetail } from '@/lib/api';
@@ -26,10 +27,11 @@ export default function WalletScreen() {
   const st = data.stats;
   const pf = data.profile;
   const isFollowing = following.has(address);
+  const id = data.identity;
 
   return (
     <View style={s.fill}>
-      <Stack.Screen options={{ title: shortAddr(address) }} />
+      <Stack.Screen options={{ title: id?.name ?? shortAddr(address) }} />
       {nav}
       <FlatList
         data={data.trades}
@@ -37,7 +39,16 @@ export default function WalletScreen() {
         contentContainerStyle={{ padding: pad, paddingBottom: 60, width: '100%', maxWidth, alignSelf: 'center' }}
         ListHeaderComponent={
           <View style={{ gap: 12, marginBottom: 12 }}>
-            {Platform.OS === 'web' && <Text style={[s.title, wide && { fontSize: 32 }]}>{shortAddr(address)}</Text>}
+            <View style={s.head}>
+              {id && <Avatar t={id} size={wide ? 64 : 52} />}
+              <View style={{ flex: 1, gap: 3 }}>
+                <View style={s.nameRow}>
+                  <Text style={[s.title, wide && { fontSize: 32 }]} numberOfLines={1}>{id?.name ?? shortAddr(address)}</Text>
+                  {id && <TierBadge tier={id.tier} />}
+                </View>
+                <Text style={s.addr} selectable numberOfLines={1}>{id?.name ? address : 'no .sol name'}</Text>
+              </View>
+            </View>
             <View style={s.grid}>
               <Stat wide={wide} label="Realized" value={signedSol(st.realizedSol)} color={st.realizedSol >= 0 ? C.up : C.down} />
               <Stat wide={wide} label="Win rate" value={st.winRate == null ? '—' : `${Math.round(st.winRate * 100)}%`} />
@@ -98,7 +109,10 @@ const Stat = ({ label, value, color, wide }: { label: string; value: string; col
 
 const s = StyleSheet.create({
   fill: { flex: 1, backgroundColor: C.bg },
-  title: { color: C.text, fontSize: 24, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  title: { color: C.text, fontSize: 24, fontWeight: '800', fontVariant: ['tabular-nums'], flexShrink: 1 },
+  head: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  addr: { color: C.dim, fontSize: 12.5, fontVariant: ['tabular-nums'] },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   stat: { flexGrow: 1, flexBasis: '45%', backgroundColor: C.card, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: C.border },
   statLabel: { color: C.dim, fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
