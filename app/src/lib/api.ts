@@ -83,6 +83,8 @@ export type WalletDetail = {
 };
 
 export type TraderProfile = {
+  name?: string | null; // .sol name (leaderboard rows)
+  avatar?: string | null;
   wallet: string;
   flips: number;
   wins: number;
@@ -176,8 +178,8 @@ export type CollectionDetail = {
   daily: DailyPoint[];
   floorHistory: { ts: number; floor: number | null }[];
   listings: Listing[];
-  topFlippers: { wallet: string; flips: number; wins: number; realizedSol: number }[];
-  recentSales: { signature: string; mint: string; buyer: string; price: number; t: number; image: string | null }[];
+  topFlippers: { wallet: string; name?: string | null; avatar?: string | null; flips: number; wins: number; realizedSol: number }[];
+  recentSales: { signature: string; mint: string; buyer: string; buyerName?: string | null; price: number; t: number; image: string | null }[];
 };
 
 // Signed-in (Privy) users send their access token; anonymous device ids don't.

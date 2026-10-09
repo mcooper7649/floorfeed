@@ -114,7 +114,14 @@ app.get("/collections/:symbol", async (req, reply) => {
   const { range } = z.object({ range: z.coerce.number().int().refine((d) => [1, 7, 30].includes(d)).default(7) })
     .parse(req.query);
   const detail = await collectionDetail(symbol, range);
-  return detail ?? reply.code(404).send({ error: "unknown collection" });
+  if (!detail) return reply.code(404).send({ error: "unknown collection" });
+  // .sol names / avatars for the wallets on the page.
+  const ids = traders([...detail.topFlippers.map((f) => f.wallet), ...detail.recentSales.map((r) => r.buyer)]);
+  return {
+    ...detail,
+    topFlippers: detail.topFlippers.map((f) => ({ ...f, name: ids.get(f.wallet)?.name ?? null, avatar: ids.get(f.wallet)?.avatar ?? null })),
+    recentSales: detail.recentSales.map((r) => ({ ...r, buyerName: ids.get(r.buyer)?.name ?? null })),
+  };
 });
 
 // Feed of recent buys. `following=<userId>` limits it to wallets that user follows;
@@ -203,13 +210,18 @@ app.get("/leaderboard", async (req) => {
     minFlips: z.coerce.number().int().min(1).max(50).default(3),
     hideMM: z.enum(["0", "1"]).default("1"),
   }).parse(req.query);
-  return traderLeaderboard({
+  const board = traderLeaderboard({
     windowDays: q.window === "all" ? null : Number(q.window),
     sort: q.sort,
     minFlips: q.minFlips,
     hideMarketMakers: q.hideMM === "1",
     limit: q.limit,
   });
+  const ids = traders(board.rows.map((r) => r.wallet));
+  return {
+    ...board,
+    rows: board.rows.map((r) => ({ ...r, name: ids.get(r.wallet)?.name ?? null, avatar: ids.get(r.wallet)?.avatar ?? null })),
+  };
 });
 
 app.get("/wallets/:address", async (req) => {

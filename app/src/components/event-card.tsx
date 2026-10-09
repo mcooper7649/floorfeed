@@ -39,7 +39,9 @@ export const traderName = (t: Trader) => t.name ?? shortAddr(t.wallet);
 // Fallback avatar color from the address, so a wallet looks the same everywhere.
 const hue = (w: string) => [...w].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) % 360, 7);
 
-export function Avatar({ t, size = 36, ring }: { t: Trader; size?: number; ring?: boolean }) {
+type Who = { wallet: string; name?: string | null; avatar?: string | null };
+
+export function Avatar({ t, size = 36, ring }: { t: Who; size?: number; ring?: boolean }) {
   return (
     <View style={[s.avatar, {
       width: size, height: size, borderRadius: size / 2,

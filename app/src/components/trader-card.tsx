@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { Avatar } from '@/components/event-card';
 import { Sparkline } from '@/components/sparkline';
 import { C } from '@/constants/brand';
 import type { TraderProfile } from '@/lib/api';
@@ -19,8 +20,9 @@ export function TraderCard({ t, rank, following, onToggleFollow }: {
     <Pressable style={s.card} onPress={() => router.push({ pathname: '/wallet/[address]', params: { address: t.wallet } })}>
         <View style={s.row}>
           <Text style={[s.rank, rank <= 3 && { color: C.accent }]}>{rank}</Text>
+          <Avatar t={t} size={40} />
           <View style={{ flex: 1, gap: 4 }}>
-            <Text style={s.addr}>{shortAddr(t.wallet)}</Text>
+            <Text style={s.addr} numberOfLines={1}>{t.name ?? shortAddr(t.wallet)}</Text>
             <View style={s.badges}>
               {t.streak >= 3 && <Badge text={`${t.streak} win streak`} tone="up" />}
               {t.likelyMarketMaker && <Badge text="Likely market maker" tone="dim" />}

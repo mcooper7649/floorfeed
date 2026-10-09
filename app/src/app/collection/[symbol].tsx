@@ -8,6 +8,7 @@ import { BuySheet } from '@/components/buy-sheet';
 import { ChainBadge } from '@/components/chain-badge';
 import { CollIcon } from '@/components/coll-icon';
 import { DepthChart } from '@/components/depth-chart';
+import { Avatar } from '@/components/event-card';
 import { FloorLine } from '@/components/floor-line';
 import { MODE_COLOR } from '@/components/mode-toggle';
 import { NftImage, Pill } from '@/components/nft-image';
@@ -134,8 +135,9 @@ export default function CollectionScreen() {
           <Link key={f.wallet} href={{ pathname: '/wallet/[address]', params: { address: f.wallet } }} asChild>
             <Pressable style={s.listRow}>
               <Text style={s.rank}>{i + 1}</Text>
+              <Avatar t={f} size={32} />
               <View style={{ flex: 1 }}>
-                <Text style={s.rowTitle}>{shortAddr(f.wallet)}</Text>
+                <Text style={s.rowTitle} numberOfLines={1}>{f.name ?? shortAddr(f.wallet)}</Text>
                 <Text style={s.rowMeta}>{f.wins}/{f.flips} profitable flips</Text>
               </View>
               <Text style={[s.rowVal, { color: f.realizedSol >= 0 ? C.up : C.down }]}>{signedSol(f.realizedSol)}</Text>
@@ -274,7 +276,7 @@ export default function CollectionScreen() {
                         </NftImage>
                         <View style={s.itemBody}>
                           <Text style={s.itemPrice}>{sol(r.price, 3)}</Text>
-                          <Text style={s.rowMeta} numberOfLines={1}>bought by {shortAddr(r.buyer)}</Text>
+                          <Text style={s.rowMeta} numberOfLines={1}>bought by {r.buyerName ?? shortAddr(r.buyer)}</Text>
                         </View>
                       </Pressable>
                     ))}
