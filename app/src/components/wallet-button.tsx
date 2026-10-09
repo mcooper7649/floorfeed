@@ -2,10 +2,12 @@ import { Image } from 'expo-image';
 import { useEffect, useState } from 'react';
 import { Linking, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { ModeChip, ModeToggle } from '@/components/mode-toggle';
 import { C } from '@/constants/brand';
 import { api, type Capabilities } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { shortAddr } from '@/lib/format';
+import { useTradeMode } from '@/lib/mode';
 import { useWallet } from '@/lib/wallet';
 
 // SOL balance for the connected address, refreshed when the address changes.
@@ -30,6 +32,7 @@ export function useCapabilities() {
 export function WalletButton() {
   const w = useWallet();
   const auth = useAuth();
+  const { mode } = useTradeMode();
   const [open, setOpen] = useState(false);
   const balance = useBalance(w.address);
   if (!w.supported) return null;
@@ -40,6 +43,7 @@ export function WalletButton() {
         accessibilityLabel={w.address ? `Wallet ${w.address}` : auth.supported ? 'Sign in' : 'Connect wallet'}>
         {w.address ? (
           <>
+            <ModeChip mode={mode} />
             {w.walletIcon ? <Image source={w.walletIcon} style={s.icon} /> : null}
             <Text style={s.addr}>{shortAddr(w.address)}</Text>
             {balance != null && <Text style={s.bal}>{balance.toFixed(2)} SOL</Text>}
@@ -75,6 +79,7 @@ export function WalletSheet({ open, onClose }: { open: boolean; onClose: () => v
           {w.kind === 'embedded' ? (
             <>
               <Text style={s.title}>Your account</Text>
+              <ModeToggle />
               {auth.label ? <Text style={s.meta}>Signed in as {auth.label}</Text> : null}
               <View style={s.acct}>
                 <View style={[s.iconBig, s.embeddedIcon]}><Text style={s.embeddedGlyph}>F</Text></View>
@@ -107,6 +112,7 @@ export function WalletSheet({ open, onClose }: { open: boolean; onClose: () => v
           ) : w.address ? (
             <>
               <Text style={s.title}>Your wallet</Text>
+              <ModeToggle />
               <View style={s.acct}>
                 {w.walletIcon ? <Image source={w.walletIcon} style={s.iconBig} /> : null}
                 <View style={{ flex: 1 }}>

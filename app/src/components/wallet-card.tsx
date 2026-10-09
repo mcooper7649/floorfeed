@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { ModeToggle } from '@/components/mode-toggle';
 import { useBalance, useCapabilities, WalletSheet } from '@/components/wallet-button';
 import { C } from '@/constants/brand';
 import { useAuth } from '@/lib/auth';
@@ -42,11 +43,10 @@ export function WalletCard() {
           </Pressable>
         )}
       </View>
-      {caps && (
+      {w.supported && <ModeToggle />}
+      {caps && !caps.buy.enabled && w.address && (
         <Text style={s.meta}>
-          {caps.buy.enabled
-            ? `Real buys enabled via ${[caps.buy.magiceden && 'Magic Eden', caps.buy.tensor && 'Tensor'].filter(Boolean).join(' and ')}.`
-            : 'Real buys are coming: they turn on once FloorFeed has marketplace API access. Until then, trades here are paper only.'}
+          In real mode, buys open the listing on Magic Eden until FloorFeed&apos;s own marketplace access is approved.
         </Text>
       )}
       <WalletSheet open={open} onClose={() => setOpen(false)} />

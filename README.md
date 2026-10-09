@@ -198,6 +198,8 @@ The feed fills within about 30 seconds of the server starting. Takes appear as c
 | `GET` | `/collections/:symbol?range=7\|30` | Solana: stats, sales, daily aggregates, floor snapshots, cheapest listings, top flippers. EVM: stats, owners, supply, 30-day volume, floor snapshots |
 | `GET` | `/wallets/:address` | A wallet's stats and its 50 most recent trades |
 | `GET` | `/follows/:userId` | Wallets a user follows |
+| `GET` | `/chain/holdings/:address` | The wallet's NFTs in tracked collections (Helius DAS), marked at est. bid |
+| `GET` | `/trade/quote/:symbol?buyer=` | Real buy quote: cheapest listing, buyer balance, whether FloorFeed can execute it |
 | `POST` | `/auth/session` | Verify a Privy access token; move this device's data to the account |
 | `POST` · `DELETE` | `/follows` | Follow or unfollow a wallet |
 | `POST` | `/paper/buy` · `/paper/sell` | Open or close a paper position |

@@ -3,8 +3,8 @@ import Fastify from "fastify";
 import { z } from "zod";
 import { cachedTake, getTake } from "./ai.ts";
 import { adoptDevice, authorize, privyUser } from "./auth.ts";
-import { ADDRESS_RE, capabilities, solBalance } from "./chain.ts";
-import { collectionDetail, listCollections } from "./collections.ts";
+import { ADDRESS_RE, capabilities, hasDas, holdings, solBalance } from "./chain.ts";
+import { cheapestListings, collectionDetail, listCollections } from "./collections.ts";
 import { collectionName, config, isEvm } from "./config.ts";
 import { db } from "./db.ts";
 import { startIngest } from "./ingest.ts";
@@ -51,6 +51,45 @@ app.get("/chain/balance/:address", async (req, reply) => {
   } catch (err) {
     return reply.code(502).send({ error: (err as Error).message });
   }
+});
+
+// Real portfolio: the wallet's NFTs in tracked collections (Helius DAS).
+app.get("/chain/holdings/:address", async (req, reply) => {
+  const { address } = req.params as { address: string };
+  if (!ADDRESS_RE.test(address)) return reply.code(400).send({ error: "Not a Solana address" });
+  if (!hasDas()) return reply.code(501).send({ error: "Holdings need a Helius RPC (SOLANA_RPC_URL)" });
+  try {
+    return await holdings(address);
+  } catch (err) {
+    return reply.code(502).send({ error: (err as Error).message });
+  }
+});
+
+// What a real "buy floor" would cost: the cheapest listing right now, the
+// buyer's balance, and whether FloorFeed can build the transaction yet.
+app.get("/trade/quote/:symbol", async (req, reply) => {
+  const { symbol } = req.params as { symbol: string };
+  const { buyer } = z.object({ buyer: z.string().regex(ADDRESS_RE).optional() }).parse(req.query);
+  if (isEvm(symbol)) return reply.code(422).send({ error: "Real buys are Solana-only" });
+  const coll = db.prepare("SELECT floor FROM collections WHERE symbol = ?").get(symbol) as { floor: number | null } | undefined;
+  if (!coll) return reply.code(404).send({ error: "unknown collection" });
+  const [listings, balance] = await Promise.all([
+    cheapestListings(symbol),
+    buyer ? solBalance(buyer).catch(() => null) : null,
+  ]);
+  const listing = listings[0] ?? null;
+  const caps = capabilities();
+  return {
+    collection: { symbol, name: collectionName(symbol), floor: coll.floor },
+    listing,
+    // Price is what the listing asks; marketplace fee and royalty are added
+    // by the marketplace when it builds the transaction.
+    networkFeeSol: 0.000005,
+    balanceSol: balance?.sol ?? null,
+    executable: caps.buy.enabled,
+    reason: caps.buy.enabled ? null : "FloorFeed's marketplace API access is pending, so buys open on Magic Eden for now.",
+    marketUrl: listing ? `https://magiceden.io/item-details/${listing.mint}` : `https://magiceden.io/marketplace/${symbol}`,
+  };
 });
 
 // Builds an unsigned buy transaction for the user's wallet to sign. The

@@ -174,11 +174,33 @@ const send = (method: string, path: string, body: unknown) =>
 
 export type Capabilities = { buy: { enabled: boolean; magiceden: boolean; tensor: boolean }; rpc: 'public' | 'custom' };
 
+export type Holding = {
+  mint: string;
+  name: string | null;
+  image: string | null;
+  collection: { symbol: string; name: string; floor: number | null };
+  estValue: number | null; // floor minus the sell haircut (est. bid)
+  boughtAt: number | null; // this wallet's last on-chain buy price, if we saw it
+};
+export type Holdings = { address: string; sol: number; nftValue: number; totalValue: number; nfts: Holding[]; untracked: number };
+
+export type BuyQuote = {
+  collection: { symbol: string; name: string; floor: number | null };
+  listing: { mint: string; price: number; name: string | null; image: string | null; rank: number | null } | null;
+  networkFeeSol: number;
+  balanceSol: number | null;
+  executable: boolean;
+  reason: string | null;
+  marketUrl: string;
+};
+
 export const api = {
   // Verifies the Privy token and moves this device's follows/paper trades to the account.
   session: (deviceId: string) => send('POST', '/auth/session', { deviceId }) as Promise<{ userId: string }>,
   capabilities: () => req<Capabilities>('/capabilities'),
   balance: (address: string) => req<{ lamports: number; sol: number }>(`/chain/balance/${address}`),
+  holdings: (address: string) => req<Holdings>(`/chain/holdings/${address}`),
+  quote: (symbol: string, buyer: string) => req<BuyQuote>(`/trade/quote/${symbol}?buyer=${buyer}`),
   feed: (p: { before?: number; following?: string } = {}) => {
     const q = new URLSearchParams({ limit: '25' });
     if (p.before) q.set('before', String(p.before));

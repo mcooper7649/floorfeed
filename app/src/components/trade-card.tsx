@@ -3,11 +3,14 @@ import { Link } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { BuySheet } from '@/components/buy-sheet';
 import { CollIcon } from '@/components/coll-icon';
+import { MODE_COLOR } from '@/components/mode-toggle';
 import { NftImage, Pill } from '@/components/nft-image';
 import { C } from '@/constants/brand';
 import { api, type FeedItem, type Take } from '@/lib/api';
 import { pct, shortAddr, signedSol, sol, timeAgo } from '@/lib/format';
+import { useTradeMode } from '@/lib/mode';
 import { useSession } from '@/lib/session';
 
 const tap = () => {
@@ -20,6 +23,8 @@ export function TradeCard({ item, tile }: { item: FeedItem; tile?: boolean }) {
   const [take, setTake] = useState<Take | null>(item.take);
   const [takeState, setTakeState] = useState<'idle' | 'loading' | 'none'>(item.take ? 'idle' : 'loading');
   const [buyState, setBuyState] = useState<'idle' | 'busy' | string>('idle');
+  const { mode } = useTradeMode();
+  const [buyOpen, setBuyOpen] = useState(false);
   const b = item.buyer;
   const isFollowing = following.has(b.wallet);
 
@@ -33,7 +38,7 @@ export function TradeCard({ item, tile }: { item: FeedItem; tile?: boolean }) {
     return () => { alive = false; };
   }, [item.signature, item.take]);
 
-  const copy = async () => {
+  const paperBuy = async () => {
     if (!userId || buyState === 'busy') return;
     tap();
     setBuyState('busy');
@@ -44,6 +49,9 @@ export function TradeCard({ item, tile }: { item: FeedItem; tile?: boolean }) {
     } catch (e) {
       setBuyState((e as Error).message);
     }
+  };
+  const copy = () => {
+    if (mode === 'real') { tap(); setBuyOpen(true); } else paperBuy();
   };
 
   const collHref = { pathname: '/collection/[symbol]' as const, params: { symbol: item.collection.symbol } };
@@ -81,13 +89,18 @@ export function TradeCard({ item, tile }: { item: FeedItem; tile?: boolean }) {
     </View>
   );
 
+  const floor = item.collection.floor ? ` · ${sol(item.collection.floor)}` : '';
   const cta = (
-    <Pressable onPress={copy} style={({ pressed }) => [s.cta, pressed && { opacity: 0.8 }]}>
-      <Text style={s.ctaTxt}>
-        {buyState === 'idle' ? `Copy · buy floor ${item.collection.floor ? sol(item.collection.floor) : ''}`
-          : buyState === 'busy' ? 'Buying…' : buyState}
-      </Text>
-    </Pressable>
+    <>
+      <Pressable onPress={copy} style={({ pressed }) => [s.cta, { backgroundColor: MODE_COLOR[mode] }, pressed && { opacity: 0.8 }]}>
+        <Text style={s.ctaTxt}>
+          {mode === 'real' ? `Copy · buy floor${floor}`
+            : buyState === 'idle' ? `Copy · paper buy${floor}`
+            : buyState === 'busy' ? 'Buying…' : buyState}
+        </Text>
+      </Pressable>
+      <BuySheet symbol={item.collection.symbol} open={buyOpen} onClose={() => setBuyOpen(false)} onPaper={paperBuy} />
+    </>
   );
 
   if (tile) {

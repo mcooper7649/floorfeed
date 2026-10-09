@@ -199,7 +199,7 @@ function evmDetail(slug: string, rangeDays: number) {
 
 // Listings change constantly but the API is rate-limited: cache per collection.
 const listingCache = new Map<string, { at: number; data: Listing[] }>();
-async function cheapestListings(symbol: string) {
+export async function cheapestListings(symbol: string) {
   const hit = listingCache.get(symbol);
   if (hit && Date.now() - hit.at < 120_000) return hit.data;
   try {

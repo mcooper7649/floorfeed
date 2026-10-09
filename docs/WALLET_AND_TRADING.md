@@ -14,6 +14,9 @@ Tensor.
 | Connect Phantom, Solflare, Backpack (web, Wallet Standard) | Done |
 | SOL balance via the server (`GET /chain/balance/:address`) | Done |
 | `GET /capabilities`: which buy sources are configured | Done |
+| Paper / Real switch on the wallet (button, sheet, Portfolio card); Real needs a connected wallet | Done |
+| Real portfolio: the wallet's NFTs in tracked collections via Helius DAS, valued at est. bid, cost basis where we saw the buy | Done |
+| Real buy sheet: live cheapest listing, cost, balance check; completes on Magic Eden until FloorFeed can build the transaction | Done |
 | `POST /trade/buy-tx` | Stub: returns 501 until a marketplace key is set |
 | Privy sign-in (email, Google) with an embedded Solana wallet (web) | Done |
 | Server verifies Privy access tokens; first sign-in moves the device's follows and paper trades to the account | Done |

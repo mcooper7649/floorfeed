@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS trades (
 );
 CREATE INDEX IF NOT EXISTS trades_time  ON trades(block_time DESC);
 CREATE INDEX IF NOT EXISTS trades_buyer ON trades(buyer);
+CREATE INDEX IF NOT EXISTS trades_mint  ON trades(mint);
 CREATE INDEX IF NOT EXISTS trades_seller ON trades(seller);
 CREATE INDEX IF NOT EXISTS trades_mint  ON trades(mint, block_time);
 

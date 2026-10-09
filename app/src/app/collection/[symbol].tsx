@@ -4,10 +4,12 @@ import { Link, Stack, router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { BuySheet } from '@/components/buy-sheet';
 import { ChainBadge } from '@/components/chain-badge';
 import { CollIcon } from '@/components/coll-icon';
 import { DepthChart } from '@/components/depth-chart';
 import { FloorLine } from '@/components/floor-line';
+import { MODE_COLOR } from '@/components/mode-toggle';
 import { NftImage, Pill } from '@/components/nft-image';
 import { PriceChart } from '@/components/price-chart';
 import { Empty } from '@/components/screen';
@@ -17,6 +19,7 @@ import { api, type CollectionDetail } from '@/lib/api';
 import { amt, shortAddr, signedSol, sol, timeAgo, usdCompact } from '@/lib/format';
 import { thumb } from '@/lib/img';
 import { columnsFor, useLayout } from '@/lib/layout';
+import { useTradeMode } from '@/lib/mode';
 import { fmtDay, fmtSol } from '@/lib/scale';
 import { useSession } from '@/lib/session';
 
@@ -34,6 +37,8 @@ export default function CollectionScreen() {
   const [error, setError] = useState<string | null>(null);
   const [table, setTable] = useState(false);
   const [buy, setBuy] = useState<string | null>(null);
+  const { mode } = useTradeMode();
+  const [buyOpen, setBuyOpen] = useState(false);
 
   const fetchData = useCallback(() => {
     api.collection(symbol, range).then((d) => { setData(d); setError(null); })
@@ -44,7 +49,7 @@ export default function CollectionScreen() {
   // Refetch keeps the frame: the old render stays (dimmed) until new data lands.
   const pickRange = (r: number) => { if (r !== range) { setLoading(true); setRange(r); } };
 
-  const buyFloor = async () => {
+  const paperBuy = async () => {
     if (!userId || !data) return;
     setBuy('Buying…');
     try {
@@ -186,13 +191,18 @@ export default function CollectionScreen() {
 
           <View style={[s.actions, !wide && { flexDirection: 'column' }]}>
             {!evm && (
-              <Pressable onPress={buyFloor} style={({ pressed }) => [s.cta, pressed && { opacity: 0.85 }]}>
-                <Text style={s.ctaTxt}>{buy ?? `Buy floor${st.floor ? ` · ${sol(st.floor)}` : ''} (paper)`}</Text>
+              <Pressable onPress={() => (mode === 'real' ? setBuyOpen(true) : paperBuy())}
+                style={({ pressed }) => [s.cta, { backgroundColor: MODE_COLOR[mode] }, pressed && { opacity: 0.85 }]}>
+                <Text style={s.ctaTxt}>
+                  {mode === 'real' ? `Buy floor${st.floor ? ` · ${sol(st.floor)}` : ''}`
+                    : buy ?? `Paper buy floor${st.floor ? ` · ${sol(st.floor)}` : ''}`}
+                </Text>
               </Pressable>
             )}
             <Pressable onPress={() => Linking.openURL(data.externalUrl)} style={({ pressed }) => [s.ctaAlt, pressed && { opacity: 0.85 }]}>
               <Text style={s.ctaAltTxt}>View on {market} ↗</Text>
             </Pressable>
+            {!evm && <BuySheet symbol={data.symbol} open={buyOpen} onClose={() => setBuyOpen(false)} onPaper={paperBuy} />}
           </View>
           </View>
 
