@@ -53,10 +53,13 @@ function PrivyLoader({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    // Coming back from Google: Privy must load to finish the login.
+    const oauthReturn = typeof window !== 'undefined' && window.location.search.includes('privy_oauth_code');
     AsyncStorage.getItem(SIGNED_IN_KEY)
       .then((v) => {
-        setWasSignedIn(v === '1');
-        if (v === '1') load().catch(() => setWasSignedIn(false));
+        const resume = v === '1' || oauthReturn;
+        setWasSignedIn(resume);
+        if (resume) load().catch(() => setWasSignedIn(false));
       })
       .catch(() => setWasSignedIn(false));
   }, [load]);
