@@ -126,7 +126,8 @@ floorfeed/
 │       │   └── wallet/[address].tsx
 │       ├── components/         # TradeCard, PriceChart, DepthChart, Sparkline, tab bars (native + web)
 │       ├── constants/brand.ts  # Design tokens (dark-only palette)
-│       └── lib/                # API client, session (device id → Privy later), formatters
+│       └── lib/                # API client, session (device id or Privy user), auth, wallets, formatters
+│   └── privy/entry.tsx         # Privy sign-in, built separately and loaded on demand
 ├── server/
 │   └── src/
 │       ├── index.ts            # REST routes
@@ -197,6 +198,7 @@ The feed fills within about 30 seconds of the server starting. Takes appear as c
 | `GET` | `/collections/:symbol?range=7\|30` | Solana: stats, sales, daily aggregates, floor snapshots, cheapest listings, top flippers. EVM: stats, owners, supply, 30-day volume, floor snapshots |
 | `GET` | `/wallets/:address` | A wallet's stats and its 50 most recent trades |
 | `GET` | `/follows/:userId` | Wallets a user follows |
+| `POST` | `/auth/session` | Verify a Privy access token; move this device's data to the account |
 | `POST` · `DELETE` | `/follows` | Follow or unfollow a wallet |
 | `POST` | `/paper/buy` · `/paper/sell` | Open or close a paper position |
 | `GET` | `/paper/:userId` | Positions with realized and unrealized P&L |
@@ -209,7 +211,7 @@ The live demo runs on a home server behind Caddy:
 ```
 https://floorfeed.example.com
   ├── /api/*  → API container (prefix stripped)    docker build -t floorfeed-api server
-  └── /*      → static web build (any file server)  EXPO_PUBLIC_API_URL=/api npx expo export -p web
+  └── /*      → static web build (any file server)  cd app && EXPO_PUBLIC_API_URL=/api npm run build:web
 ```
 
 ```bash
@@ -226,8 +228,8 @@ The web export is a single-page app (`web.output: "single"`), so the file server
 - [x] **Phase 1.6:** multi-chain market (Ethereum, Base, Polygon via OpenSea), categories, trending, search, watchlist; detailed trader leaderboard
 - [x] **Phase 1.7:** desktop web layout (top nav with search, multi-column grids, sortable markets table), OpenSea-style collection pages (banner, listing and sales art grids with rarity ranks), rolling-median price chart with volume panel and hover tooltips, 24H range, resized NFT images via image CDNs
 - [ ] **Next data sources:** OpenSea key (EVM sales feed, listings, flippers), Tensor key (the other half of Solana volume, real collection bids for instant-sell), Helius (wallet-level tracking, compressed NFTs)
-- [ ] **Wallets & real buys (in progress, [plan](docs/WALLET_AND_TRADING.md)):** web wallet connect (Phantom, Solflare, Backpack) and balances are live; buys need Magic Eden / Tensor keys; Privy email wallets next
-- [ ] **Phase 2:** [Privy](https://privy.io) login with embedded Solana wallets (no seed phrase), Helius webhooks per followed wallet, push notifications when a followed wallet buys
+- [ ] **Wallets & real buys (in progress, [plan](docs/WALLET_AND_TRADING.md)):** web wallet connect (Phantom, Solflare, Backpack), balances via Helius, and Privy sign-in (email or Google) with an embedded Solana wallet are live; buys need Magic Eden / Tensor keys
+- [ ] **Phase 2:** Helius webhooks per followed wallet, push notifications when a followed wallet buys, Privy sign-in in the native apps
 - [ ] **Phase 3:** real trades, devnet first: Tensor / Magic Eden buy-floor and instant-sell-to-bid transactions, signed by the user
 - [ ] **Phase 4:** a feed of new mints, "explain my portfolio" chat, EAS builds for TestFlight and Play
 

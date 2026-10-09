@@ -4,7 +4,12 @@
   "version": "1.0.0",
   "dependencies": {
     "@expo/ui": "~57.0.22",
+    "@privy-io/react-auth": "3.44.0",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@solana-program/memo": "0.15.0",
+    "@solana-program/system": "0.15.0",
+    "@solana-program/token": "0.17.0",
+    "@solana/kit": "8.3.0",
     "@solana/wallet-standard-features": "^1.5.0",
     "@wallet-standard/app": "^1.1.1",
     "@wallet-standard/base": "^1.1.1",
@@ -37,6 +42,8 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
+    "@types/react-dom": "19.2.7",
+    "esbuild": "0.28.2",
     "eslint": "^9.0.0",
     "eslint-config-expo": "~57.0.2",
     "typescript": "~6.0.3"
@@ -46,7 +53,9 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "privy": "node scripts/build-privy.mjs",
+    "build:web": "EXPO_PUBLIC_PRIVY_ENTRY=$(node scripts/build-privy.mjs) expo export -p web --clear"
   },
   "private": true
 }

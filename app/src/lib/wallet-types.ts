@@ -8,6 +8,9 @@ export type WalletState = {
   supported: boolean; // false where no wallet integration exists yet
   available: WalletOption[]; // wallets detected in this browser
   address: string | null;
+  // 'extension' = a browser wallet the user connected; 'embedded' = the Privy
+  // wallet that comes with signing in (used when no extension is connected).
+  kind: 'extension' | 'embedded' | null;
   walletName: string | null;
   walletIcon: string | null;
   connecting: boolean;

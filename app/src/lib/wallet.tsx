@@ -9,6 +9,7 @@ const NATIVE: WalletState = {
   supported: false,
   available: [],
   address: null,
+  kind: null,
   walletName: null,
   walletIcon: null,
   connecting: false,

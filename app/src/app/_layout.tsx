@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { C } from '@/constants/brand';
+import { AuthProvider } from '@/lib/auth';
 import { SessionProvider } from '@/lib/session';
 import { WalletProvider } from '@/lib/wallet';
 
@@ -20,6 +21,7 @@ const theme = {
 export default function RootLayout() {
   return (
     <ThemeProvider value={theme}>
+      <AuthProvider>
       <SessionProvider>
       <WalletProvider>
         <StatusBar style="light" />
@@ -32,6 +34,7 @@ export default function RootLayout() {
         </Stack>
       </WalletProvider>
       </SessionProvider>
+      </AuthProvider>
     </ThemeProvider>
   );
 }

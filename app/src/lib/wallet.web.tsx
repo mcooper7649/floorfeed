@@ -8,6 +8,7 @@ import {
 } from '@wallet-standard/features';
 import { createContext, use, useCallback, useEffect, useState, type ReactNode } from 'react';
 
+import { useAuth } from './auth';
 import type { WalletOption, WalletState } from './wallet-types';
 
 // Browser wallets (Phantom, Solflare, Backpack, …) announce themselves through
@@ -29,6 +30,7 @@ const mainnetAccount = (accounts: readonly WalletAccount[]) =>
 const Ctx = createContext<WalletState | null>(null);
 
 export function WalletProvider({ children }: { children: ReactNode }) {
+  const auth = useAuth();
   const [wallets, setWallets] = useState<Wallet[]>(solanaWallets);
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [address, setAddress] = useState<string | null>(null);
@@ -97,12 +99,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     await AsyncStorage.removeItem(LAST_KEY).catch(() => {});
   }, [wallet]);
 
+  // A connected extension wins; otherwise the signed-in user's Privy wallet.
+  const embedded = !address && auth.embeddedAddress ? auth.embeddedAddress : null;
   const value: WalletState = {
     supported: true,
     available: wallets.map(option),
-    address,
-    walletName: wallet?.name ?? null,
-    walletIcon: wallet?.icon ?? null,
+    address: address ?? embedded,
+    kind: address ? 'extension' : embedded ? 'embedded' : null,
+    walletName: embedded ? 'FloorFeed wallet' : wallet?.name ?? null,
+    walletIcon: embedded ? null : wallet?.icon ?? null,
     connecting,
     error,
     connect,

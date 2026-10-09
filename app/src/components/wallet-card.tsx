@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useBalance, useCapabilities, WalletSheet } from '@/components/wallet-button';
 import { C } from '@/constants/brand';
+import { useAuth } from '@/lib/auth';
 import { shortAddr } from '@/lib/format';
 import { useWallet } from '@/lib/wallet';
 
@@ -10,6 +11,7 @@ import { useWallet } from '@/lib/wallet';
 // off (and says why) until the server has a marketplace key.
 export function WalletCard() {
   const w = useWallet();
+  const auth = useAuth();
   const caps = useCapabilities();
   const balance = useBalance(w.address);
   const [open, setOpen] = useState(false);
@@ -27,12 +29,16 @@ export function WalletCard() {
               <Text style={s.meta}>  {balance != null ? `${balance.toFixed(3)} SOL` : '…'}</Text>
             </Text>
           ) : (
-            <Text style={s.meta}>Connect Phantom, Solflare or Backpack to see your balance.</Text>
+            <Text style={s.meta}>
+              {auth.supported
+                ? 'Sign in with email or Google for a free wallet, or connect Phantom, Solflare or Backpack.'
+                : 'Connect Phantom, Solflare or Backpack to see your balance.'}
+            </Text>
           )}
         </View>
         {w.supported && (
           <Pressable accessibilityRole="button" onPress={() => setOpen(true)} style={w.address ? s.secondary : s.primary}>
-            <Text style={w.address ? s.secondaryTxt : s.primaryTxt}>{w.address ? 'Manage' : 'Connect wallet'}</Text>
+            <Text style={w.address ? s.secondaryTxt : s.primaryTxt}>{w.address ? 'Manage' : auth.supported ? 'Sign in' : 'Connect wallet'}</Text>
           </Pressable>
         )}
       </View>

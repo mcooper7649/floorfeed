@@ -2,6 +2,7 @@ import cors from "@fastify/cors";
 import Fastify from "fastify";
 import { z } from "zod";
 import { cachedTake, getTake } from "./ai.ts";
+import { adoptDevice, authorize, privyUser } from "./auth.ts";
 import { ADDRESS_RE, capabilities, solBalance } from "./chain.ts";
 import { collectionDetail, listCollections } from "./collections.ts";
 import { collectionName, config, isEvm } from "./config.ts";
@@ -29,7 +30,7 @@ const tradeSelect = `
   FROM trades t LEFT JOIN collections c ON c.symbol = t.collection`;
 
 const app = Fastify({ logger: { level: "info" } });
-await app.register(cors, { origin: true });
+await app.register(cors, { origin: true, methods: ["GET", "HEAD", "POST", "DELETE"] });
 
 app.get("/health", async () => ({
   ok: true,
@@ -75,12 +76,13 @@ app.get("/collections/:symbol", async (req, reply) => {
 
 // Feed of recent buys. `following=<userId>` limits it to wallets that user follows;
 // `before=<unix>` paginates.
-app.get("/feed", async (req) => {
+app.get("/feed", async (req, reply) => {
   const q = z.object({
     limit: z.coerce.number().int().min(1).max(100).default(30),
     before: z.coerce.number().int().optional(),
     following: z.string().optional(),
   }).parse(req.query);
+  if (q.following && !(await authorize(req, reply, q.following))) return;
   const where: string[] = [];
   const args: unknown[] = [];
   if (q.before) { where.push("t.block_time < ?"); args.push(q.before); }
@@ -170,21 +172,33 @@ app.get("/wallets/:address", async (req) => {
   };
 });
 
-// --- Follows (userId is a device id until Privy auth lands) ---
+// --- Sign-in: verify the Privy token and adopt this device's anonymous data ---
+app.post("/auth/session", async (req, reply) => {
+  const userId = await privyUser(req);
+  if (!userId) return reply.code(401).send({ error: "invalid or expired token" });
+  const b = z.object({ deviceId: z.string().optional() }).parse(req.body ?? {});
+  if (b.deviceId) adoptDevice(userId, b.deviceId);
+  return { userId };
+});
+
+// --- Follows (userId: anonymous device id, or a Privy user with its token) ---
 const FollowBody = z.object({ userId: z.string().min(1), wallet: z.string().min(32).max(44) });
 
-app.get("/follows/:userId", async (req) => {
+app.get("/follows/:userId", async (req, reply) => {
   const { userId } = req.params as { userId: string };
+  if (!(await authorize(req, reply, userId))) return;
   return (db.prepare("SELECT wallet FROM follows WHERE user_id = ?").all(userId) as { wallet: string }[])
     .map((r) => r.wallet);
 });
-app.post("/follows", async (req) => {
+app.post("/follows", async (req, reply) => {
   const b = FollowBody.parse(req.body);
+  if (!(await authorize(req, reply, b.userId))) return;
   db.prepare("INSERT OR IGNORE INTO follows (user_id, wallet) VALUES (?, ?)").run(b.userId, b.wallet);
   return { ok: true };
 });
-app.delete("/follows", async (req) => {
+app.delete("/follows", async (req, reply) => {
   const b = FollowBody.parse(req.body);
+  if (!(await authorize(req, reply, b.userId))) return;
   db.prepare("DELETE FROM follows WHERE user_id = ? AND wallet = ?").run(b.userId, b.wallet);
   return { ok: true };
 });
@@ -200,6 +214,7 @@ app.post("/paper/buy", async (req, reply) => {
     collection: z.string(),
     copiedFrom: z.string().optional(),
   }).parse(req.body);
+  if (!(await authorize(req, reply, b.userId))) return;
   // The paper portfolio is denominated in SOL; EVM collections are browse-only for now.
   if (isEvm(b.collection)) return reply.code(422).send({ error: "Paper trading is Solana-only for now" });
   const floor = floorOf(b.collection);
@@ -213,6 +228,7 @@ app.post("/paper/buy", async (req, reply) => {
 
 app.post("/paper/sell", async (req, reply) => {
   const b = z.object({ userId: z.string(), positionId: z.number().int() }).parse(req.body);
+  if (!(await authorize(req, reply, b.userId))) return;
   const pos = db.prepare(
     "SELECT * FROM paper_positions WHERE id = ? AND user_id = ? AND closed_at IS NULL",
   ).get(b.positionId, b.userId) as { collection: string } | undefined;
@@ -225,8 +241,9 @@ app.post("/paper/sell", async (req, reply) => {
   return { exitPrice: exit };
 });
 
-app.get("/paper/:userId", async (req) => {
+app.get("/paper/:userId", async (req, reply) => {
   const { userId } = req.params as { userId: string };
+  if (!(await authorize(req, reply, userId))) return;
   const rows = db.prepare(
     `SELECT p.*, c.floor FROM paper_positions p
      LEFT JOIN collections c ON c.symbol = p.collection
@@ -276,5 +293,7 @@ app.post("/webhooks/helius", async (req, reply) => {
   return { added };
 });
 
-startIngest();
+// INGEST=0 runs the API only. This machine and production share a public IP,
+// and so Magic Eden's rate limit.
+if (process.env.INGEST !== "0") startIngest();
 await app.listen({ host: "0.0.0.0", port: config.port });

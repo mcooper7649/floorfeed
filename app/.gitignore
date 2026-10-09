@@ -41,3 +41,6 @@ example
 # generated native folders
 /ios
 /android
+
+# Privy bundle (built by scripts/build-privy.mjs)
+public/privy/

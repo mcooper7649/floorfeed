@@ -15,7 +15,9 @@ Tensor.
 | SOL balance via the server (`GET /chain/balance/:address`) | Done |
 | `GET /capabilities`: which buy sources are configured | Done |
 | `POST /trade/buy-tx` | Stub: returns 501 until a marketplace key is set |
-| Privy embedded wallets (email/social login) | Needs a Privy app ID |
+| Privy sign-in (email, Google) with an embedded Solana wallet (web) | Done |
+| Server verifies Privy access tokens; first sign-in moves the device's follows and paper trades to the account | Done |
+| Helius RPC for balances (and later simulation) | Done |
 | Magic Eden buys | Needs a Magic Eden API key |
 | Tensor buys | Needs a Tensor API key |
 | Android (Mobile Wallet Adapter), iOS | After web |
@@ -69,8 +71,8 @@ where noted), then redeploy. None of them belong in git.
 |---|---|---|---|
 | Magic Eden API key | Magic Eden developer docs → API key request form | `MAGICEDEN_API_KEY` (server) | Buy transactions for Magic Eden listings; also higher rate limits for all data |
 | Tensor API key | Tensor developer portal | `TENSOR_API_KEY` (server) | Buy transactions for Tensor listings; collection bids (real instant-sell prices) |
-| Privy app | dashboard.privy.io → new app (Solana embedded wallets on) | `EXPO_PUBLIC_PRIVY_APP_ID`, `EXPO_PUBLIC_PRIVY_CLIENT_ID` (app) | Email/social login with a wallet created for the user |
-| Helius RPC (recommended) | dashboard.helius.dev (free tier) | `SOLANA_RPC_URL` (server) | Reliable sends, simulation and confirmations; the public RPC is rate-limited |
+| Privy app (have it) | dashboard.privy.io → new app (Solana embedded wallets on; allowed domains = the site + `http://localhost:8081`) | `EXPO_PUBLIC_PRIVY_APP_ID` (app); `PRIVY_APP_ID`, `PRIVY_APP_SECRET` (server) | Email/Google login with a wallet created for the user |
+| Helius (have it) | dashboard.helius.dev (free tier) | `HELIUS_API_KEY`, `SOLANA_RPC_URL` (server) | Reliable sends, simulation and confirmations; webhooks per followed wallet |
 
 ## Order of work
 
@@ -78,6 +80,27 @@ where noted), then redeploy. None of them belong in git.
 2. **When the Magic Eden key arrives:** buy-tx builder + simulation + safety
    checks, the confirmation sheet, and a real-trades ledger. Test with one cheap buy.
 3. **Tensor key:** add Tensor as a second source and pick the cheaper listing.
-4. **Privy app ID:** add "Continue with email" next to the detected wallets.
+4. **Privy (done on web):** "Continue with email or Google" above the detected wallets.
 5. **Native:** Android via Mobile Wallet Adapter (EAS dev build), then iOS
    via Privy or Phantom deep links.
+
+## How sign-in works
+
+- **Anonymous by default.** Each device gets a `dev-…` id; follows and paper
+  trades work without an account.
+- **Signing in** (Privy: email or Google) gives the user a `did:privy:…` id and,
+  if they have no wallet yet, an embedded Solana wallet. On the first sign-in
+  the app calls `POST /auth/session` with its device id, and the server moves
+  that device's follows and paper positions to the account.
+- **The server checks every request for a Privy id**: it must carry that user's
+  access token (`Authorization: Bearer …`), an ES256 JWT verified against
+  Privy's JWKS (issuer `privy.io`, audience = app id). Requests for device ids
+  stay unauthenticated, as before.
+- **Bundle size.** Privy's SDK is several MB, so it is built on its own with
+  esbuild (`app/privy/entry.tsx` → `app/public/privy/`, `npm run privy`) and
+  fetched only when someone taps Sign in, or on load for a returning signed-in
+  user. It renders in its own React root and reports state to the app. Build
+  the site with `npm run build:web`, which builds this bundle first and passes
+  its file name to the app as `EXPO_PUBLIC_PRIVY_ENTRY`.
+- **Native** builds don't have sign-in yet (`lib/auth.tsx` is a stub); the Privy
+  Expo SDK needs a client ID and a dev build.

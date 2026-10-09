@@ -152,11 +152,16 @@ export type CollectionDetail = {
   recentSales: { signature: string; mint: string; buyer: string; price: number; t: number; image: string | null }[];
 };
 
+// Signed-in (Privy) users send their access token; anonymous device ids don't.
+let tokenGetter: (() => Promise<string | null>) | null = null;
+export const setTokenGetter = (fn: typeof tokenGetter) => { tokenGetter = fn; };
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(BASE + path, {
-    ...init,
-    headers: init?.body ? { 'content-type': 'application/json' } : undefined,
-  });
+  const headers: Record<string, string> = {};
+  if (init?.body) headers['content-type'] = 'application/json';
+  const token = tokenGetter ? await tokenGetter().catch(() => null) : null;
+  if (token) headers.authorization = `Bearer ${token}`;
+  const res = await fetch(BASE + path, { ...init, headers });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error ?? `HTTP ${res.status}`);
@@ -170,6 +175,8 @@ const send = (method: string, path: string, body: unknown) =>
 export type Capabilities = { buy: { enabled: boolean; magiceden: boolean; tensor: boolean }; rpc: 'public' | 'custom' };
 
 export const api = {
+  // Verifies the Privy token and moves this device's follows/paper trades to the account.
+  session: (deviceId: string) => send('POST', '/auth/session', { deviceId }) as Promise<{ userId: string }>,
   capabilities: () => req<Capabilities>('/capabilities'),
   balance: (address: string) => req<{ lamports: number; sol: number }>(`/chain/balance/${address}`),
   feed: (p: { before?: number; following?: string } = {}) => {
