@@ -64,6 +64,27 @@ CREATE TABLE IF NOT EXISTS paper_positions (
   exit_price  REAL,
   closed_at   INTEGER
 );
+
+-- X (Twitter) posts drafted from FloorFeed data. Flow: draft → approved
+-- (Telegram button or auto-approve) → posted by the browser poster.
+CREATE TABLE IF NOT EXISTS social_posts (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  kind        TEXT NOT NULL,
+  key         TEXT NOT NULL UNIQUE,      -- dedupe, e.g. "movers:2026-10-09"
+  text        TEXT NOT NULL,
+  image       TEXT,
+  status      TEXT NOT NULL DEFAULT 'draft', -- draft|approved|posted|skipped|expired|failed
+  created_at  INTEGER NOT NULL,          -- unix ms
+  expires_at  INTEGER NOT NULL,
+  decided_at  INTEGER,
+  posted_at   INTEGER,
+  post_url    TEXT,
+  attempts    INTEGER NOT NULL DEFAULT 0,
+  error       TEXT,
+  tg_chat     TEXT,
+  tg_message  INTEGER
+);
+CREATE INDEX IF NOT EXISTS social_posts_status ON social_posts(status, created_at);
 `);
 
 // Columns added after the first release; ALTER is a no-op error if present.

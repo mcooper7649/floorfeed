@@ -1,5 +1,6 @@
+import { timingSafeEqual } from "node:crypto";
 import cors from "@fastify/cors";
-import Fastify from "fastify";
+import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import { z } from "zod";
 import { cachedTake, getTake } from "./ai.ts";
 import { adoptDevice, authorize, privyUser } from "./auth.ts";
@@ -8,6 +9,7 @@ import { cheapestListings, collectionDetail, listCollections } from "./collectio
 import { collectionName, config, isEvm } from "./config.ts";
 import { db } from "./db.ts";
 import { startIngest } from "./ingest.ts";
+import { KINDS, generate, nextPost, reportResult, startSocial, xLength, type Kind } from "./social.ts";
 import { walletStats } from "./pnl.ts";
 import { traderLeaderboard, traderProfile } from "./traders.ts";
 
@@ -332,7 +334,41 @@ app.post("/webhooks/helius", async (req, reply) => {
   return { added };
 });
 
+// --- X posting: the browser poster pulls approved drafts (see src/social.ts) ---
+function posterAuth(req: FastifyRequest, reply: FastifyReply) {
+  const got = Buffer.from(req.headers.authorization ?? "");
+  const want = Buffer.from(`Bearer ${config.socialToken}`);
+  if (config.socialToken && got.length === want.length && timingSafeEqual(got, want)) return true;
+  reply.code(401).send({ error: "unauthorized" });
+  return false;
+}
+
+app.get("/social/next", async (req, reply) => {
+  if (!posterAuth(req, reply)) return;
+  const p = nextPost();
+  return p ? { id: p.id, kind: p.kind, text: p.text, image: p.image } : reply.code(204).send();
+});
+
+app.post("/social/:id/result", async (req, reply) => {
+  if (!posterAuth(req, reply)) return;
+  const { id } = z.object({ id: z.coerce.number().int() }).parse(req.params);
+  const b = z.object({ ok: z.boolean(), url: z.string().url().nullish(), error: z.string().max(500).nullish() }).parse(req.body);
+  return (await reportResult(id, b.ok, b.url ?? null, b.error ?? null)) ? { ok: true } : reply.code(409).send({ error: "not approved" });
+});
+
+// Dry run: what each generator would post right now (nothing is saved).
+app.get("/social/preview", async (req, reply) => {
+  if (!posterAuth(req, reply)) return;
+  const out = [];
+  for (const kind of KINDS as Kind[]) {
+    const d = await generate(kind, `${kind}:preview:${Date.now()}`);
+    out.push(d ? { kind, chars: xLength(d.text), text: d.text, image: d.image } : { kind, text: null });
+  }
+  return out;
+});
+
 // INGEST=0 runs the API only. This machine and production share a public IP,
 // and so Magic Eden's rate limit.
 if (process.env.INGEST !== "0") startIngest();
+startSocial();
 await app.listen({ host: "0.0.0.0", port: config.port });

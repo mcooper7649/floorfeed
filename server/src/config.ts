@@ -16,6 +16,14 @@ export const config = {
   // Without one, buying stays disabled and the app says so.
   magicEdenApiKey: process.env.MAGICEDEN_API_KEY ?? "",
   tensorApiKey: process.env.TENSOR_API_KEY ?? "",
+  // X posting: drafts go to Telegram for approval, then a browser poster on
+  // the host publishes them (no paid X API). All optional.
+  siteUrl: process.env.SITE_URL ?? "https://floorfeed.mycodedojo.com",
+  telegramBotToken: process.env.TELEGRAM_BOT_TOKEN ?? "",
+  telegramChatId: process.env.TELEGRAM_CHAT_ID ?? "",
+  socialToken: process.env.SOCIAL_TOKEN ?? "", // shared secret for the poster
+  socialAutoApprove: (process.env.SOCIAL_AUTO_APPROVE ?? "").split(",").map((s) => s.trim()).filter(Boolean),
+  socialMinGapMs: 90 * 60_000, // at most one post per 90 minutes
   // How often to pull fresh trades / floor prices from Magic Eden.
   // Sales for the live tier; stats for the whole universe (~40 calls).
   activityPollMs: 3 * 60_000,

@@ -205,6 +205,9 @@ The feed fills within about 30 seconds of the server starting. Takes appear as c
 | `POST` | `/paper/buy` · `/paper/sell` | Open or close a paper position |
 | `GET` | `/paper/:userId` | Positions with realized and unrealized P&L |
 | `POST` | `/webhooks/helius` | Ingest `NFT_SALE` events from Helius |
+| `GET` | `/social/next` | Poster only (`SOCIAL_TOKEN`): the next approved X post, if spacing allows |
+| `POST` | `/social/:id/result` | Poster only: report a post as published (with its URL) or failed |
+| `GET` | `/social/preview` | Poster only: what each post generator would write right now (dry run) |
 
 ## Self-hosting
 
@@ -222,6 +225,26 @@ docker run -d --name floorfeed-api --restart unless-stopped \
 ```
 
 The web export is a single-page app (`web.output: "single"`), so the file server needs to fall back to `index.html` for deep links like `/collection/mad_lads`. SQLite lives in the `floorfeed-data` volume.
+
+## Auto-posting to X
+
+The server drafts posts for the [@FloorFeed](https://x.com/FloorFeed) account from its own data (`server/src/social.ts`):
+
+| Kind | When (UTC) | What |
+|---|---|---|
+| `movers` | daily from 14:00 | Biggest 24h floor gainers and losers |
+| `smartbuy` | at most one a day, 15:00–02:00 | A fresh buy by a wallet with a strong record (≥5 flips, ≥60% wins, ≥3 SOL realized, not a market maker), with its AI take |
+| `bigsale` | daily from 22:00 | The biggest sale of the last 24h, vs floor |
+| `flipper` | Fridays from 17:00 | The week's top flipper from the leaderboard |
+
+Each draft goes to a Telegram chat with **Post** / **Skip** buttons (kinds in `SOCIAL_AUTO_APPROVE` skip that step). Sending `/draft` or `/draft <kind>` to the bot makes a draft immediately. Drafts expire after a few hours because the numbers go stale.
+
+Approved posts are published by `tools/x-poster/x_post.py`, a Playwright script that uses the X web composer with a saved login session rather than the paid X API. It runs from cron, pulls `GET /social/next` (at most one post every 90 minutes), and reports back. Keep the volume low: X restricts automated posting, and a human-paced schedule is what keeps the account in good standing.
+
+```bash
+# cron on the host, every 20 minutes
+*/20 * * * * cd ~/floorfeed/tools/x-poster && SOCIAL_TOKEN=... X_STATE=~/x_state.json flock -n /tmp/x_post.lock python3 x_post.py
+```
 
 ## Roadmap
 
