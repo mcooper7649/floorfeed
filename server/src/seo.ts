@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import http from "node:http";
 import { Resvg } from "@resvg/resvg-js";
 import { listCollections } from "./collections.ts";
 import { COLLECTIONS, EVM_COLLECTIONS, config } from "./config.ts";
@@ -54,13 +55,23 @@ const chainLabel: Record<string, string> = { solana: "Solana", ethereum: "Ethere
 
 // The built index.html lives with the static site (nginx). Fetch it from
 // there so the API never serves a stale copy for long after a web deploy.
+// The shared nginx picks the site by Host, which fetch() can't set.
+function getText(url: string, host?: string) {
+  return new Promise<string>((resolve, reject) => {
+    const req = http.get(url, { headers: host ? { host } : {}, timeout: 5000 }, (res) => {
+      if (res.statusCode !== 200) { res.resume(); reject(new Error(`index.html ${res.statusCode}`)); return; }
+      let body = "";
+      res.setEncoding("utf8").on("data", (c) => (body += c)).on("end", () => resolve(body));
+    });
+    req.on("timeout", () => req.destroy(new Error("index.html timeout"))).on("error", reject);
+  });
+}
+
 let shell: { html: string; at: number } | null = null;
 async function template() {
   if (shell && Date.now() - shell.at < MIN) return shell.html;
   try {
-    const r = await fetch(`${config.webOrigin}/index.html`, { signal: AbortSignal.timeout(5000) });
-    if (!r.ok) throw new Error(`index.html ${r.status}`);
-    shell = { html: await r.text(), at: Date.now() };
+    shell = { html: await getText(`${config.webOrigin}/index.html`, config.webHost || undefined), at: Date.now() };
   } catch (err) {
     if (!shell) throw err;
     shell.at = Date.now() - MIN / 2; // keep serving the last copy, retry soon

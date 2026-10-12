@@ -21,6 +21,7 @@ export const config = {
   siteUrl: process.env.SITE_URL ?? "https://floorfeed.io",
   // Where the static web build is served (the SEO renderer reads its index.html).
   webOrigin: process.env.WEB_ORIGIN ?? "http://127.0.0.1:8020",
+  webHost: process.env.WEB_HOST ?? "", // Host header for a name-based static server
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN ?? "",
   telegramChatId: process.env.TELEGRAM_CHAT_ID ?? "",
   socialToken: process.env.SOCIAL_TOKEN ?? "", // shared secret for the poster
