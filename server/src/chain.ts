@@ -4,7 +4,7 @@ import { db } from "./db.ts";
 // Solana base58 address (32-byte public key).
 export const ADDRESS_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
-async function rpc<T>(method: string, params: unknown): Promise<T> {
+export async function rpc<T>(method: string, params: unknown): Promise<T> {
   const res = await fetch(config.solanaRpcUrl, {
     method: "POST",
     headers: { "content-type": "application/json" },

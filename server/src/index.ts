@@ -6,9 +6,10 @@ import { cachedTake, getTake } from "./ai.ts";
 import { adoptDevice, authorize, privyUser } from "./auth.ts";
 import { ADDRESS_RE, capabilities, hasDas, holdings, solBalance } from "./chain.ts";
 import { cheapestListings, collectionDetail, listCollections } from "./collections.ts";
-import { collectionName, config, isEvm } from "./config.ts";
+import { COLLECTIONS, collectionName, config, isEvm } from "./config.ts";
 import { db } from "./db.ts";
 import { feedEvents, traders } from "./feed.ts";
+import { itemDetail, warmRarity } from "./items.ts";
 import { startIngest } from "./ingest.ts";
 import { KINDS, generate, nextPost, postedSince, reportResult, startSocial, submitExternal, xLength } from "./social.ts";
 import { walletStats } from "./pnl.ts";
@@ -433,6 +434,15 @@ app.get("/social/preview", async (req, reply) => {
   return out;
 });
 
+// One NFT: traits with rarity, rank, owner, listing and its sale history.
+// `id` is the mint (Solana) or contract:tokenId (EVM).
+app.get("/items/:symbol/:id", async (req, reply) => {
+  const { symbol, id } = req.params as { symbol: string; id: string };
+  const d = await itemDetail(symbol, id).catch((err) => { req.log.warn({ err }, "item failed"); return null; });
+  if (!d) return reply.code(404).send({ error: "unknown item" });
+  return d;
+});
+
 // --- SEO: Caddy sends page requests here as /seo/<path> (see seo.ts) ---
 app.get("/seo/robots.txt", async (_req, reply) => reply.type("text/plain").header("cache-control", "public, max-age=3600").send(robots()));
 app.get("/seo/sitemap.xml", async (_req, reply) => reply.type("application/xml").header("cache-control", "public, max-age=3600").send(sitemap()));
@@ -453,6 +463,13 @@ app.get("/seo/*", async (req, reply) => {
 // INGEST=0 runs the API only. This machine and production share a public IP,
 // and so Magic Eden's rate limit.
 if (process.env.INGEST !== "0") startIngest();
+// Rank every Solana collection's items in the background (weekly refresh),
+// starting after boot so it doesn't compete with the first polls.
+if (process.env.INGEST !== "0") {
+  const warm = () => void warmRarity(COLLECTIONS.map((c) => c.symbol));
+  setTimeout(warm, 5 * 60_000).unref();
+  setInterval(warm, 6 * 3_600_000).unref();
+}
 startSocial();
 startNames();
 await app.listen({ host: "0.0.0.0", port: config.port });

@@ -122,3 +122,10 @@ export async function getListings(symbol: string, limit = 20): Promise<Listing[]
     rank: r.rarity?.meInstant?.rank ?? r.rarity?.moonrank?.rank ?? r.rarity?.howrare?.rank ?? null,
   })).sort((a, b) => a.price - b.price);
 }
+
+// One NFT's active listing, if any (cheapest first).
+export async function getTokenListing(mint: string) {
+  const rows = await get<{ price: number; seller: string }[]>(`/tokens/${mint}/listings`, { retries: 0, priority: PRIORITY.user });
+  const r = rows.filter((x) => x.price > 0).sort((a, b) => a.price - b.price)[0];
+  return r ? { price: r.price, seller: r.seller } : null;
+}

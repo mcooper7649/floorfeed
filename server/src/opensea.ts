@@ -124,3 +124,45 @@ export async function getOsSales(slug: string, opts: { after?: number; next?: st
   }
   return { sales, next: r.next || null, oldest: r.asset_events.at(-1)?.event_timestamp ?? null };
 }
+
+// OpenSea's chain names; Polygon is "matic" in the API.
+export const osChain = (chain: string) => (chain === "polygon" ? "matic" : chain);
+
+type OsNft = {
+  identifier: string; name: string | null; image_url?: string | null; display_image_url?: string | null;
+  traits?: { trait_type: string; value: string | number }[] | null;
+  owners?: { address: string; quantity: number }[] | null;
+  rarity?: { rank?: number | null } | null;
+  opensea_url?: string;
+};
+export async function getOsNft(chain: string, contract: string, id: string) {
+  const r = await get<{ nft: OsNft }>(`/chain/${osChain(chain)}/contract/${contract}/nfts/${id}`);
+  const n = r.nft;
+  return {
+    name: n.name || null,
+    image: n.display_image_url || n.image_url || null,
+    traits: (n.traits ?? []).map((t) => ({ type: t.trait_type, value: String(t.value) })),
+    owner: n.owners?.[0]?.address?.toLowerCase() ?? null,
+    rank: n.rarity?.rank ?? null,
+    url: n.opensea_url ?? null,
+  };
+}
+
+// Trait value counts across the collection: {type: {value: count}}.
+export async function getOsTraits(slug: string) {
+  const r = await get<{ counts: Record<string, Record<string, number>> }>(`/traits/${slug}`);
+  return r.counts ?? {};
+}
+
+// Cheapest active listing for one NFT, in ETH (null when not listed).
+export async function getOsBestListing(slug: string, id: string) {
+  try {
+    const r = await get<{ price?: { current?: { value: string; decimals: number; currency: string } }; order_hash?: string }>(
+      `/listings/collection/${slug}/nfts/${id}/best`);
+    const p = r.price?.current;
+    if (!p || !["ETH", "WETH"].includes(p.currency)) return null;
+    return { price: Number(p.value) / 10 ** p.decimals, orderHash: r.order_hash ?? null };
+  } catch {
+    return null; // 404 = not listed
+  }
+}

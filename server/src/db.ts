@@ -85,6 +85,26 @@ CREATE TABLE IF NOT EXISTS social_posts (
   tg_message  INTEGER
 );
 CREATE INDEX IF NOT EXISTS social_posts_status ON social_posts(status, created_at);
+
+-- NFT detail pages: every item of a Solana collection with its traits and a
+-- rarity rank FloorFeed computes itself (from Helius DAS), plus per-collection
+-- trait counts (Solana: computed; EVM: from OpenSea).
+CREATE TABLE IF NOT EXISTS nft_items (
+  mint       TEXT PRIMARY KEY,
+  collection TEXT NOT NULL,
+  name       TEXT,
+  image      TEXT,
+  attrs      TEXT NOT NULL,        -- JSON [{type, value}]
+  score      REAL,
+  rank       INTEGER
+);
+CREATE INDEX IF NOT EXISTS nft_items_collection ON nft_items(collection, rank);
+CREATE TABLE IF NOT EXISTS collection_traits (
+  symbol      TEXT PRIMARY KEY,
+  total       INTEGER NOT NULL,
+  counts      TEXT NOT NULL,       -- JSON {type: {value: count}}
+  computed_at INTEGER NOT NULL
+);
 `);
 
 // Columns added after the first release; ALTER is a no-op error if present.
