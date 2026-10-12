@@ -137,7 +137,7 @@ function Body({ onClose, suggest, setFunding }: {
         <Text style={s.primaryTxt}>{auth.fund ? `Buy ${amount} SOL` : 'Sign in to buy with card'}</Text>
       </Pressable>
       <Text style={s.fine}>
-        Payment is handled by Coinbase or MoonPay, who may ask for ID the first time. FloorFeed never sees your card. You can change the amount there.
+        Payment is handled by MoonPay, who may ask for ID the first time. FloorFeed never sees your card. You can change the amount there.
       </Text>
       {error && <Text style={s.err}>{error}</Text>}
 

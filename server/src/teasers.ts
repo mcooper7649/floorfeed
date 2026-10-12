@@ -15,6 +15,8 @@ export const TEASERS: Teaser[] = [
     text: `FloorFeed in one line: a social feed of Solana NFT trades from wallets with a track record.\n\nSee who's buying, how good they are, and copy them on paper first.\n\n${SITE}` },
   { id: "clusters", image: "cluster.jpg",
     text: "When 3+ wallets buy the same Solana collection within 6 hours, FloorFeed flags it as a cluster.\n\nNo KOL shill, no hype thread. Just wallets converging on-chain." },
+  { id: "deposit", image: "deposit.jpg",
+    text: "New on FloorFeed: Deposit.\n\nBuy SOL with card or Apple Pay right in the app, or scan the QR from any exchange or wallet. Your balance updates the moment it lands.\n\nShort on SOL for a buy? Deposit is right there in the buy sheet." },
   { id: "sweeps", image: "feed.jpg",
     text: "One wallet buying 3+ from the same collection inside 15 minutes? That's a sweep.\n\nFloorFeed puts it in your feed the moment it lands, so you see conviction before the floor moves." },
   { id: "tiers", image: "leaders.jpg",
