@@ -83,8 +83,10 @@ export function WalletSheet({ open, onClose }: { open: boolean; onClose: () => v
           {w.kind === 'embedded' ? (
             <>
               <Text style={s.title}>Your account</Text>
-              <ModeToggle />
               {auth.label ? <Text style={s.meta}>Signed in as {auth.label}</Text> : null}
+              <Text style={s.label}>TRADING MODE</Text>
+              <ModeToggle />
+              <Text style={s.label}>REAL WALLET · USED IN REAL MODE ONLY</Text>
               <View style={s.acct}>
                 <View style={[s.iconBig, s.embeddedIcon]}><Text style={s.embeddedGlyph}>F</Text></View>
                 <View style={{ flex: 1 }}>
@@ -119,7 +121,9 @@ export function WalletSheet({ open, onClose }: { open: boolean; onClose: () => v
           ) : w.address ? (
             <>
               <Text style={s.title}>Your wallet</Text>
+              <Text style={s.label}>TRADING MODE</Text>
               <ModeToggle />
+              <Text style={s.label}>REAL WALLET · USED IN REAL MODE ONLY</Text>
               <View style={s.acct}>
                 {w.walletIcon ? <Image source={w.walletIcon} style={s.iconBig} /> : null}
                 <View style={{ flex: 1 }}>

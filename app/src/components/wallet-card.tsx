@@ -2,14 +2,15 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { DepositSheet } from '@/components/deposit-sheet';
-import { ModeToggle } from '@/components/mode-toggle';
+import { MODE_COLOR } from '@/components/mode-toggle';
 import { useBalance, useCapabilities, WalletSheet } from '@/components/wallet-button';
 import { C } from '@/constants/brand';
 import { useAuth } from '@/lib/auth';
 import { shortAddr } from '@/lib/format';
 import { useWallet } from '@/lib/wallet';
 
-// Portfolio header: real wallet status next to the paper P&L. Buying stays
+// Real-mode wallet: address, balance, Deposit and Manage. Only shown in Real
+// mode so paper trading never looks like it spends this wallet. Buying stays
 // off (and says why) until the server has a marketplace key.
 export function WalletCard() {
   const w = useWallet();
@@ -20,10 +21,10 @@ export function WalletCard() {
   const [deposit, setDeposit] = useState(false);
 
   return (
-    <View style={s.card}>
+    <View style={[s.card, { borderColor: `${MODE_COLOR.real}55` }]}>
       <View style={s.row}>
         <View style={{ flex: 1, gap: 2 }}>
-          <Text style={s.label}>WALLET</Text>
+          <Text style={s.label}>YOUR WALLET</Text>
           {!w.supported ? (
             <Text style={s.meta}>Wallet connection is on the website first; the mobile app is next.</Text>
           ) : w.address ? (
@@ -50,7 +51,6 @@ export function WalletCard() {
           </Pressable>
         )}
       </View>
-      {w.supported && <ModeToggle />}
       {caps && !caps.buy.enabled && w.address && (
         <Text style={s.meta}>
           In real mode, buys open the listing on Magic Eden until FloorFeed&apos;s own marketplace access is approved.

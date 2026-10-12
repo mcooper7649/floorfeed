@@ -2,11 +2,14 @@ import { Link } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { FlatList, Linking, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
+import { MODE_COLOR, ModeToggle } from '@/components/mode-toggle';
 import { NftImage } from '@/components/nft-image';
 import { Empty, Screen } from '@/components/screen';
+import { WalletSheet } from '@/components/wallet-button';
 import { WalletCard } from '@/components/wallet-card';
 import { C } from '@/constants/brand';
 import { api, type Holdings, type PaperPosition } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import { shortAddr, signedSol, sol } from '@/lib/format';
 import { useTradeMode } from '@/lib/mode';
 import { useSession } from '@/lib/session';
@@ -18,6 +21,31 @@ export default function PortfolioScreen() {
   const { mode } = useTradeMode();
   const w = useWallet();
   return mode === 'real' && w.address ? <RealPortfolio address={w.address} /> : <PaperPortfolio />;
+}
+
+// Paper and Real are two separate accounts: the switch sits on top, tinted
+// with the mode's color, and only Real shows the wallet (balance, Deposit).
+function ModeCard() {
+  const { mode, canReal } = useTradeMode();
+  const w = useWallet();
+  const auth = useAuth();
+  const [open, setOpen] = useState(false);
+  return (
+    <View style={[s.modeCard, { borderColor: `${MODE_COLOR[mode]}55` }]}>
+      {w.supported && <ModeToggle describe={false} />}
+      <Text style={s.meta}>
+        {mode === 'paper'
+          ? 'Paper account: simulated trades at live prices, tracked separately. Nothing here touches a real wallet.'
+          : 'Real account: the NFTs and SOL in your wallet. Your wallet asks before anything is signed.'}
+      </Text>
+      {w.supported && !canReal && (
+        <Pressable accessibilityRole="button" onPress={() => setOpen(true)} style={s.unlock}>
+          <Text style={s.unlockTxt}>{auth.supported ? 'Sign in to trade for real' : 'Connect a wallet to trade for real'}</Text>
+        </Pressable>
+      )}
+      <WalletSheet open={open} onClose={() => setOpen(false)} />
+    </View>
+  );
 }
 
 // Real mode: what the connected wallet actually holds in tracked collections,
@@ -41,7 +69,8 @@ function RealPortfolio({ address }: { address: string }) {
   const known = h?.nfts.filter((n) => n.boughtAt != null).length ?? 0;
 
   return (
-    <Screen title="Portfolio" subtitle={`Real mode · ${shortAddr(address)}`}>
+    <Screen title="Portfolio" subtitle={`Real account · ${shortAddr(address)}`}>
+      <ModeCard />
       <WalletCard />
       <View style={s.summary}>
         <Text style={s.label}>WALLET VALUE</Text>
@@ -62,7 +91,7 @@ function RealPortfolio({ address }: { address: string }) {
           <Empty text={
             !current ? 'Loading your NFTs…'
               : !h ? `Couldn't load holdings: ${'error' in current ? current.error : ''}`
-              : 'No NFTs from tracked collections in this wallet yet. Switch to Real and tap "Copy · buy floor" on a trade to buy one.'
+              : 'No NFTs from tracked collections in this wallet yet. Tap "Copy · buy floor" on a trade in the feed to buy one.'
           } />
         }
         ListFooterComponent={h && h.untracked > 0 ? (
@@ -132,11 +161,11 @@ function PaperPortfolio() {
   const total = (data?.realizedSol ?? 0) + (data?.unrealizedSol ?? 0);
 
   return (
-    <Screen title="Portfolio" subtitle="Paper mode: no real SOL moves">
-      <WalletCard />
-      <View style={s.summary}>
+    <Screen title="Portfolio" subtitle="Paper account · practice trades, no real SOL">
+      <ModeCard />
+      <View style={[s.summary, { borderColor: `${MODE_COLOR.paper}55` }]}>
         <View style={s.labelRow}>
-          <Text style={s.label}>TOTAL P&L</Text>
+          <Text style={[s.label, { color: MODE_COLOR.paper }]}>PAPER P&L</Text>
           {!!data?.positions.length && (
             <Pressable onPress={reset} style={armed ? s.resetArmed : s.reset}>
               <Text style={[s.resetTxt, armed && { color: C.down }]}>{armed ? 'Tap again to wipe all paper trades' : 'Reset paper stats'}</Text>
@@ -179,6 +208,9 @@ function PaperPortfolio() {
 }
 
 const s = StyleSheet.create({
+  modeCard: { marginHorizontal: 16, marginBottom: 8, padding: 14, borderRadius: 18, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, gap: 10 },
+  unlock: { alignSelf: 'flex-start', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 9, backgroundColor: C.accent },
+  unlockTxt: { color: C.accentInk, fontWeight: '800' },
   summary: { marginHorizontal: 16, marginBottom: 8, padding: 16, borderRadius: 18, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, gap: 4 },
   label: { color: C.dim, fontSize: 11, fontWeight: '800', letterSpacing: 1 },
   labelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
