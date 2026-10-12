@@ -104,7 +104,7 @@ function RealPortfolio({ address }: { address: string }) {
           return (
             <View style={s.row}>
               <NftImage uri={n.image} name={n.collection.name} radius={10} px={120} style={{ width: 48 }} />
-              <Link href={{ pathname: '/collection/[symbol]', params: { symbol: n.collection.symbol } }} asChild>
+              <Link href={{ pathname: '/item/[symbol]/[id]', params: { symbol: n.collection.symbol, id: n.mint } }} asChild>
                 <Pressable style={{ flex: 1 }}>
                   <Text style={s.name} numberOfLines={1}>{n.name ?? n.collection.name}</Text>
                   <Text style={s.meta}>

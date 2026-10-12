@@ -152,6 +152,7 @@ function CopyCta({ coll, copiedFrom }: { coll: FeedEvent['collection']; copiedFr
 }
 
 const collHref = (symbol: string) => ({ pathname: '/collection/[symbol]' as const, params: { symbol } });
+const itemHref = (symbol: string, id: string) => ({ pathname: '/item/[symbol]/[id]' as const, params: { symbol, id } });
 
 // Up to four distinct artworks, never leaving an empty cell.
 // Tiles: a square (1 full · 2 halves · 3 = one large + two stacked · 4 = 2×2).
@@ -220,7 +221,7 @@ function BuyCard({ e, tile }: { e: BuyEvent; tile?: boolean }) {
   if (tile) {
     return (
       <Card tile>
-        <Link href={collHref(e.collection.symbol)} asChild>
+        <Link href={itemHref(e.collection.symbol, e.mint)} asChild>
           <Pressable>
             <NftImage uri={e.image} name={e.collection.name}>
               {e.vsFloorPct != null && <Pill text={`${pct(e.vsFloorPct)} vs floor`} tone={below ? 'up' : 'dark'} style={{ top: 10, left: 10 }} />}
@@ -244,7 +245,7 @@ function BuyCard({ e, tile }: { e: BuyEvent; tile?: boolean }) {
   return (
     <Card>
       <TraderRow t={e.wallet} />
-      <Link href={collHref(e.collection.symbol)} asChild>
+      <Link href={itemHref(e.collection.symbol, e.mint)} asChild>
         <Pressable style={s.trade}>
           <CollIcon name={e.collection.name} uri={e.image} size={96} radius={14} />
           <View style={{ flex: 1, gap: 2 }}>
@@ -289,7 +290,7 @@ function FlipCard({ e, tile }: { e: FlipEvent; tile?: boolean }) {
   if (tile) {
     return (
       <Card tile>
-        <Link href={collHref(e.collection.symbol)} asChild>
+        <Link href={itemHref(e.collection.symbol, e.mint)} asChild>
           <Pressable>
             <NftImage uri={e.image} name={e.collection.name}>
               <Pill text={`${win ? 'WIN' : 'LOSS'} ${pct(e.pnlPct)}`} tone={win ? 'up' : 'down'} style={{ top: 10, left: 10 }} />

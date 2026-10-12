@@ -241,6 +241,7 @@ app.get("/wallets/:address", async (req) => {
     profile: traderProfile(address),
     trades: trades.map((t) => ({
       signature: t.signature,
+      mint: t.mint,
       side: t.buyer === address ? "buy" : "sell",
       collection: collectionName(t.collection),
       symbol: t.collection,

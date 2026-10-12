@@ -1,0 +1,230 @@
+import { Link, Stack, useLocalSearchParams } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+
+import { ChainBadge } from '@/components/chain-badge';
+import { Avatar, TierBadge } from '@/components/event-card';
+import { NftImage, Pill } from '@/components/nft-image';
+import { Empty } from '@/components/screen';
+import { TopNav } from '@/components/top-nav';
+import { C } from '@/constants/brand';
+import { api, type ItemDetail } from '@/lib/api';
+import { shortAddr, signedSol, sol, timeAgo } from '@/lib/format';
+import { useLayout } from '@/lib/layout';
+import { useTitle } from '@/lib/use-title';
+
+// Rarity band from the rank's percentile; the rank itself is always shown too.
+function band(rank: number, total: number | null) {
+  if (!total) return null;
+  const p = rank / total;
+  if (p <= 0.01) return { label: 'LEGENDARY', color: '#FFB547' };
+  if (p <= 0.05) return { label: 'EPIC', color: C.ai };
+  if (p <= 0.15) return { label: 'RARE', color: '#4DA3FF' };
+  if (p <= 0.4) return { label: 'UNCOMMON', color: C.up };
+  return { label: 'COMMON', color: C.dim };
+}
+
+const pctLabel = (p: number) => (p < 0.1 ? '<0.1%' : p < 10 ? `${p.toFixed(1)}%` : `${Math.round(p)}%`);
+
+export default function ItemScreen() {
+  const { symbol, id } = useLocalSearchParams<{ symbol: string; id: string }>();
+  // Keyed by the item, so moving to another NFT never shows the previous one.
+  const key = `${symbol}/${id}`;
+  const [loaded, setLoaded] = useState<{ key: string; d?: ItemDetail; error?: string } | null>(null);
+  const data = loaded?.key === key ? loaded.d ?? null : null;
+  const error = loaded?.key === key ? loaded.error ?? null : null;
+  const { wide, pad, maxWidth } = useLayout();
+
+  useTitle(data && `${data.name ?? data.collection.name}${data.rarity ? ` · Rank ${data.rarity.rank.toLocaleString()}` : ''}: traits, rarity & sales | FloorFeed`);
+
+  useEffect(() => {
+    let alive = true;
+    api.item(symbol, id)
+      .then((d) => alive && setLoaded({ key: `${symbol}/${id}`, d }))
+      .catch((e) => alive && setLoaded({ key: `${symbol}/${id}`, error: (e as Error).message }));
+    return () => { alive = false; };
+  }, [symbol, id]);
+
+  const nav = Platform.OS === 'web' && <TopNav back />;
+  if (error) return <View style={s.fill}>{nav}<Empty text={error} /></View>;
+  if (!data) return <View style={s.fill}>{nav}<ActivityIndicator style={{ marginTop: 40 }} color={C.accent} /></View>;
+
+  const u = data.currency;
+  const title = data.name ?? `${data.collection.name} ${shortAddr(data.id)}`;
+  const b = data.rarity ? band(data.rarity.rank, data.rarity.total) : null;
+  const market = data.chain === 'solana' ? 'Magic Eden' : 'OpenSea';
+  const vsFloor = data.listing && data.collection.floor
+    ? ((data.listing.price - data.collection.floor) / data.collection.floor) * 100 : null;
+
+  const art = (
+    <NftImage uri={data.image} name={title} radius={18} px={wide ? 900 : 640}>
+      {b && <Pill text={`${b.label} · #${data.rarity!.rank.toLocaleString()}`} style={{ top: 12, left: 12 }} />}
+    </NftImage>
+  );
+
+  const facts = (
+    <View style={{ gap: 14 }}>
+      <View style={{ gap: 6 }}>
+        <Link href={{ pathname: '/collection/[symbol]', params: { symbol: data.symbol } }} asChild>
+          <Pressable style={s.collRow}>
+            <ChainBadge chain={data.chain} />
+            <Text style={s.collName}>{data.collection.name} ›</Text>
+          </Pressable>
+        </Link>
+        <Text style={[s.title, wide && { fontSize: 34 }]}>{title}</Text>
+      </View>
+
+      <View style={s.statRow}>
+        <Fact label="Rarity rank" value={data.rarity ? `#${data.rarity.rank.toLocaleString()}` : data.rarityPending ? 'Ranking…' : '—'}
+          sub={data.rarity?.total ? `of ${data.rarity.total.toLocaleString()} · top ${pctLabel((data.rarity.rank / data.rarity.total) * 100)}` : undefined}
+          color={b?.color} />
+        <Fact label={data.listing ? 'Listed at' : 'Last sale'}
+          value={data.listing ? sol(data.listing.price, 2, u) : data.lastSale ? sol(data.lastSale.price, 2, u) : '—'}
+          sub={data.listing
+            ? (vsFloor != null ? `${vsFloor >= 0 ? '+' : '−'}${Math.abs(vsFloor).toFixed(1)}% vs floor` : `on ${market}`)
+            : data.lastSale ? `${timeAgo(data.lastSale.t)} ago` : 'not tracked'} />
+        <Fact label="Collection floor" value={data.collection.floor != null ? sol(data.collection.floor, 2, u) : '—'} />
+      </View>
+
+      {data.owner && (
+        <Link href={{ pathname: '/wallet/[address]', params: { address: data.owner.wallet } }} asChild>
+          <Pressable style={s.owner}>
+            <Avatar t={data.owner} size={36} />
+            <View style={{ flex: 1 }}>
+              <Text style={s.label}>OWNER</Text>
+              <View style={s.nameRow}>
+                <Text style={s.ownerName} numberOfLines={1}>{data.owner.name ?? shortAddr(data.owner.wallet)}</Text>
+                <TierBadge tier={data.owner.tier === 'new' ? null : data.owner.tier} />
+              </View>
+            </View>
+            <Text style={s.chev}>›</Text>
+          </Pressable>
+        </Link>
+      )}
+
+      <View style={s.ctaRow}>
+        <Pressable accessibilityRole="link" onPress={() => Linking.openURL(data.listing?.url ?? data.marketUrl)}
+          style={data.listing ? s.primary : s.secondary}>
+          <Text style={data.listing ? s.primaryTxt : s.secondaryTxt}>
+            {data.listing ? `Buy on ${market} · ${sol(data.listing.price, 2, u)} ↗` : `View on ${market} ↗`}
+          </Text>
+        </Pressable>
+        <Pressable accessibilityRole="link" onPress={() => Linking.openURL(data.explorerUrl)} style={s.secondary}>
+          <Text style={s.secondaryTxt}>Explorer ↗</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+
+  const traits = (
+    <View style={{ gap: 10 }}>
+      <Text style={s.section}>TRAITS · RAREST FIRST</Text>
+      {data.traits.length === 0 ? <Text style={s.note}>This NFT has no trait metadata.</Text> : (
+        <View style={s.traitGrid}>
+          {data.traits.map((t) => (
+            <View key={`${t.type}:${t.value}`} style={[s.trait, wide && { flexBasis: '31%' }]}>
+              <Text style={s.traitType} numberOfLines={1}>{t.type.toUpperCase()}</Text>
+              <Text style={s.traitVal} numberOfLines={2}>{t.value}</Text>
+              {t.pct != null && (
+                <>
+                  <View style={s.bar}><View style={[s.barFill, { width: `${Math.max(2, Math.min(100, t.pct))}%`, backgroundColor: t.pct < 5 ? C.accent : C.dim }]} /></View>
+                  <Text style={s.traitPct}>{pctLabel(t.pct)} have this{t.count != null ? ` · ${t.count.toLocaleString()}` : ''}</Text>
+                </>
+              )}
+            </View>
+          ))}
+        </View>
+      )}
+      {data.rarity && (
+        <Text style={s.note}>
+          {data.rarity.source === 'FloorFeed'
+            ? 'Rank computed by FloorFeed from every item in the collection: rarer trait values score higher (OpenRarity-style).'
+            : `Rank from ${data.rarity.source}.`}
+        </Text>
+      )}
+    </View>
+  );
+
+  const history = (
+    <View style={{ gap: 4 }}>
+      <Text style={s.section}>SALES OF THIS NFT</Text>
+      {data.history.length === 0 ? <Text style={s.note}>No sales of this NFT in FloorFeed&apos;s history yet.</Text> :
+        data.history.map((h) => (
+          <View key={h.signature} style={s.saleRow}>
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={s.saleWho} numberOfLines={1}>
+                <Link href={{ pathname: '/wallet/[address]', params: { address: h.seller } }}><Text style={s.link}>{h.sellerName ?? shortAddr(h.seller)}</Text></Link>
+                <Text style={s.meta}> → </Text>
+                <Link href={{ pathname: '/wallet/[address]', params: { address: h.buyer } }}><Text style={s.link}>{h.buyerName ?? shortAddr(h.buyer)}</Text></Link>
+              </Text>
+              <Text style={s.meta}>
+                {timeAgo(h.t)} ago
+                {h.flipPnl != null && <Text style={{ color: h.flipPnl >= 0 ? C.up : C.down }}> · seller {h.flipPnl >= 0 ? 'flipped' : 'sold at a loss'} {signedSol(h.flipPnl, 2, u)}</Text>}
+              </Text>
+            </View>
+            <Text style={s.salePrice}>{sol(h.price, 2, u)}</Text>
+          </View>
+        ))}
+    </View>
+  );
+
+  return (
+    <View style={s.fill}>
+      <Stack.Screen options={{ title }} />
+      {nav}
+      <ScrollView contentContainerStyle={{ padding: pad, paddingBottom: 60, width: '100%', maxWidth, alignSelf: 'center', gap: 24 }}>
+        {wide ? (
+          <View style={{ flexDirection: 'row', gap: 32, alignItems: 'flex-start' }}>
+            <View style={{ flex: 1 }}>{art}</View>
+            <View style={{ flex: 1, gap: 24 }}>{facts}{traits}</View>
+          </View>
+        ) : (
+          <>{art}{facts}{traits}</>
+        )}
+        {history}
+      </ScrollView>
+    </View>
+  );
+}
+
+const Fact = ({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) => (
+  <View style={s.fact}>
+    <Text style={s.label}>{label.toUpperCase()}</Text>
+    <Text style={[s.factVal, color ? { color } : null]} numberOfLines={1}>{value}</Text>
+    {sub ? <Text style={s.meta} numberOfLines={1}>{sub}</Text> : null}
+  </View>
+);
+
+const s = StyleSheet.create({
+  fill: { flex: 1, backgroundColor: C.bg },
+  collRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  collName: { color: C.accent, fontWeight: '700', fontSize: 14 },
+  title: { color: C.text, fontSize: 26, fontWeight: '800', letterSpacing: -0.5 },
+  statRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  fact: { flexGrow: 1, flexBasis: '30%', minWidth: 140, backgroundColor: C.card, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: C.border, gap: 2 },
+  factVal: { color: C.text, fontSize: 20, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  label: { color: C.dim, fontSize: 11, fontWeight: '800', letterSpacing: 0.8 },
+  meta: { color: C.dim, fontSize: 12.5 },
+  note: { color: C.dim, fontSize: 12.5, lineHeight: 18 },
+  owner: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.card, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: C.border },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  ownerName: { color: C.text, fontWeight: '700', fontSize: 15, flexShrink: 1 },
+  chev: { color: C.dim, fontSize: 22 },
+  ctaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  primary: { flexGrow: 1, backgroundColor: C.accent, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center' },
+  primaryTxt: { color: C.accentInk, fontWeight: '800' },
+  secondary: { flexGrow: 1, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center', borderWidth: 1, borderColor: C.border, backgroundColor: C.cardHi },
+  secondaryTxt: { color: C.text, fontWeight: '800' },
+  section: { color: C.dim, fontSize: 11, fontWeight: '800', letterSpacing: 1 },
+  traitGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  trait: { flexGrow: 1, flexBasis: '46%', backgroundColor: C.card, borderRadius: 12, padding: 10, borderWidth: 1, borderColor: C.border, gap: 3 },
+  traitType: { color: C.dim, fontSize: 10.5, fontWeight: '800', letterSpacing: 0.6 },
+  traitVal: { color: C.text, fontSize: 14.5, fontWeight: '700' },
+  bar: { height: 4, borderRadius: 2, backgroundColor: C.grid, overflow: 'hidden', marginTop: 4 },
+  barFill: { height: 4, borderRadius: 2 },
+  traitPct: { color: C.dim, fontSize: 11.5, fontVariant: ['tabular-nums'] },
+  saleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
+  saleWho: { color: C.text, fontSize: 14 },
+  link: { color: C.text, fontWeight: '700' },
+  salePrice: { color: C.text, fontWeight: '800', fontVariant: ['tabular-nums'] },
+});

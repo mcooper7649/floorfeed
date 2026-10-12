@@ -75,6 +75,7 @@ export type WalletDetail = {
   profile: TraderProfile;
   trades: {
     signature: string;
+    mint: string;
     side: 'buy' | 'sell';
     collection: string;
     symbol: string;
@@ -118,6 +119,29 @@ export type Leaderboard = {
 };
 
 export type Chain = 'solana' | 'ethereum' | 'base' | 'polygon';
+
+// One NFT (GET /items/:symbol/:id). id = Solana mint or EVM contract:tokenId.
+export type ItemDetail = {
+  symbol: string;
+  id: string;
+  chain: Chain;
+  currency: string;
+  collection: { symbol: string; name: string; floor: number | null; image: string | null };
+  name: string | null;
+  image: string | null;
+  owner: { wallet: string; name: string | null; tier: Tier } | null;
+  rarity: { rank: number; total: number | null; source: string } | null;
+  rarityPending: boolean;
+  traits: { type: string; value: string; count: number | null; pct: number | null }[];
+  listing: { price: number; url: string } | null;
+  lastSale: { price: number; t: number } | null;
+  history: {
+    signature: string; price: number; t: number; buyer: string; buyerName: string | null;
+    seller: string; sellerName: string | null; flipPnl: number | null;
+  }[];
+  marketUrl: string;
+  explorerUrl: string;
+};
 export type MarketCategory = 'PFP' | 'Art' | 'Gaming' | 'Assets' | 'Domains' | 'Memberships' | 'Utility';
 
 export type CollectionSummary = {
@@ -252,6 +276,7 @@ export const api = {
   leaderboard: (p: { window: LeaderWindow; sort: LeaderSort; hideMM: boolean; chain: Ecosystem }) =>
     req<Leaderboard>(`/leaderboard?limit=50&window=${p.window}&sort=${p.sort}&hideMM=${p.hideMM ? 1 : 0}&chain=${p.chain}`),
   wallet: (address: string) => req<WalletDetail>(`/wallets/${address}`),
+  item: (symbol: string, id: string) => req<ItemDetail>(`/items/${encodeURIComponent(symbol)}/${encodeURIComponent(id)}`),
   follows: (userId: string) => req<string[]>(`/follows/${userId}`),
   follow: (userId: string, wallet: string) => send('POST', '/follows', { userId, wallet }),
   unfollow: (userId: string, wallet: string) => send('DELETE', '/follows', { userId, wallet }),

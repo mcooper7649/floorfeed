@@ -93,7 +93,7 @@ export default function WalletScreen() {
         }
         ListEmptyComponent={<Empty text="No tracked trades." />}
         renderItem={({ item: t }) => (
-          <Link href={{ pathname: '/collection/[symbol]', params: { symbol: t.symbol } }} asChild>
+          <Link href={{ pathname: '/item/[symbol]/[id]', params: { symbol: t.symbol, id: t.mint } }} asChild>
           <Pressable style={s.row}>
             <CollIcon name={t.collection} uri={t.image} size={52} radius={10} />
             <View style={{ flex: 1 }}>

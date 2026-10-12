@@ -33,6 +33,7 @@ export default function RootLayout() {
           {/* Web draws its own header (TopNav) on these pages */}
           <Stack.Screen name="wallet/[address]" options={{ title: 'Wallet', headerBackTitle: 'Back', headerShown: !web }} />
           <Stack.Screen name="collection/[symbol]" options={{ title: 'Collection', headerBackTitle: 'Back', headerShown: !web }} />
+          <Stack.Screen name="item/[symbol]/[id]" options={{ title: 'NFT', headerBackTitle: 'Back', headerShown: !web }} />
         </Stack>
       </TradeModeProvider>
       </WalletProvider>

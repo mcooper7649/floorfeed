@@ -267,7 +267,7 @@ export default function CollectionScreen() {
                   <View style={s.grid}>
                     {data.listings.map((l, i) => (
                       <Pressable key={`${i}:${l.mint}`} style={[s.item, { width: itemW }]}
-                        onPress={() => Linking.openURL(`https://magiceden.io/item-details/${l.mint}`)}>
+                        onPress={() => router.push({ pathname: '/item/[symbol]/[id]', params: { symbol: data.symbol, id: l.mint } })}>
                         <NftImage uri={l.image} name={l.name ?? data.name} px={itemW}>
                           {l.rank != null && <Pill text={`Rank ${l.rank.toLocaleString()}`} style={{ top: 8, left: 8 }} />}
                         </NftImage>
@@ -287,11 +287,11 @@ export default function CollectionScreen() {
               )}
 
               {data.recentSales.length > 0 && (
-                <Section title="Recent sales" sub="Tap a sale to see the buyer's track record">
+                <Section title="Recent sales" sub="Tap an NFT for its traits, rarity and sale history">
                   <View style={s.grid}>
                     {data.recentSales.map((r) => (
                       <Pressable key={r.signature} style={[s.item, { width: itemW }]}
-                        onPress={() => router.push({ pathname: '/wallet/[address]', params: { address: r.buyer } })}>
+                        onPress={() => router.push({ pathname: '/item/[symbol]/[id]', params: { symbol: data.symbol, id: r.mint } })}>
                         <NftImage uri={r.image} name={data.name} px={itemW}>
                           <Pill text={`${timeAgo(r.t)} ago`} style={{ top: 8, left: 8 }} />
                         </NftImage>
