@@ -176,7 +176,7 @@ The feed fills within about 30 seconds of the server starting. Takes appear as c
 | `OLLAMA_URL` | `http://localhost:11434` | Used when no Anthropic key is set |
 | `OLLAMA_MODEL` | `nimble:latest` | Any instruction-tuned model works |
 | `HELIUS_WEBHOOK_SECRET` | none | If set, required as the `Authorization` header on `/webhooks/helius` |
-| `OPENSEA_API_KEY` | none | Optional. Makes OpenSea stats reliable (keyless access is intermittent) and is the prerequisite for EVM sales/listings |
+| `OPENSEA_API_KEY` | none | Optional (free). Turns on EVM sales: a 30-day backfill, then polling for Ethereum/Base/Polygon collections priced in ETH, which powers their feed events, charts, flippers and the Ethereum leaderboard. Without it, EVM collections are stats-only |
 | `SOLANA_RPC_URL` | public mainnet RPC | Wallet balances now; sends and simulation later. A Helius URL is recommended |
 | `MAGICEDEN_API_KEY` | none | Enables real buys of Magic Eden listings ([plan](docs/WALLET_AND_TRADING.md)) |
 | `TENSOR_API_KEY` | none | Enables real buys of Tensor listings |
@@ -265,7 +265,7 @@ Approved posts are published by `tools/x-poster/x_post.py`, a Playwright script 
 - **Market-maker detection is a heuristic.** Wallets with ≥60% of their trades through AMM pools are labeled *likely* market makers, and the threshold can misclassify active traders who happen to use pools.
 - **Paper sells use floor − 3%,** not a real bid, until Tensor bid data is wired in.
 - **Floor vs. listings:** Magic Eden's floor stat can sit slightly below its cheapest regular listing. Depth is measured against the reported floor.
-- **EVM collections are stats-only.** OpenSea's keyless API gives collection stats but not sales, listings or rankings, so EVM collections have no sales chart, flippers or paper trading (the paper portfolio is SOL-denominated). Keyless access is also intermittent, so failed refreshes keep the last good values.
+- **EVM is track-only.** With `OPENSEA_API_KEY`, Ethereum/Base/Polygon sales feed the same events, charts, flippers and wallet pages as Solana, in ETH. Leaderboards are per ecosystem because P&L is in each chain's unit (SOL vs ETH). Sales paid in other tokens (Courtyard's USDC) are skipped. There are no EVM listings, ENS names or market-maker detection yet, and paper and real trading stay Solana-only (the paper portfolio is SOL-denominated).
 - **The collection list is curated, not discovered.** Neither public API offers a usable "top collections" ranking without a key, so the 74 collections are a hand-checked list.
 - **Floor history starts at first run.** Sale history is backfilled, but floor snapshots only build up from when the server started.
 - **Some NFT image hosts block cross-origin embedding** in the web build, so those collections show a letter placeholder (native apps are unaffected).

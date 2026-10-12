@@ -12,7 +12,7 @@ import { C } from '@/constants/brand';
 import {
   api, type BuyEvent, type ClusterEvent, type FeedEvent, type FlipEvent, type SweepEvent, type Take, type Tier, type Trader,
 } from '@/lib/api';
-import { holdTime, pct, shortAddr, signedSol, sol, timeAgo } from '@/lib/format';
+import { holdTime, pct, shortAddr, signedSol, sol, timeAgo, unitFor } from '@/lib/format';
 import { thumb } from '@/lib/img';
 import { useTradeMode } from '@/lib/mode';
 import { useSession } from '@/lib/session';
@@ -90,7 +90,7 @@ function TraderRow({ t }: { t: Trader }) {
             </View>
             <Text style={s.meta} numberOfLines={1}>
               {statLine(t)}
-              {t.flips > 0 && <Text style={{ color: t.realizedSol >= 0 ? C.up : C.down }}> · {signedSol(t.realizedSol, Math.abs(t.realizedSol) >= 10 ? 0 : 1)}</Text>}
+              {t.flips > 0 && <Text style={{ color: t.realizedSol >= 0 ? C.up : C.down }}> · {signedSol(t.realizedSol, Math.abs(t.realizedSol) >= 10 ? 0 : 1, unitFor(t.wallet))}</Text>}
             </Text>
           </View>
         </Pressable>
@@ -109,7 +109,8 @@ function Kicker({ text, color }: { text: string; color: string }) {
 }
 
 // Copy = buy the collection's floor (paper or real, per the wallet mode).
-function CopyCta({ symbol, floor, copiedFrom }: { symbol: string; floor: number | null; copiedFrom?: string }) {
+function CopyCta({ coll, copiedFrom }: { coll: FeedEvent['collection']; copiedFrom?: string }) {
+  const { symbol, floor } = coll;
   const { userId, bumpPortfolio } = useSession();
   const { mode } = useTradeMode();
   const [state, setState] = useState<'idle' | 'busy' | string>('idle');
@@ -127,6 +128,14 @@ function CopyCta({ symbol, floor, copiedFrom }: { symbol: string; floor: number 
     }
   };
   const f = floor ? ` · ${sol(floor)}` : '';
+  // Paper and real trading are Solana-only for now.
+  if (coll.chain !== 'solana') {
+    return (
+      <Link href={collHref(symbol)} asChild>
+        <Pressable style={s.ghost}><Text style={s.ghostTxt}>See {coll.name} ›</Text></Pressable>
+      </Link>
+    );
+  }
   return (
     <>
       <Pressable onPress={() => (mode === 'real' ? (tap(), setOpen(true)) : paperBuy())}
@@ -223,11 +232,11 @@ function BuyCard({ e, tile }: { e: BuyEvent; tile?: boolean }) {
           <TraderRow t={e.wallet} />
           <View style={{ gap: 2 }}>
             <Text style={s.verb}>bought <Text style={s.coll}>{e.collection.name}</Text></Text>
-            <Text style={s.big}>{sol(e.price, 3)}</Text>
+            <Text style={s.big}>{sol(e.price, 3, e.collection.currency)}</Text>
           </View>
           {aiTake}
           <View style={{ flex: 1 }} />
-          <CopyCta symbol={e.collection.symbol} floor={e.collection.floor} copiedFrom={e.signature} />
+          <CopyCta coll={e.collection} copiedFrom={e.signature} />
         </View>
       </Card>
     );
@@ -240,7 +249,7 @@ function BuyCard({ e, tile }: { e: BuyEvent; tile?: boolean }) {
           <CollIcon name={e.collection.name} uri={e.image} size={96} radius={14} />
           <View style={{ flex: 1, gap: 2 }}>
             <Text style={s.verb}>bought <Text style={s.coll}>{e.collection.name}</Text></Text>
-            <Text style={s.big}>{sol(e.price, 3)}</Text>
+            <Text style={s.big}>{sol(e.price, 3, e.collection.currency)}</Text>
             <Text style={s.meta}>
               {e.vsFloorPct != null && <Text style={{ color: below ? C.up : C.dim }}>{pct(e.vsFloorPct)} vs floor · </Text>}
               {timeAgo(e.t)} ago
@@ -250,7 +259,7 @@ function BuyCard({ e, tile }: { e: BuyEvent; tile?: boolean }) {
         </Pressable>
       </Link>
       {aiTake}
-      <CopyCta symbol={e.collection.symbol} floor={e.collection.floor} copiedFrom={e.signature} />
+      <CopyCta coll={e.collection} copiedFrom={e.signature} />
     </Card>
   );
 }
@@ -263,9 +272,9 @@ function FlipCard({ e, tile }: { e: FlipEvent; tile?: boolean }) {
   const detail = (
     <>
       <Text style={s.verb}>{win ? 'flipped' : 'sold at a loss'} <Text style={s.coll}>{e.collection.name}</Text></Text>
-      <Text style={[s.big, { color }]}>{signedSol(e.pnl, 2)}</Text>
+      <Text style={[s.big, { color }]}>{signedSol(e.pnl, 2, e.collection.currency)}</Text>
       <Text style={s.meta}>
-        <Text style={{ color }}>{pct(e.pnlPct)}</Text> · {e.buy.toFixed(2)} → {e.sell.toFixed(2)} SOL · held {holdTime(e.holdHours)}
+        <Text style={{ color }}>{pct(e.pnlPct)}</Text> · {e.buy.toFixed(e.collection.currency === 'ETH' ? 3 : 2)} → {sol(e.sell, 2, e.collection.currency)} · held {holdTime(e.holdHours)}
       </Text>
     </>
   );
@@ -319,9 +328,9 @@ function SweepCard({ e, tile }: { e: SweepEvent; tile?: boolean }) {
   const detail = (
     <View style={{ gap: 2 }}>
       <Text style={s.verb}>swept <Text style={s.coll}>{e.count} × {e.collection.name}</Text></Text>
-      <Text style={s.big}>{sol(e.total, 2)}</Text>
+      <Text style={s.big}>{sol(e.total, 2, e.collection.currency)}</Text>
       <Text style={s.meta}>
-        avg {e.avg.toFixed(2)} SOL
+        avg {sol(e.avg, 2, e.collection.currency)}
         {e.vsFloorPct != null && <Text style={{ color: below ? C.up : C.dim }}> · {pct(e.vsFloorPct)} vs floor</Text>}
         {' '}· {timeAgo(e.t)} ago
       </Text>
@@ -343,7 +352,7 @@ function SweepCard({ e, tile }: { e: SweepEvent; tile?: boolean }) {
           <TraderRow t={e.wallet} />
           {detail}
           <View style={{ flex: 1 }} />
-          <CopyCta symbol={e.collection.symbol} floor={e.collection.floor} />
+          <CopyCta coll={e.collection} />
         </View>
       </Card>
     );
@@ -354,7 +363,7 @@ function SweepCard({ e, tile }: { e: SweepEvent; tile?: boolean }) {
       <TraderRow t={e.wallet} />
       {detail}
       {art}
-      <CopyCta symbol={e.collection.symbol} floor={e.collection.floor} />
+      <CopyCta coll={e.collection} />
     </Card>
   );
 }
@@ -388,7 +397,7 @@ function ClusterCard({ e, tile }: { e: ClusterEvent; tile?: boolean }) {
         </Text>
       </View>
       <Text style={s.meta}>
-        {e.buys} buys · avg {e.avg.toFixed(2)} SOL
+        {e.buys} buys · avg {sol(e.avg, 2, e.collection.currency)}
         {e.vsFloorPct != null && <Text style={{ color: below ? C.up : C.dim }}> · {pct(e.vsFloorPct)} vs floor</Text>}
         {' '}· {timeAgo(e.t)} ago
       </Text>
@@ -409,7 +418,7 @@ function ClusterCard({ e, tile }: { e: ClusterEvent; tile?: boolean }) {
         <View style={s.tileBody}>
           {body}
           <View style={{ flex: 1 }} />
-          <CopyCta symbol={e.collection.symbol} floor={e.collection.floor} />
+          <CopyCta coll={e.collection} />
         </View>
       </Card>
     );
@@ -419,7 +428,7 @@ function ClusterCard({ e, tile }: { e: ClusterEvent; tile?: boolean }) {
       <Kicker text="CLUSTER" color={C.accent} />
       {body}
       {art}
-      <CopyCta symbol={e.collection.symbol} floor={e.collection.floor} />
+      <CopyCta coll={e.collection} />
     </Card>
   );
 }

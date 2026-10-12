@@ -1,4 +1,4 @@
-import { collectionName } from "./config.ts";
+import { collectionName, isEvmWallet } from "./config.ts";
 import { db } from "./db.ts";
 import { walletStats } from "./pnl.ts";
 
@@ -109,6 +109,7 @@ export function traderLeaderboard(opts: {
   minFlips: number;
   hideMarketMakers: boolean;
   limit: number;
+  chain?: "solana" | "evm"; // P&L is per unit (SOL or ETH), so boards are per ecosystem
 }) {
   const t0 = since(opts.windowDays);
   const flips = flipsSince.all(t0) as Flip[];
@@ -119,7 +120,8 @@ export function traderLeaderboard(opts: {
       .map((a) => [a.wallet, a]),
   );
 
-  const candidates = [...byWallet.entries()].filter(([, fs]) => fs.length >= opts.minFlips);
+  const evm = (opts.chain ?? "solana") === "evm";
+  const candidates = [...byWallet.entries()].filter(([w, fs]) => fs.length >= opts.minFlips && isEvmWallet(w) === evm);
   let rows = candidates.map(([w, fs]) => profileFrom(w, fs, act.get(w)));
   const marketMakers = rows.filter((r) => r.likelyMarketMaker).length;
   if (opts.hideMarketMakers) rows = rows.filter((r) => !r.likelyMarketMaker);

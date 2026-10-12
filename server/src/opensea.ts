@@ -1,7 +1,6 @@
-// OpenSea API v2, keyless subset: collection stats + collection info.
-// (Sales events, listings and rankings need an API key; see README.)
-// OPENSEA_API_KEY in the environment is sent when present.
-// The keyless limit is ~120 req/min; a 700ms gap stays well under it.
+// OpenSea API v2: collection stats + info (work keyless) and sale events
+// (need OPENSEA_API_KEY, sent when present). The limit is 120 req/min; a
+// 700ms gap stays under it.
 const BASE = "https://api.opensea.io/api/v2";
 const MIN_GAP_MS = 700;
 let last = 0;
@@ -69,4 +68,59 @@ export async function getOsInfo(slug: string) {
     supply: c.total_supply ?? null,
     url: c.opensea_url ?? `https://opensea.io/collection/${slug}`,
   };
+}
+
+// Sales are kept only when paid in ETH or an ETH wrapper (WETH, Blur's BETH),
+// so every EVM price and P&L is in ETH. Bundles/ERC-1155 lots are priced per unit.
+const ETH_LIKE = new Set(["ETH", "WETH", "BETH"]);
+
+export type OsSale = {
+  signature: string; // tx:contract:tokenId (one tx can sell several NFTs)
+  mint: string;      // contract:tokenId
+  buyer: string;
+  seller: string;
+  price: number;
+  blockTime: number;
+  image: string | null;
+  source: string;    // os:<payment symbol>; WETH sales are usually accepted bids
+};
+
+type OsEvent = {
+  event_type: string;
+  event_timestamp: number;
+  transaction: string;
+  buyer: string;
+  seller: string;
+  quantity: number;
+  payment: { quantity: string; decimals: number; symbol: string } | null;
+  nft: { identifier: string; contract: string; display_image_url?: string | null; image_url?: string | null } | null;
+};
+
+export const hasOsKey = () => !!process.env.OPENSEA_API_KEY;
+
+// One page of sales, newest first. `after` (unix seconds) limits to newer ones.
+export async function getOsSales(slug: string, opts: { after?: number; next?: string } = {}) {
+  const q = new URLSearchParams({ event_type: "sale", limit: "50" });
+  if (opts.after) q.set("after", String(opts.after));
+  if (opts.next) q.set("next", opts.next);
+  const r = await get<{ asset_events: OsEvent[]; next?: string | null }>(`/events/collection/${slug}?${q}`);
+  const sales: OsSale[] = [];
+  for (const e of r.asset_events) {
+    if (e.event_type !== "sale" || !e.nft || !e.payment || !ETH_LIKE.has(e.payment.symbol)) continue;
+    const qty = Math.max(1, e.quantity || 1);
+    const price = Number(e.payment.quantity) / 10 ** e.payment.decimals / qty;
+    if (!(price > 0)) continue;
+    const mint = `${e.nft.contract}:${e.nft.identifier}`;
+    sales.push({
+      signature: `${e.transaction}:${mint}`,
+      mint,
+      buyer: e.buyer.toLowerCase(),
+      seller: e.seller.toLowerCase(),
+      price,
+      blockTime: e.event_timestamp,
+      image: e.nft.display_image_url || e.nft.image_url || null,
+      source: `os:${e.payment.symbol}`,
+    });
+  }
+  return { sales, next: r.next || null, oldest: r.asset_events.at(-1)?.event_timestamp ?? null };
 }

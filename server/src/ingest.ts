@@ -1,7 +1,7 @@
-import { COLLECTIONS, EVM_COLLECTIONS, LIVE_TIER_SIZE, config } from "./config.ts";
+import { COLLECTIONS, EVM_COLLECTIONS, EVM_SALES, LIVE_TIER_SIZE, config } from "./config.ts";
 import { db } from "./db.ts";
 import { PRIORITY, getCollectionMeta, getSales, getStats, type MeActivity } from "./magiceden.ts";
-import { getOsInfo, getOsStats } from "./opensea.ts";
+import { getOsInfo, getOsSales, getOsStats, hasOsKey, type OsSale } from "./opensea.ts";
 import { refreshPrices } from "./prices.ts";
 
 const insertTrade = db.prepare(`
@@ -221,6 +221,76 @@ export async function refreshEvmStats() {
   }
 }
 
+// EVM sales from OpenSea (needs OPENSEA_API_KEY). The first run backfills
+// 30 days per collection; after that each poll asks only for sales newer
+// than the latest one stored.
+const EVM_BACKFILL_DAYS = 30;
+const latestFor = db.prepare(`SELECT MAX(block_time) t FROM trades WHERE collection = ?`);
+const oldestFor = db.prepare(`SELECT MIN(block_time) t FROM trades WHERE collection = ?`);
+
+function saveOsSales(slug: string, rows: OsSale[]) {
+  let added = 0;
+  db.transaction(() => {
+    for (const a of rows) {
+      added += insertTrade.run({
+        signature: a.signature, collection: slug, mint: a.mint, buyer: a.buyer, seller: a.seller,
+        price: a.price, blockTime: a.blockTime, image: a.image, source: a.source,
+      }).changes;
+    }
+  })();
+  return added;
+}
+
+// Pages back from now (or from `after`) until `until`, a page that is all
+// duplicates, or the end. `maxPages` caps very busy collections.
+async function pageOsSales(slug: string, opts: { after?: number; until: number; maxPages: number }) {
+  let next: string | undefined;
+  let added = 0;
+  for (let page = 0; page < opts.maxPages; page++) {
+    const r = await getOsSales(slug, { after: opts.after, next });
+    const n = saveOsSales(slug, r.sales);
+    added += n;
+    if (!r.next || r.oldest == null || r.oldest < opts.until) break;
+    next = r.next;
+  }
+  return added;
+}
+
+export async function refreshEvmSales() {
+  if (!hasOsKey()) return;
+  const now = Math.floor(Date.now() / 1000);
+  let added = 0;
+  for (const c of EVM_SALES) {
+    try {
+      const latest = (latestFor.get(c.slug) as { t: number | null }).t;
+      added += latest
+        ? await pageOsSales(c.slug, { after: latest - 60, until: latest - 60, maxPages: 20 })
+        : await pageOsSales(c.slug, { until: now - EVM_BACKFILL_DAYS * 86_400, maxPages: 60 });
+    } catch (err) {
+      console.warn(`[os-sales] ${c.slug}:`, (err as Error).message);
+    }
+  }
+  if (added) console.log(`[os-sales] +${added} trades`);
+}
+
+// Collections whose first backfill stopped short (busy ones hit the page cap)
+// get one more stretch of history per day until 30 days are covered.
+export async function deepenEvmSales() {
+  if (!hasOsKey()) return;
+  const target = Math.floor(Date.now() / 1000) - EVM_BACKFILL_DAYS * 86_400;
+  for (const c of EVM_SALES) {
+    const oldest = (oldestFor.get(c.slug) as { t: number | null }).t;
+    if (oldest == null || oldest <= target + 86_400) continue;
+    try {
+      // `next` cursors can't start mid-history, so page from the top; stored pages are skipped cheaply.
+      const n = await pageOsSales(c.slug, { until: target, maxPages: 120 });
+      if (n) console.log(`[os-sales] ${c.slug}: +${n} older`);
+    } catch (err) {
+      console.warn(`[os-sales] ${c.slug} (deepen):`, (err as Error).message);
+    }
+  }
+}
+
 function every(ms: number, fn: () => Promise<void>) {
   let running = false;
   const tick = async () => {
@@ -235,6 +305,9 @@ function every(ms: number, fn: () => Promise<void>) {
 export function startIngest() {
   every(config.statsPollMs, refreshPrices);
   every(config.statsPollMs, refreshEvmStats);
+  every(config.activityPollMs, refreshEvmSales);
+  // After the first backfill has had time to run.
+  setTimeout(() => every(24 * 3_600_000, deepenEvmSales), 3_600_000).unref();
   every(config.statsPollMs, refreshStats);
   // Backfill runs after the first live poll, through the same rate-limited queue.
   every(config.activityPollMs, (() => {

@@ -5,7 +5,7 @@ import { Avatar } from '@/components/event-card';
 import { Sparkline } from '@/components/sparkline';
 import { C } from '@/constants/brand';
 import type { TraderProfile } from '@/lib/api';
-import { holdTime, pct, shortAddr, signedSol, timeAgo } from '@/lib/format';
+import { holdTime, pct, shortAddr, signedSol, timeAgo, unitFor } from '@/lib/format';
 
 export function TraderCard({ t, rank, following, onToggleFollow }: {
   t: TraderProfile;
@@ -14,6 +14,7 @@ export function TraderCard({ t, rank, following, onToggleFollow }: {
   onToggleFollow: () => void;
 }) {
   const up = t.realizedSol >= 0;
+  const u = unitFor(t.wallet);
   return (
     // Plain Pressable + router.push (not <Link>): on web a Link renders an <a>,
     // and the nested Follow button would trigger navigation too.
@@ -37,7 +38,7 @@ export function TraderCard({ t, rank, following, onToggleFollow }: {
         <View style={[s.row, { alignItems: 'flex-end' }]}>
           <View style={{ flex: 1 }}>
             <Text style={s.label}>Realized P&L</Text>
-            <Text style={[s.pnl, { color: up ? C.up : C.down }]}>{signedSol(t.realizedSol)}</Text>
+            <Text style={[s.pnl, { color: up ? C.up : C.down }]}>{signedSol(t.realizedSol, 2, u)}</Text>
           </View>
           {t.roiPct != null && (
             <View style={[s.roi, { backgroundColor: (t.roiPct >= 0 ? C.up : C.down) + '22' }]}>
@@ -49,9 +50,9 @@ export function TraderCard({ t, rank, following, onToggleFollow }: {
 
         <View style={s.grid}>
           <Stat label="Win rate" value={t.winRate == null ? '—' : `${Math.round(t.winRate * 100)}%`} sub={`${t.wins}/${t.flips} flips`} />
-          <Stat label="Avg / flip" value={t.avgPnlSol == null ? '—' : signedSol(t.avgPnlSol).replace(' SOL', '')} sub="SOL" />
+          <Stat label="Avg / flip" value={t.avgPnlSol == null ? '—' : signedSol(t.avgPnlSol, 2, u).replace(` ${u}`, '')} sub={u} />
           <Stat label="Avg hold" value={t.avgHoldHours == null ? '—' : holdTime(t.avgHoldHours)} />
-          <Stat label="Holding" value={String(t.openPositions)} sub={t.openPositions ? `${signedSol(t.unrealizedSol)} open` : undefined} />
+          <Stat label="Holding" value={String(t.openPositions)} sub={t.openPositions ? `${signedSol(t.unrealizedSol, 2, u)} open` : undefined} />
         </View>
 
         {t.collections.length > 0 && (
@@ -59,16 +60,16 @@ export function TraderCard({ t, rank, following, onToggleFollow }: {
             {t.collections.map((c) => (
               <View key={c.symbol} style={s.chip}>
                 <Text style={s.chipTxt} numberOfLines={1}>{c.name}</Text>
-                <Text style={s.chipMeta}>×{c.flips} · <Text style={{ color: c.pnlSol >= 0 ? C.up : C.down }}>{signedSol(c.pnlSol, 1)}</Text></Text>
+                <Text style={s.chipMeta}>×{c.flips} · <Text style={{ color: c.pnlSol >= 0 ? C.up : C.down }}>{signedSol(c.pnlSol, 1, u)}</Text></Text>
               </View>
             ))}
           </View>
         )}
 
         <Text style={s.foot}>
-          {t.bestFlip ? <>Best flip <Text style={{ color: C.up }}>{signedSol(t.bestFlip.pnlSol)}</Text> on {t.bestFlip.collection}</> : null}
-          {t.worstFlipSol != null && t.worstFlipSol < 0 ? <> · worst <Text style={{ color: C.down }}>{signedSol(t.worstFlipSol)}</Text></> : null}
-          {` · ${Math.round(t.poolShare * 100)}% of trades via AMM pools`}
+          {t.bestFlip ? <>Best flip <Text style={{ color: C.up }}>{signedSol(t.bestFlip.pnlSol, 2, u)}</Text> on {t.bestFlip.collection}</> : null}
+          {t.worstFlipSol != null && t.worstFlipSol < 0 ? <> · worst <Text style={{ color: C.down }}>{signedSol(t.worstFlipSol, 2, u)}</Text></> : null}
+          {u === 'SOL' ? ` · ${Math.round(t.poolShare * 100)}% of trades via AMM pools` : ''}
         </Text>
     </Pressable>
   );

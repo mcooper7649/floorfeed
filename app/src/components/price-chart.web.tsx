@@ -20,12 +20,13 @@ import { fmtSol } from '@/lib/scale';
 //  - price: the rolling median is the one accent series (area), individual
 //    sales are gray dots at their real time inside each bucket, the current
 //    floor is a dashed price line;
-//  - volume: SOL traded per bucket.
+//  - volume: amount traded per bucket (SOL or ETH).
 // Drag to pan, wheel/pinch to zoom; the tooltip follows the crosshair.
 const TIP_W = 220;
 const NARROW = 560; // below this the headline shows the hovered bucket instead of a tooltip
 
 type Props = {
+  unit?: string; // SOL or ETH
   sales: Sale[];
   buckets: DailyPoint[];
   bucketSec: number;
@@ -72,7 +73,7 @@ class SaleDots implements ICustomSeriesPaneView<Time, DotRow, CustomSeriesOption
 
 type Hover = { slot: Slot; x: number } | null;
 
-export function PriceChart({ sales, buckets, bucketSec, floor, rangeDays, asOf, dimmed, tall }: Props) {
+export function PriceChart({ sales, buckets, bucketSec, floor, rangeDays, asOf, dimmed, tall, unit = 'SOL' }: Props) {
   const PLOT_H = tall ? 300 : 220;
   const VOL_H = tall ? 80 : 56;
   const H = PLOT_H + VOL_H + 26;
@@ -189,9 +190,9 @@ export function PriceChart({ sales, buckets, bucketSec, floor, rangeDays, asOf, 
           screens it shows the hovered bucket instead of a covering tooltip. */}
       {narrow && sel ? (
         <View style={s.head}>
-          <Text style={s.headVal}>{sel.roll != null ? `${fmtSol(sel.roll)} SOL` : '—'}</Text>
+          <Text style={s.headVal}>{sel.roll != null ? `${fmtSol(sel.roll)} ${unit}` : '—'}</Text>
           <Text style={s.ctx}>
-            {fmtWhen(sel.day, bucketSec)} · {sel.count} sale{sel.count === 1 ? '' : 's'} · {fmtSol(sel.volume)} SOL volume
+            {fmtWhen(sel.day, bucketSec)} · {sel.count} sale{sel.count === 1 ? '' : 's'} · {fmtSol(sel.volume)} {unit} volume
             {sel.roll != null && floor != null ? ` · ${sel.roll >= floor ? '+' : ''}${(((sel.roll - floor) / floor) * 100).toFixed(1)}% vs floor` : ''}
           </Text>
         </View>
@@ -199,7 +200,7 @@ export function PriceChart({ sales, buckets, bucketSec, floor, rangeDays, asOf, 
         <View style={s.head}>
           {last && (
             <Text style={s.headVal}>
-              {fmtSol(last.roll!)} SOL{'  '}
+              {fmtSol(last.roll!)} {unit}{'  '}
               {change != null && (
                 <Text style={[s.headChg, { color: change >= 0 ? C.up : C.down }]}>
                   {change >= 0 ? '▲' : '▼'} {Math.abs(change).toFixed(1)}% {rangeLabel}
@@ -209,7 +210,7 @@ export function PriceChart({ sales, buckets, bucketSec, floor, rangeDays, asOf, 
           )}
           <Text style={s.ctx}>
             median sale price, rolling {rangeDays <= 1 ? '3 hours' : '24 hours'}
-            {hidden ? ` · ${hidden} rare-trait sale${hidden === 1 ? '' : 's'} above ${fmtSol(hi)} SOL off-chart` : ''}
+            {hidden ? ` · ${hidden} rare-trait sale${hidden === 1 ? '' : 's'} above ${fmtSol(hi)} ${unit} off-chart` : ''}
           </Text>
         </View>
       )}
@@ -223,7 +224,7 @@ export function PriceChart({ sales, buckets, bucketSec, floor, rangeDays, asOf, 
 
       <View style={{ height: H }} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
         accessibilityRole="image"
-        accessibilityLabel={last ? `Rolling median sale price, latest ${fmtSol(last.roll!)} SOL` : 'Price chart'}>
+        accessibilityLabel={last ? `Rolling median sale price, latest ${fmtSol(last.roll!)} ${unit}` : 'Price chart'}>
         <View ref={host} style={StyleSheet.absoluteFill} />
 
         {/* tooltip follows the crosshair, flips sides near the right edge */}
@@ -232,20 +233,20 @@ export function PriceChart({ sales, buckets, bucketSec, floor, rangeDays, asOf, 
             left: hover.x + 16 + TIP_W > width - 60 ? Math.max(0, hover.x - 16 - TIP_W) : hover.x + 16,
           }]}>
             <Text style={s.tipWhen}>{fmtWhen(sel.day, bucketSec)}</Text>
-            {sel.roll != null && <TipRow label={`Rolling median (${rangeDays <= 1 ? '3h' : '24h'})`} value={`${fmtSol(sel.roll)} SOL`} strong />}
+            {sel.roll != null && <TipRow label={`Rolling median (${rangeDays <= 1 ? '3h' : '24h'})`} value={`${fmtSol(sel.roll)} ${unit}`} strong />}
             {sel.roll != null && floor != null && (
               <TipRow label="vs floor now" value={`${sel.roll >= floor ? '+' : ''}${(((sel.roll - floor) / floor) * 100).toFixed(1)}%`} />
             )}
             <View style={s.tipSep} />
             <TipRow label="Sales in period" value={String(sel.count)} />
-            {sel.count > 0 && <TipRow label="Period median" value={`${fmtSol(sel.median)} SOL`} />}
+            {sel.count > 0 && <TipRow label="Period median" value={`${fmtSol(sel.median)} ${unit}`} />}
             {sel.count > 0 && <TipRow label="Low – high" value={`${fmtSol(sel.low)} – ${fmtSol(sel.high)}`} />}
-            <TipRow label="Volume" value={`${fmtSol(sel.volume)} SOL`} />
+            <TipRow label="Volume" value={`${fmtSol(sel.volume)} ${unit}`} />
           </View>
         )}
       </View>
       <Text style={s.hint}>
-        Volume per {per} · peak {fmtSol(vMax)} SOL · {narrow ? 'touch for detail, drag to pan' : 'hover for detail · drag to pan · scroll to zoom'} ·{' '}
+        Volume per {per} · peak {fmtSol(vMax)} {unit} · {narrow ? 'touch for detail, drag to pan' : 'hover for detail · drag to pan · scroll to zoom'} ·{' '}
         <Text style={s.tv} onPress={() => Linking.openURL(TV_URL)}>Chart by TradingView</Text>
       </Text>
     </View>

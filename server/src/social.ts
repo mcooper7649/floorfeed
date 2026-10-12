@@ -84,7 +84,7 @@ function bigSale(key: string): Draft | null {
   const s = db.prepare(`
     SELECT t.signature, t.collection, t.buyer, t.price, t.image, c.floor, c.avg_24h, c.volume_7d
     FROM trades t JOIN collections c ON c.symbol = t.collection
-    WHERE t.block_time >= ? ORDER BY t.price DESC LIMIT 1`).get(Math.floor(Date.now() / 1000) - 86_400) as SaleRow | undefined;
+    WHERE t.block_time >= ? AND c.chain = 'solana' ORDER BY t.price DESC LIMIT 1`).get(Math.floor(Date.now() / 1000) - 86_400) as SaleRow | undefined;
   if (!s) return null;
   const name = collectionName(s.collection);
   const vsFloor = s.floor ? ((s.price - s.floor) / s.floor) * 100 : null;
@@ -107,7 +107,7 @@ async function smartBuy(key: string): Promise<Draft | null> {
   const recent = db.prepare(`
     SELECT t.signature, t.collection, t.buyer, t.price, t.image, c.floor, c.avg_24h, c.volume_7d
     FROM trades t JOIN collections c ON c.symbol = t.collection
-    WHERE t.block_time >= ? AND t.price >= 0.5 ORDER BY t.block_time DESC LIMIT 200`)
+    WHERE t.block_time >= ? AND t.price >= 0.5 AND c.chain = 'solana' ORDER BY t.block_time DESC LIMIT 200`)
     .all(Math.floor(Date.now() / 1000) - 3 * 3600) as SaleRow[];
   let best: { s: SaleRow; p: ReturnType<typeof traderProfile> } | null = null;
   const seen = new Set<string>();
@@ -146,7 +146,7 @@ async function smartBuy(key: string): Promise<Draft | null> {
 }
 
 function flipper(key: string): Draft | null {
-  const top = traderLeaderboard({ windowDays: 7, sort: "pnl", minFlips: 3, hideMarketMakers: true, limit: 1 }).rows[0];
+  const top = traderLeaderboard({ windowDays: 7, sort: "pnl", minFlips: 3, hideMarketMakers: true, limit: 1, chain: "solana" }).rows[0];
   if (!top || top.realizedSol <= 0) return null;
   const head = pick(key, [
     "Top flipper of the week on FloorFeed:",

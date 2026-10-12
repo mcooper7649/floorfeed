@@ -130,6 +130,7 @@ export { getNames };
 // resolved in the background, so the feed never waits on RPC.
 const queue = new Set<string>();
 export function wantNames(wallets: string[]) {
+  wallets = wallets.filter((w) => !w.startsWith("0x")); // .sol names are Solana-only
   if (!wallets.length) return;
   const now = Math.floor(Date.now() / 1000);
   const fresh = new Set((db.prepare(`SELECT wallet FROM wallet_names WHERE checked_at > ? AND wallet IN (${wallets.map(() => "?").join(",")})`)
@@ -158,6 +159,7 @@ async function drain() {
 // One wallet, resolved now if it hasn't been checked recently (wallet pages
 // can't wait for the background queue). Falls back to whatever is cached.
 export async function nameFor(wallet: string): Promise<string | null> {
+  if (wallet.startsWith("0x")) return null;
   const row = db.prepare("SELECT name, checked_at FROM wallet_names WHERE wallet = ?").get(wallet) as
     { name: string | null; checked_at: number } | undefined;
   const now = Math.floor(Date.now() / 1000);

@@ -173,12 +173,13 @@ app.get("/events", async (req, reply) => {
     limit: z.coerce.number().int().min(1).max(60).default(30),
     before: z.coerce.number().int().optional(),
     following: z.string().optional(),
+    chain: z.enum(["all", "solana", "evm"]).default("all"),
   }).parse(req.query);
   if (q.following && !(await authorize(req, reply, q.following))) return;
   const followed = q.following
     ? new Set((db.prepare("SELECT wallet FROM follows WHERE user_id = ?").all(q.following) as { wallet: string }[]).map((r) => r.wallet))
     : undefined;
-  return feedEvents({ view: q.view, before: q.before, limit: q.limit, followed });
+  return feedEvents({ view: q.view, before: q.before, limit: q.limit, followed, chain: q.chain });
 });
 
 // AI take, generated lazily and cached per trade.
@@ -210,6 +211,7 @@ app.get("/leaderboard", async (req) => {
     sort: z.enum(["pnl", "winrate", "roi", "flips"]).default("pnl"),
     minFlips: z.coerce.number().int().min(1).max(50).default(3),
     hideMM: z.enum(["0", "1"]).default("1"),
+    chain: z.enum(["solana", "evm"]).default("solana"),
   }).parse(req.query);
   const board = traderLeaderboard({
     windowDays: q.window === "all" ? null : Number(q.window),
@@ -217,6 +219,7 @@ app.get("/leaderboard", async (req) => {
     minFlips: q.minFlips,
     hideMarketMakers: q.hideMM === "1",
     limit: q.limit,
+    chain: q.chain,
   });
   const ids = traders(board.rows.map((r) => r.wallet));
   return {

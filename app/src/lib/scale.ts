@@ -14,7 +14,9 @@ export function niceTicks(min: number, max: number, count = 4) {
   return ticks;
 }
 
-export const fmtSol = (v: number) => (v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v.toFixed(2));
+// Price labels; small ETH prices need more digits than SOL ones.
+export const fmtSol = (v: number) =>
+  v.toFixed(v >= 100 ? 0 : v >= 10 ? 1 : v >= 1 ? 2 : v >= 0.1 ? 3 : 4);
 
 export const fmtDay = (unix: number) =>
   new Date(unix * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });

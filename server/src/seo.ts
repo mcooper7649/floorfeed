@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import http from "node:http";
 import { Resvg } from "@resvg/resvg-js";
 import { listCollections } from "./collections.ts";
-import { COLLECTIONS, EVM_COLLECTIONS, config } from "./config.ts";
+import { COLLECTIONS, EVM_COLLECTIONS, config, isEvmWallet, walletUnit } from "./config.ts";
 import { db } from "./db.ts";
 import { traders } from "./feed.ts";
 import { collectionFlippers } from "./pnl.ts";
@@ -17,6 +17,8 @@ import { traderLeaderboard, traderProfile } from "./traders.ts";
 // the normal UI; crawlers and link unfurlers that don't run JS get the facts.
 
 const SITE = config.siteUrl.replace(/\/$/, "");
+// Solana (base58) or EVM (0x) wallet addresses.
+const isWallet = (a: string) => ADDRESS_RE.test(a) || /^0x[0-9a-f]{40}$/.test(a);
 const NAME = "FloorFeed";
 const HANDLE = "@FloorFeed";
 const DEFAULT_IMAGE = `${SITE}/og.jpg`;
@@ -30,7 +32,7 @@ const short = (a: string) => `${a.slice(0, 4)}…${a.slice(-4)}`;
 const num = (n: number, d = 2) => n.toLocaleString("en-US", { maximumFractionDigits: d, minimumFractionDigits: 0 });
 const amt = (n: number | null | undefined, cur: string) =>
   n == null ? "n/a" : `${num(n, n < 1 ? 3 : n < 100 ? 2 : 0)} ${cur}`;
-const signed = (n: number, cur: string) => `${n >= 0 ? "+" : "−"}${num(Math.abs(n), 2)} ${cur}`;
+const signed = (n: number, cur: string) => `${n >= 0 ? "+" : "−"}${num(Math.abs(n), Math.abs(n) < 1 ? 3 : 2)} ${cur}`;
 const pct = (n: number | null | undefined) => (n == null ? null : `${n >= 0 ? "+" : "−"}${Math.abs(n).toFixed(1)}%`);
 const usd = (n: number | null | undefined) =>
   n == null ? null : `$${n >= 1000 ? num(Math.round(n), 0) : num(n, 2)}`;
@@ -48,6 +50,8 @@ function cached<T>(ttl: number, fn: () => T): () => T {
 const markets = cached(5 * MIN, () => listCollections());
 const leaders = cached(10 * MIN, () =>
   traderLeaderboard({ windowDays: 30, sort: "pnl", minFlips: 3, hideMarketMakers: true, limit: 100 }));
+const evmLeaders = cached(10 * MIN, () =>
+  traderLeaderboard({ windowDays: 30, sort: "pnl", minFlips: 3, hideMarketMakers: true, limit: 50, chain: "evm" }));
 
 const chainLabel: Record<string, string> = { solana: "Solana", ethereum: "Ethereum", base: "Base", polygon: "Polygon" };
 
@@ -246,10 +250,10 @@ function collectionPage(symbol: string): Page | null {
     : `${c.name} on ${chainLabel[c.chain]}.`;
   const vol = c.volume7d ? ` 7-day volume ${amt(c.volume7d, c.currency)}.` : "";
   const description = clip(evm
-    ? `${lead}${vol} Live floor, volume and owners for ${c.name} on ${chainLabel[c.chain]}.`
+    ? `${lead}${vol} Live sales, price chart, owners and the wallets flipping ${c.name} on ${chainLabel[c.chain]}.`
     : `${lead}${vol} Live sales, price chart, cheapest listings and the wallets flipping ${c.name} for profit.`, 300);
 
-  const flippers = evm ? [] : collectionFlippers(symbol, 8).filter((f) => f.flips >= 2);
+  const flippers = collectionFlippers(symbol, 8).filter((f) => f.flips >= 2);
   const ids = traders(flippers.map((f) => f.wallet));
   const related = markets().filter((x) => x.symbol !== symbol && x.category === c.category).slice(0, 8);
   const stats: [string, string | null][] = [
@@ -265,7 +269,7 @@ function collectionPage(symbol: string): Page | null {
   ];
 
   return {
-    title: `${c.name} floor price, chart & ${evm ? "stats" : "top flippers"} | FloorFeed`,
+    title: `${c.name} floor price, chart & top flippers | FloorFeed`,
     description,
     path: `/collection/${encodeURIComponent(symbol)}`,
     image: `${SITE}/og/collection/${encodeURIComponent(symbol)}.png`,
@@ -277,7 +281,7 @@ function collectionPage(symbol: string): Page | null {
       <dl>${stats.filter(([, v]) => v).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v!)}</dd>`).join("")}</dl>
       ${meta ? `<h2>About ${esc(c.name)}</h2><p>${esc(clip(meta, 600))}</p>` : ""}
       ${flippers.length ? `<h2>Top ${esc(c.name)} flippers</h2><ol>${flippers.map((f) =>
-        `<li><a href="/wallet/${f.wallet}">${esc(ids.get(f.wallet)?.name ?? short(f.wallet))}</a>: ${signed(f.realizedSol, "SOL")} over ${f.flips} flips, ${Math.round((f.wins / f.flips) * 100)}% wins</li>`).join("")}</ol>` : ""}
+        `<li><a href="/wallet/${f.wallet}">${esc(ids.get(f.wallet)?.name ?? short(f.wallet))}</a>: ${signed(f.realizedSol, c.currency)} over ${f.flips} flips, ${Math.round((f.wins / f.flips) * 100)}% wins</li>`).join("")}</ol>` : ""}
       ${related.length ? `<h2>Similar collections</h2><ul>${related.map((r) =>
         `<li><a href="/collection/${encodeURIComponent(r.symbol)}">${esc(r.name)}</a> · floor ${amt(r.floor, r.currency)}</li>`).join("")}</ul>` : ""}`),
   };
@@ -285,16 +289,18 @@ function collectionPage(symbol: string): Page | null {
 
 function walletPage(address: string): Page {
   const p = traderProfile(address);
+  const unit = walletUnit(address);
+  const eco = isEvmWallet(address) ? "Ethereum" : "Solana";
   const id = traders([address]).get(address)!;
   const name = id.name ?? short(address);
   const tier = { elite: "Top Flipper", pro: "Proven", mm: "Market Maker", new: "New" }[id.tier ?? "new"] ?? "New";
   const wr = p.winRate == null ? null : `${Math.round(p.winRate * 100)}%`;
   const has = p.flips > 0;
   const description = has
-    ? `${name} has ${signed(p.realizedSol, "SOL")} realized from ${p.flips} Solana NFT flips${wr ? ` with a ${wr} win rate` : ""}. ${p.collections.length ? `Mostly trades ${p.collections.map((c) => c.name).join(", ")}. ` : ""}See every buy, sell and open position.`
-    : `Solana NFT trades by ${name}: buys, sells and open positions tracked by FloorFeed.`;
+    ? `${name} has ${signed(p.realizedSol, unit)} realized from ${p.flips} ${eco} NFT flips${wr ? ` with a ${wr} win rate` : ""}. ${p.collections.length ? `Mostly trades ${p.collections.map((c) => c.name).join(", ")}. ` : ""}See every buy, sell and open position.`
+    : `${eco} NFT trades by ${name}: buys, sells and open positions tracked by FloorFeed.`;
   return {
-    title: has ? `${name}: Solana NFT trader, ${signed(p.realizedSol, "SOL")} P&L | FloorFeed` : `${name}: Solana NFT wallet | FloorFeed`,
+    title: has ? `${name}: ${eco} NFT trader, ${signed(p.realizedSol, unit)} P&L | FloorFeed` : `${name}: ${eco} NFT wallet | FloorFeed`,
     description: clip(description, 300),
     path: `/wallet/${address}`,
     image: has ? `${SITE}/og/wallet/${address}.png` : undefined,
@@ -307,15 +313,15 @@ function walletPage(address: string): Page {
       <p>${esc(description)}</p>
       ${has ? `<dl>
         <dt>Tier</dt><dd>${tier}</dd>
-        <dt>Realized P&amp;L</dt><dd>${signed(p.realizedSol, "SOL")}</dd>
+        <dt>Realized P&amp;L</dt><dd>${signed(p.realizedSol, unit)}</dd>
         <dt>Flips</dt><dd>${p.flips} (${p.wins} wins)</dd>
         ${wr ? `<dt>Win rate</dt><dd>${wr}</dd>` : ""}
         ${p.roiPct != null ? `<dt>ROI</dt><dd>${pct(p.roiPct)}</dd>` : ""}
         ${p.avgHoldHours != null ? `<dt>Average hold</dt><dd>${p.avgHoldHours < 48 ? `${Math.round(p.avgHoldHours)} hours` : `${Math.round(p.avgHoldHours / 24)} days`}</dd>` : ""}
-        ${p.bestFlip ? `<dt>Best flip</dt><dd>${signed(p.bestFlip.pnlSol, "SOL")} on ${esc(p.bestFlip.collection)}</dd>` : ""}
+        ${p.bestFlip ? `<dt>Best flip</dt><dd>${signed(p.bestFlip.pnlSol, unit)} on ${esc(p.bestFlip.collection)}</dd>` : ""}
       </dl>` : ""}
       ${p.collections.length ? `<h2>Most traded</h2><ul>${p.collections.map((c) =>
-        `<li><a href="/collection/${encodeURIComponent(c.symbol)}">${esc(c.name)}</a>: ${c.flips} flips, ${signed(c.pnlSol, "SOL")}</li>`).join("")}</ul>` : ""}
+        `<li><a href="/collection/${encodeURIComponent(c.symbol)}">${esc(c.name)}</a>: ${c.flips} flips, ${signed(c.pnlSol, unit)}</li>`).join("")}</ul>` : ""}
       <p>Wallet <code>${address}</code></p>`),
   };
 }
@@ -342,7 +348,7 @@ export function pageFor(path: string): Page {
   let m = clean.match(/^\/collection\/([^/]+)$/);
   if (m) return collectionPage(decodeURIComponent(m[1])) ?? notFound(clean);
   m = clean.match(/^\/wallet\/([^/]+)$/);
-  if (m && ADDRESS_RE.test(m[1])) return walletPage(m[1]);
+  if (m && isWallet(m[1])) return walletPage(m[1]);
   return notFound(clean);
 }
 
@@ -361,7 +367,7 @@ export function sitemap() {
     ["/leaderboard", "daily", 0.8],
     ...[...COLLECTIONS.map((c) => c.symbol), ...EVM_COLLECTIONS.map((c) => c.slug)]
       .map((s): [string, string, number] => [`/collection/${encodeURIComponent(s)}`, "hourly", 0.7]),
-    ...leaders().rows.map((r): [string, string, number] => [`/wallet/${r.wallet}`, "daily", 0.5]),
+    ...[...leaders().rows, ...evmLeaders().rows].map((r): [string, string, number] => [`/wallet/${r.wallet}`, "daily", 0.5]),
   ];
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -449,6 +455,7 @@ async function collectionCard(symbol: string) {
 
 async function walletCard(address: string) {
   const p = traderProfile(address);
+  const unit = walletUnit(address);
   if (!p.flips) return null;
   const id = traders([address]).get(address)!;
   const name = id.name ?? short(address);
@@ -461,14 +468,14 @@ async function walletCard(address: string) {
     ${wordmark}
     <rect x="884" y="64" width="252" height="252" rx="126" fill="${CARD}" stroke="${BORDER}" stroke-width="2"/>
     ${art ? `<clipPath id="a"><circle cx="1010" cy="190" r="124"/></clipPath><image x="886" y="66" width="248" height="248" preserveAspectRatio="xMidYMid slice" clip-path="url(#a)" xlink:href="${art}"/>` : ""}
-    <text x="64" y="170" font-size="24" font-weight="600" fill="${ACCENT}" letter-spacing="2">${tier} · SOLANA NFT TRADER</text>
+    <text x="64" y="170" font-size="24" font-weight="600" fill="${ACCENT}" letter-spacing="2">${tier} · ${isEvmWallet(address) ? "ETHEREUM" : "SOLANA"} NFT TRADER</text>
     <text x="64" y="${170 + size + 14}" font-size="${size}" font-weight="800" fill="${TEXT}">${esc(clip(name, 24))}</text>
     ${spark(series, 64, 290, 760, 70, pnlColor)}
-    ${stat(64, "Realized P&L", signed(p.realizedSol, "SOL"), pnlColor)}
+    ${stat(64, "Realized P&L", signed(p.realizedSol, unit), pnlColor)}
     ${stat(470, "Win rate", p.winRate == null ? "–" : `${Math.round(p.winRate * 100)}%`)}
     ${stat(720, "Flips", String(p.flips))}
     ${stat(920, "Streak", p.streak ? `${p.streak} wins` : "–")}
-    ${footer(p.bestFlip ? `Best: ${signed(p.bestFlip.pnlSol, "SOL")} on ${clip(p.bestFlip.collection, 22)}` : "Every flip, tracked")}`;
+    ${footer(p.bestFlip ? `Best: ${signed(p.bestFlip.pnlSol, unit)} on ${clip(p.bestFlip.collection, 22)}` : "Every flip, tracked")}`;
   return svgDoc(inner);
 }
 
@@ -480,7 +487,7 @@ export async function card(kind: "collection" | "wallet", id: string) {
   const key = `${kind}:${id}`;
   const hit = cards.get(key);
   if (hit && Date.now() - hit.at < CARD_TTL) return hit.png;
-  const svg = kind === "collection" ? await collectionCard(id) : ADDRESS_RE.test(id) ? await walletCard(id) : null;
+  const svg = kind === "collection" ? await collectionCard(id) : isWallet(id) ? await walletCard(id) : null;
   if (!svg) return null;
   const png = new Resvg(svg, {
     font: { fontFiles: FONTS, loadSystemFonts: false, defaultFontFamily: "Inter" },

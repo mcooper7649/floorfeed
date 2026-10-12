@@ -12,7 +12,7 @@ import { fmtSol, linear, niceTicks } from '@/lib/scale';
 //    24h, or 3h on the 24H range) is the one accent series, the current floor
 //    is a dashed reference line. A plain per-bucket median jumps around when
 //    a bucket holds one rare-trait sale; the rolling window doesn't;
-//  - volume: SOL traded per bucket, single-series bars.
+//  - volume: amount traded per bucket (SOL or ETH), single-series bars.
 // One crosshair spans both; the tooltip follows it.
 const AXIS_H = 22;
 const GAP = 24; // between the panels (holds the volume label)
@@ -21,6 +21,7 @@ const FONT = Platform.select({ web: 'system-ui, -apple-system, Segoe UI, Roboto,
 const TIP_W = 220;
 
 type Props = {
+  unit?: string; // SOL or ETH
   sales: Sale[];
   buckets: DailyPoint[];
   bucketSec: number;
@@ -45,7 +46,7 @@ const tickLabel = (t: number, step: number) =>
     ? new Date(t * 1000).toLocaleTimeString(undefined, { hour: 'numeric' })
     : new Date(t * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
 
-export function PriceChart({ sales, buckets, bucketSec, floor, rangeDays, asOf, dimmed, tall }: Props) {
+export function PriceChart({ sales, buckets, bucketSec, floor, rangeDays, asOf, dimmed, tall, unit = 'SOL' }: Props) {
   const [width, setWidth] = useState(0);
   const [active, setActive] = useState<number | null>(null);
   const PLOT_H = tall ? 300 : 190;
@@ -98,7 +99,7 @@ export function PriceChart({ sales, buckets, bucketSec, floor, rangeDays, asOf, 
       <View style={s.head}>
         {last && (
           <Text style={s.headVal}>
-            {fmtSol(last.roll)} SOL{'  '}
+            {fmtSol(last.roll)} {unit}{'  '}
             {change != null && (
               <Text style={[s.headChg, { color: change >= 0 ? C.up : C.down }]}>
                 {change >= 0 ? '▲' : '▼'} {Math.abs(change).toFixed(1)}% {rangeLabel}
@@ -108,7 +109,7 @@ export function PriceChart({ sales, buckets, bucketSec, floor, rangeDays, asOf, 
         )}
         <Text style={s.ctx}>
           median sale price, rolling {rangeDays <= 1 ? '3 hours' : '24 hours'}
-          {geo?.hidden ? ` · ${geo.hidden} sale${geo.hidden === 1 ? '' : 's'} above ${fmtSol(geo.yMax)} SOL not plotted` : ''}
+          {geo?.hidden ? ` · ${geo.hidden} sale${geo.hidden === 1 ? '' : 's'} above ${fmtSol(geo.yMax)} ${unit} not plotted` : ''}
         </Text>
       </View>
 
@@ -131,7 +132,7 @@ export function PriceChart({ sales, buckets, bucketSec, floor, rangeDays, asOf, 
           ? { onPointerMove: (e: any) => pick(e.nativeEvent.offsetX), onPointerLeave: () => setActive(null) }
           : {})}
         accessibilityRole="image"
-        accessibilityLabel={last ? `Rolling median sale price, latest ${fmtSol(last.roll)} SOL` : 'Price chart'}>
+        accessibilityLabel={last ? `Rolling median sale price, latest ${fmtSol(last.roll)} ${unit}` : 'Price chart'}>
         {geo && (
           <Svg width={width} height={H} pointerEvents="none">
             {/* recessive hairline grid + y ticks */}
@@ -144,7 +145,7 @@ export function PriceChart({ sales, buckets, bucketSec, floor, rangeDays, asOf, 
             {/* volume panel baseline + its own label (separate scale, separate panel) */}
             <Line x1={PAD.left} x2={width - PAD.right} y1={geo.volTop + VOL_H} y2={geo.volTop + VOL_H} stroke={C.grid} strokeWidth={1} />
             <SvgText fontFamily={FONT} x={PAD.left} y={geo.volTop - 3} fill={C.dim} fontSize={11}>
-              Volume per {bucketSec === 3600 ? 'hour' : bucketSec < DAY ? '6h' : 'day'} · peak {fmtSol(geo.vMax)} SOL
+              Volume per {bucketSec === 3600 ? 'hour' : bucketSec < DAY ? '6h' : 'day'} · peak {fmtSol(geo.vMax)} {unit}
             </SvgText>
             {geo.xt.ticks.map((t) => (
               <SvgText fontFamily={FONT} key={t} x={geo.x(t)} y={H - 6} fill={C.dim} fontSize={11} textAnchor="middle">
@@ -206,13 +207,13 @@ export function PriceChart({ sales, buckets, bucketSec, floor, rangeDays, asOf, 
             left: sel.cx + 14 + TIP_W > width ? sel.cx - 14 - TIP_W : sel.cx + 14,
           }]}>
             <Text style={s.tipWhen}>{fmtWhen(sel.day, bucketSec)}</Text>
-            <TipRow label={`Rolling median (${rangeDays <= 1 ? '3h' : '24h'})`} value={`${fmtSol(sel.roll)} SOL`} strong />
+            <TipRow label={`Rolling median (${rangeDays <= 1 ? '3h' : '24h'})`} value={`${fmtSol(sel.roll)} ${unit}`} strong />
             {floor != null && <TipRow label="vs floor now" value={`${sel.roll >= floor ? '+' : ''}${(((sel.roll - floor) / floor) * 100).toFixed(1)}%`} />}
             <View style={s.tipSep} />
             <TipRow label="Sales in period" value={String(sel.count)} />
-            <TipRow label="Period median" value={`${fmtSol(sel.median)} SOL`} />
+            <TipRow label="Period median" value={`${fmtSol(sel.median)} ${unit}`} />
             <TipRow label="Low – high" value={`${fmtSol(sel.low)} – ${fmtSol(sel.high)}`} />
-            <TipRow label="Volume" value={`${fmtSol(sel.volume)} SOL`} />
+            <TipRow label="Volume" value={`${fmtSol(sel.volume)} ${unit}`} />
           </View>
         )}
       </View>

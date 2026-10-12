@@ -8,7 +8,7 @@ import { Avatar, TierBadge } from '@/components/event-card';
 import { TopNav } from '@/components/top-nav';
 import { C } from '@/constants/brand';
 import { api, type WalletDetail } from '@/lib/api';
-import { holdTime, pct, shortAddr, signedSol, sol, timeAgo } from '@/lib/format';
+import { holdTime, isEvmWallet, pct, shortAddr, signedSol, sol, timeAgo, unitFor } from '@/lib/format';
 import { useLayout } from '@/lib/layout';
 import { useSession } from '@/lib/session';
 import { useTitle } from '@/lib/use-title';
@@ -21,9 +21,11 @@ export default function WalletScreen() {
   const { wide, pad, maxWidth } = useLayout();
 
   const who = data ? data.identity?.name ?? shortAddr(address) : null;
+  const u = unitFor(address);
+  const eco = isEvmWallet(address) ? 'Ethereum' : 'Solana';
   useTitle(data && (data.profile.flips
-    ? `${who}: Solana NFT trader, ${signedSol(data.profile.realizedSol)} P&L | FloorFeed`
-    : `${who}: Solana NFT wallet | FloorFeed`));
+    ? `${who}: ${eco} NFT trader, ${signedSol(data.profile.realizedSol, 2, u)} P&L | FloorFeed`
+    : `${who}: ${eco} NFT wallet | FloorFeed`));
 
   useEffect(() => { api.wallet(address).then(setData).catch((e) => setError(e.message)); }, [address]);
 
@@ -52,26 +54,28 @@ export default function WalletScreen() {
                   <Text style={[s.title, wide && { fontSize: 32 }]} numberOfLines={1}>{id?.name ?? shortAddr(address)}</Text>
                   {id && <TierBadge tier={id.tier} />}
                 </View>
-                <Text style={s.addr} selectable numberOfLines={1}>{id?.name ? address : 'no .sol name'}</Text>
+                <Text style={s.addr} selectable numberOfLines={1}>{id?.name || isEvmWallet(address) ? address : 'no .sol name'}</Text>
               </View>
             </View>
             <View style={s.grid}>
-              <Stat wide={wide} label="Realized" value={signedSol(st.realizedSol)} color={st.realizedSol >= 0 ? C.up : C.down} />
+              <Stat wide={wide} label="Realized" value={signedSol(st.realizedSol, 2, u)} color={st.realizedSol >= 0 ? C.up : C.down} />
               <Stat wide={wide} label="Win rate" value={st.winRate == null ? '—' : `${Math.round(st.winRate * 100)}%`} />
               <Stat wide={wide} label="Flips" value={String(st.flips)} />
               <Stat wide={wide} label="Holding" value={String(st.openPositions)} />
               <Stat wide={wide} label="ROI" value={pf.roiPct == null ? '—' : pct(pf.roiPct)}
                 color={pf.roiPct == null ? undefined : pf.roiPct >= 0 ? C.up : C.down} />
-              <Stat wide={wide} label="Avg / flip" value={pf.avgPnlSol == null ? '—' : signedSol(pf.avgPnlSol)} />
+              <Stat wide={wide} label="Avg / flip" value={pf.avgPnlSol == null ? '—' : signedSol(pf.avgPnlSol, 2, u)} />
               <Stat wide={wide} label="Avg hold" value={pf.avgHoldHours == null ? '—' : holdTime(pf.avgHoldHours)} />
-              <Stat wide={wide} label="Via AMM pools" value={`${Math.round(pf.poolShare * 100)}%`} />
+              {isEvmWallet(address)
+                ? <Stat wide={wide} label="Trades" value={String(pf.trades)} />
+                : <Stat wide={wide} label="Via AMM pools" value={`${Math.round(pf.poolShare * 100)}%`} />}
             </View>
             {pf.collections.length > 0 && (
               <View style={s.chips}>
                 {pf.collections.map((c) => (
                   <View key={c.symbol} style={s.chip}>
                     <Text style={s.chipTxt}>{c.name}</Text>
-                    <Text style={s.chipMeta}>×{c.flips} · <Text style={{ color: c.pnlSol >= 0 ? C.up : C.down }}>{signedSol(c.pnlSol, 1)}</Text></Text>
+                    <Text style={s.chipMeta}>×{c.flips} · <Text style={{ color: c.pnlSol >= 0 ? C.up : C.down }}>{signedSol(c.pnlSol, 1, u)}</Text></Text>
                   </View>
                 ))}
               </View>
@@ -97,7 +101,7 @@ export default function WalletScreen() {
               <Text style={s.meta}>{timeAgo(t.blockTime)} ago</Text>
             </View>
             <Text style={[s.side, { color: t.side === 'buy' ? C.up : C.down }]}>{t.side.toUpperCase()}</Text>
-            <Text style={s.price}>{sol(t.price, 3)}</Text>
+            <Text style={s.price}>{sol(t.price, 2, u)}</Text>
           </Pressable>
           </Link>
         )}

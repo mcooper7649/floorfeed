@@ -1,5 +1,5 @@
 import { cachedTake } from "./ai.ts";
-import { collectionName } from "./config.ts";
+import { chainOf, collectionName, currencyOf, type Chain } from "./config.ts";
 import { db } from "./db.ts";
 import { getNames, wantNames } from "./sns.ts";
 
@@ -30,7 +30,7 @@ export type Trader = {
   realizedSol: number;
   quality: number;       // 0..1, win rate shrunk toward 50% for small samples
 };
-type Coll = { symbol: string; name: string; floor: number | null };
+type Coll = { symbol: string; name: string; floor: number | null; chain: Chain; currency: string };
 type Base = { id: string; t: number; collection: Coll; score?: number };
 export type FeedEvent =
   | (Base & { kind: "buy"; signature: string; mint: string; image: string | null; price: number;
@@ -128,7 +128,10 @@ export function traders(wallets: string[]) {
   }));
 }
 
-const coll = (r: Row): Coll => ({ symbol: r.collection, name: collectionName(r.collection), floor: r.floor });
+const coll = (r: Row): Coll => ({
+  symbol: r.collection, name: collectionName(r.collection), floor: r.floor,
+  chain: chainOf(r.collection), currency: currencyOf(r.collection),
+});
 const vsFloor = (price: number, floor: number | null) => (floor ? ((price - floor) / floor) * 100 : null);
 
 function build(rows: Row[], withClusters: boolean): FeedEvent[] {
@@ -218,7 +221,8 @@ const proven = (t: Trader) => (t.tier === "mm" ? 0.1 : t.quality * (1 - Math.exp
 function signal(e: FeedEvent) {
   switch (e.kind) {
     // Three unknown wallets aping is noise; three proven flippers is the story.
-    case "cluster": return (0.5 + 0.2 * e.count) * (0.4 + e.wallets.reduce((a, w) => a + proven(w), 0));
+    // Wallet count stops adding past 10, or busy Ethereum collections drown out everything.
+    case "cluster": return (0.5 + 0.2 * Math.min(e.count, 10)) * (0.4 + e.wallets.reduce((a, w) => a + proven(w), 0));
     case "sweep": return (1.2 + 0.2 * Math.min(e.count, 10)) * (0.6 + proven(e.wallet));
     case "flip": return e.pnl > 0
       ? (0.5 + Math.min(1.5, e.pnlPct / 40)) * (0.5 + proven(e.wallet))
@@ -230,15 +234,19 @@ function signal(e: FeedEvent) {
 const involves = (e: FeedEvent, set: Set<string>) =>
   e.kind === "cluster" ? e.wallets.some((w) => set.has(w.wallet)) : set.has(e.wallet.wallet) || (e.kind === "flip" && set.has(e.buyer.wallet));
 
-// Greedy pick by score, discounting each repeat of the same wallet (×0.6)
-// and collection (×0.8), so one prolific flipper can't fill the page.
+// Greedy pick by score, discounting each repeat of the same wallet (×0.6),
+// collection (×0.8) and chain (×0.9), so one prolific flipper can't fill the
+// page and Ethereum's larger volume doesn't crowd out Solana.
 function diversify(events: FeedEvent[], limit: number) {
   const pool = [...events];
   const seenW = new Map<string, number>();
   const seenC = new Map<string, number>();
+  const seenK = new Map<string, number>();
+  const eco = (e: FeedEvent) => (e.collection.chain === "solana" ? "solana" : "evm");
   const actor = (e: FeedEvent) => (e.kind === "cluster" ? null : e.wallet.wallet);
   const adj = (e: FeedEvent) =>
-    e.score! * 0.6 ** (seenW.get(actor(e) ?? "") ?? 0) * 0.8 ** (seenC.get(e.collection.symbol) ?? 0);
+    e.score! * 0.6 ** (seenW.get(actor(e) ?? "") ?? 0) * 0.8 ** (seenC.get(e.collection.symbol) ?? 0) *
+    0.9 ** (seenK.get(eco(e)) ?? 0);
   const out: FeedEvent[] = [];
   while (out.length < limit && pool.length) {
     let bi = 0;
@@ -248,19 +256,22 @@ function diversify(events: FeedEvent[], limit: number) {
     const a = actor(e);
     if (a) seenW.set(a, (seenW.get(a) ?? 0) + 1);
     seenC.set(e.collection.symbol, (seenC.get(e.collection.symbol) ?? 0) + 1);
+    seenK.set(eco(e), (seenK.get(eco(e)) ?? 0) + 1);
   }
   return out;
 }
 
 export type View = "top" | "latest" | "wins";
-export function feedEvents(opts: { view: View; before?: number; limit: number; followed?: Set<string> }) {
+export function feedEvents(opts: { view: View; before?: number; limit: number; followed?: Set<string>; chain?: "all" | "solana" | "evm" }) {
   const now = Math.floor(Date.now() / 1000);
   const f = opts.followed;
-  const who = f ? `AND (t.buyer IN (${[...f].map(() => "?").join(",") || "''"}) OR t.seller IN (${[...f].map(() => "?").join(",") || "''"}))` : "";
+  const chain = opts.chain === "solana" ? "AND c.chain = 'solana'" : opts.chain === "evm" ? "AND c.chain != 'solana'" : "";
+  const who = chain + (f ? ` AND (t.buyer IN (${[...f].map(() => "?").join(",") || "''"}) OR t.seller IN (${[...f].map(() => "?").join(",") || "''"}))` : "");
   const fargs = f ? [...f, ...f] : [];
 
   if (opts.view === "top") {
-    const rows = db.prepare(`${rowSelect} WHERE t.block_time >= ? ${who} ORDER BY t.block_time DESC LIMIT 2000`)
+    // Solana and EVM together run a few thousand sales per 72h.
+    const rows = db.prepare(`${rowSelect} WHERE t.block_time >= ? ${who} ORDER BY t.block_time DESC LIMIT 5000`)
       .all(now - TOP_WINDOW, ...fargs) as Row[];
     let events = build(rows, true);
     if (f) events = events.filter((e) => involves(e, f));

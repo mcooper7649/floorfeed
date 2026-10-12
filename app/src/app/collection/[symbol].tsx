@@ -41,7 +41,7 @@ export default function CollectionScreen() {
   const [buy, setBuy] = useState<string | null>(null);
   const { mode } = useTradeMode();
   const [buyOpen, setBuyOpen] = useState(false);
-  useTitle(data && `${data.name} floor price, chart & ${data.source === 'opensea' ? 'stats' : 'top flippers'} | FloorFeed`);
+  useTitle(data && `${data.name} floor price, chart & top flippers | FloorFeed`);
 
   const fetchData = useCallback(() => {
     api.collection(symbol, range).then((d) => { setData(d); setError(null); })
@@ -88,6 +88,8 @@ export default function CollectionScreen() {
   const st = data.stats;
   const cur = data.currency;
   const evm = data.chain !== 'solana';
+  // EVM collections have OpenSea sales (in ETH) except the few that trade in other tokens.
+  const floorOnly = evm && data.sales.length === 0 && data.historyStartsAt == null;
   const within5 = st.floor ? data.listings.filter((l) => l.price <= st.floor! * 1.05).length : 0;
   const rangeStart = data.asOf - data.rangeDays * 86_400;
   const partial = data.historyStartsAt != null && data.historyStartsAt > rangeStart + 86_400;
@@ -132,7 +134,7 @@ export default function CollectionScreen() {
         </View>
       ) : (
         <PriceChart sales={data.sales} buckets={data.daily} bucketSec={data.bucketSec} floor={st.floor}
-          rangeDays={data.rangeDays} asOf={data.asOf} dimmed={loading} tall={wide} />
+          rangeDays={data.rangeDays} asOf={data.asOf} dimmed={loading} tall={wide} unit={cur} />
       )}
     </Card>
   );
@@ -159,7 +161,7 @@ export default function CollectionScreen() {
                 <Text style={s.rowTitle} numberOfLines={1}>{f.name ?? shortAddr(f.wallet)}</Text>
                 <Text style={s.rowMeta}>{f.wins}/{f.flips} profitable flips</Text>
               </View>
-              <Text style={[s.rowVal, { color: f.realizedSol >= 0 ? C.up : C.down }]}>{signedSol(f.realizedSol)}</Text>
+              <Text style={[s.rowVal, { color: f.realizedSol >= 0 ? C.up : C.down }]}>{signedSol(f.realizedSol, 2, cur)}</Text>
             </Pressable>
           </Link>
         ))}
@@ -227,7 +229,7 @@ export default function CollectionScreen() {
           </View>
           </View>
 
-          {evm ? (
+          {floorOnly ? (
             <Card title="Floor history">
               {data.floorHistory.filter((f) => f.floor != null).length >= 2 ? (
                 <FloorLine points={data.floorHistory.filter((f) => f.floor != null) as { ts: number; floor: number }[]}
@@ -236,7 +238,7 @@ export default function CollectionScreen() {
                 <Text style={s.desc}>{"FloorFeed records this collection's floor every 10 minutes; the chart fills in as snapshots build up."}</Text>
               )}
               <Text style={s.desc}>
-                Individual sales, listings and flipper stats for {CHAIN_NAME[data.chain]} collections need an OpenSea API key (free), which is not configured yet.
+                This collection trades in a token other than ETH, so FloorFeed tracks its floor but not individual sales.
               </Text>
             </Card>
           ) : (
@@ -271,7 +273,7 @@ export default function CollectionScreen() {
                         </NftImage>
                         <View style={s.itemBody}>
                           <Text style={s.itemName} numberOfLines={1}>{l.name ?? shortAddr(l.mint)}</Text>
-                          <Text style={s.itemPrice}>{sol(l.price, 3)}</Text>
+                          <Text style={s.itemPrice}>{sol(l.price, 3, cur)}</Text>
                           {st.floor != null && (
                             <Text style={s.rowMeta}>
                               {l.price <= st.floor * 1.0005 ? 'at floor' : `+${(((l.price - st.floor) / st.floor) * 100).toFixed(1)}% over floor`}
@@ -294,7 +296,7 @@ export default function CollectionScreen() {
                           <Pill text={`${timeAgo(r.t)} ago`} style={{ top: 8, left: 8 }} />
                         </NftImage>
                         <View style={s.itemBody}>
-                          <Text style={s.itemPrice}>{sol(r.price, 3)}</Text>
+                          <Text style={s.itemPrice}>{sol(r.price, 3, cur)}</Text>
                           <Text style={s.rowMeta} numberOfLines={1}>bought by {r.buyerName ?? shortAddr(r.buyer)}</Text>
                         </View>
                       </Pressable>

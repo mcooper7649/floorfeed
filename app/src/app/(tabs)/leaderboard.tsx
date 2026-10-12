@@ -4,12 +4,14 @@ import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, Sty
 import { Empty, Screen } from '@/components/screen';
 import { TraderCard } from '@/components/trader-card';
 import { C } from '@/constants/brand';
-import { api, type Leaderboard, type LeaderSort, type LeaderWindow } from '@/lib/api';
+import { api, type Ecosystem, type Leaderboard, type LeaderSort, type LeaderWindow } from '@/lib/api';
 import { signedSol } from '@/lib/format';
 import { useLayout } from '@/lib/layout';
 import { useSession } from '@/lib/session';
 import { useTitle } from '@/lib/use-title';
 
+// P&L is in each chain's unit (SOL vs ETH), so the boards are separate.
+const CHAINS: { key: Ecosystem; label: string }[] = [{ key: 'solana', label: 'Solana' }, { key: 'evm', label: 'Ethereum' }];
 const WINDOWS: { key: LeaderWindow; label: string }[] = [
   { key: '7', label: '7D' }, { key: '30', label: '30D' }, { key: 'all', label: 'All' },
 ];
@@ -18,7 +20,8 @@ const SORTS: { key: LeaderSort; label: string }[] = [
 ];
 
 export default function LeaderboardScreen() {
-  useTitle('Top Solana NFT flippers: 30-day P&L leaderboard | FloorFeed');
+  const [chain, setChain] = useState<Ecosystem>('solana');
+  useTitle(chain === 'evm' ? 'Top Ethereum NFT flippers: P&L leaderboard | FloorFeed' : 'Top Solana NFT flippers: 30-day P&L leaderboard | FloorFeed');
   const { following, toggleFollow } = useSession();
   const [win, setWin] = useState<LeaderWindow>('30');
   const [sort, setSort] = useState<LeaderSort>('pnl');
@@ -31,11 +34,11 @@ export default function LeaderboardScreen() {
   const cols = wide ? 2 : 1;
 
   const fetchRows = useCallback(() => {
-    api.leaderboard({ window: win, sort, hideMM })
+    api.leaderboard({ window: win, sort, hideMM, chain })
       .then((d) => { setData(d); setError(null); })
       .catch((e) => setError(e.message))
       .finally(() => { setLoading(false); setRefreshing(false); });
-  }, [win, sort, hideMM]);
+  }, [win, sort, hideMM, chain]);
   useEffect(fetchRows, [fetchRows]);
 
   // Filters keep the previous list on screen (dimmed) while refetching.
@@ -48,6 +51,10 @@ export default function LeaderboardScreen() {
       {/* Fixed-height wrapper: a horizontal ScrollView collapses its height on web */}
       <View style={s.filterBar}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[s.filters, { paddingHorizontal: pad }]}>
+        {CHAINS.map((c) => (
+          <Chip key={c.key} label={c.label} on={chain === c.key} onPress={() => change(() => setChain(c.key))} />
+        ))}
+        <View style={s.sep} />
         {WINDOWS.map((w) => (
           <Chip key={w.key} label={w.label} on={win === w.key} onPress={() => change(() => setWin(w.key))} />
         ))}
@@ -56,14 +63,14 @@ export default function LeaderboardScreen() {
           <Chip key={o.key} label={o.label} on={sort === o.key} onPress={() => change(() => setSort(o.key))} />
         ))}
         <View style={s.sep} />
-        <Chip label="Hide market makers" on={hideMM} onPress={() => change(() => setHideMM((v) => !v))} />
+        {chain === 'solana' && <Chip label="Hide market makers" on={hideMM} onPress={() => change(() => setHideMM((v) => !v))} />}
       </ScrollView>
       </View>
 
       {sm && (
         <Text style={[s.summary, { paddingHorizontal: pad }]}>
           {sm.wallets} wallets with 3+ flips · {sm.flips.toLocaleString()} flips · {sm.profitableWallets} profitable ·{' '}
-          <Text style={{ color: sm.realizedSol >= 0 ? C.up : C.down }}>{signedSol(sm.realizedSol, 1)}</Text> combined
+          <Text style={{ color: sm.realizedSol >= 0 ? C.up : C.down }}>{signedSol(sm.realizedSol, 1, chain === 'evm' ? 'ETH' : 'SOL')}</Text> combined
           {sm.hiddenMarketMakers ? ` · ${sm.hiddenMarketMakers} likely market makers hidden` : ''}
         </Text>
       )}

@@ -136,11 +136,16 @@ export function listCollections() {
       sales24h: c.sales_24h_ext ?? null,
       volume24h: c.volume_24h_ext ?? null,
       volume24hUsd: toUsd(c.volume_24h_ext ?? null, currency),
-      // No keyless sales history: the trend line is our own floor snapshots.
-      spark: floorSpark(slug),
+      // Sale medians once OpenSea sales are in; until then our floor snapshots.
+      spark: evmSpark(slug, now),
     };
   });
   return [...sol, ...evm].sort((a, b) => (b.volume7dUsd ?? 0) - (a.volume7dUsd ?? 0));
+}
+
+function evmSpark(slug: string, now: number) {
+  const sales = salesSince.all(slug, now - 14 * DAY) as { t: number; price: number }[];
+  return sales.length >= 10 ? daily(sales).map((d) => ({ day: d.day, median: d.median })) : floorSpark(slug);
 }
 
 const snapshotsSince = db.prepare(
@@ -155,12 +160,17 @@ function floorSpark(symbol: string) {
     .map((r) => ({ day: Math.floor(r.ts / 1000), median: r.floor }));
 }
 
-// EVM collection page: stats only (sales/listings need an OpenSea key).
+// EVM collection page: OpenSea stats, plus sales history, chart and top
+// flippers from stored OpenSea sales (all in ETH). No listings yet.
 function evmDetail(slug: string, rangeDays: number) {
   const meta = EVM_COLLECTIONS.find((c) => c.slug === slug)!;
   const c = (statsRow.get(slug) as CollectionRow | undefined) ?? ({ symbol: slug } as CollectionRow);
   const now = Math.floor(Date.now() / 1000);
   const currency = c.currency && c.currency !== "SOL" ? c.currency : "ETH";
+  const sales = salesSince.all(slug, now - rangeDays * DAY) as {
+    signature: string; mint: string; buyer: string; seller: string; price: number; t: number; image: string | null;
+  }[];
+  const firstTracked = (db.prepare(`SELECT MIN(block_time) t FROM trades WHERE collection = ?`).get(slug) as { t: number | null }).t;
   return {
     symbol: slug,
     name: meta.name,
@@ -187,13 +197,13 @@ function evmDetail(slug: string, rangeDays: number) {
     rangeDays,
     bucketSec: bucketFor(rangeDays),
     asOf: now,
-    historyStartsAt: null,
-    sales: [],
-    daily: [],
+    historyStartsAt: firstTracked,
+    sales: sales.map(({ signature, price, t }) => ({ signature, price, t })),
+    daily: daily(sales, bucketFor(rangeDays)),
     floorHistory: snapshotsSince.all(slug, (now - rangeDays * DAY) * 1000),
     listings: [],
-    topFlippers: [],
-    recentSales: [],
+    topFlippers: collectionFlippers(slug, 5),
+    recentSales: sales.slice(-24).reverse(),
   };
 }
 

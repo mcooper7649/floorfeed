@@ -1,7 +1,14 @@
-export const sol = (n: number, digits = 2) => `${n.toFixed(digits)} SOL`;
+// Amounts in a chain's native unit: SOL by default, ETH for EVM collections
+// and wallets. ETH amounts are ~10x smaller, so they get one more digit.
+export const sol = (n: number, digits = 2, unit = 'SOL') =>
+  `${n.toFixed(unit === 'ETH' ? digits + 1 : digits)} ${unit}`;
 
-export const signedSol = (n: number, digits = 2) =>
-  `${n >= 0 ? '+' : '−'}${Math.abs(n).toFixed(digits)} SOL`;
+export const signedSol = (n: number, digits = 2, unit = 'SOL') =>
+  `${n >= 0 ? '+' : '−'}${Math.abs(n).toFixed(unit === 'ETH' ? digits + 1 : digits)} ${unit}`;
+
+// A wallet's P&L unit: 0x addresses are EVM (ETH), everything else Solana.
+export const isEvmWallet = (w: string) => w.startsWith('0x');
+export const unitFor = (w: string) => (isEvmWallet(w) ? 'ETH' : 'SOL');
 
 export const pct = (n: number) => `${n >= 0 ? '+' : '−'}${Math.abs(n).toFixed(1)}%`;
 

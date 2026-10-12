@@ -43,7 +43,7 @@ export type Trader = {
   realizedSol: number;
   quality: number;
 };
-type EventColl = { symbol: string; name: string; floor: number | null };
+type EventColl = { symbol: string; name: string; floor: number | null; chain: Chain; currency: string };
 type EventBase = { id: string; t: number; collection: EventColl; score?: number };
 export type BuyEvent = EventBase & { kind: 'buy'; signature: string; mint: string; image: string | null; price: number;
   vsFloorPct: number | null; wallet: Trader; take: Take | null };
@@ -55,6 +55,8 @@ export type ClusterEvent = EventBase & { kind: 'cluster'; wallets: Trader[]; cou
   images: string[]; vsFloorPct: number | null; since: number };
 export type FeedEvent = BuyEvent | FlipEvent | SweepEvent | ClusterEvent;
 export type FeedView = 'top' | 'latest' | 'wins';
+export type FeedChain = 'all' | 'solana' | 'evm';
+export type Ecosystem = 'solana' | 'evm';
 
 export type PaperPosition = {
   id: number;
@@ -237,17 +239,18 @@ export const api = {
     if (p.following) q.set('following', p.following);
     return req<FeedItem[]>(`/feed?${q}`);
   },
-  events: (p: { view: FeedView; before?: number; following?: string }) => {
+  events: (p: { view: FeedView; before?: number; following?: string; chain?: FeedChain }) => {
     const q = new URLSearchParams({ view: p.view, limit: '30' });
+    if (p.chain && p.chain !== 'all') q.set('chain', p.chain);
     if (p.before) q.set('before', String(p.before));
     if (p.following) q.set('following', p.following);
     return req<{ view: FeedView; events: FeedEvent[]; next: number | null }>(`/events?${q}`);
   },
-  take: (signature: string) => req<Take | null>(`/takes/${signature}`),
+  take: (signature: string) => req<Take | null>(`/takes/${encodeURIComponent(signature)}`),
   collections: () => req<CollectionSummary[]>('/collections'),
   collection: (symbol: string, range: number) => req<CollectionDetail>(`/collections/${symbol}?range=${range}`),
-  leaderboard: (p: { window: LeaderWindow; sort: LeaderSort; hideMM: boolean }) =>
-    req<Leaderboard>(`/leaderboard?limit=50&window=${p.window}&sort=${p.sort}&hideMM=${p.hideMM ? 1 : 0}`),
+  leaderboard: (p: { window: LeaderWindow; sort: LeaderSort; hideMM: boolean; chain: Ecosystem }) =>
+    req<Leaderboard>(`/leaderboard?limit=50&window=${p.window}&sort=${p.sort}&hideMM=${p.hideMM ? 1 : 0}&chain=${p.chain}`),
   wallet: (address: string) => req<WalletDetail>(`/wallets/${address}`),
   follows: (userId: string) => req<string[]>(`/follows/${userId}`),
   follow: (userId: string, wallet: string) => send('POST', '/follows', { userId, wallet }),

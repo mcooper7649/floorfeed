@@ -4,12 +4,16 @@ import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Tex
 import { EventCard } from '@/components/event-card';
 import { Empty, Screen } from '@/components/screen';
 import { C } from '@/constants/brand';
-import { api, type FeedEvent, type FeedView } from '@/lib/api';
+import { api, type FeedChain, type FeedEvent, type FeedView } from '@/lib/api';
 import { columnsFor, useLayout } from '@/lib/layout';
 import { useSession } from '@/lib/session';
 import { useTitle } from '@/lib/use-title';
 
 type Scope = 'all' | 'following';
+
+const CHAINS: { key: FeedChain; label: string }[] = [
+  { key: 'all', label: 'All chains' }, { key: 'solana', label: 'Solana' }, { key: 'evm', label: 'Ethereum' },
+];
 
 const VIEWS: { key: FeedView; label: string; hint: string }[] = [
   { key: 'top', label: 'Top', hint: 'Ranked by who traded, how big, and how recently (72h)' },
@@ -22,6 +26,7 @@ export default function FeedScreen() {
   const { userId, following } = useSession();
   const [scope, setScope] = useState<Scope>('all');
   const [view, setView] = useState<FeedView>('top');
+  const [chain, setChain] = useState<FeedChain>('all');
   const [items, setItems] = useState<FeedEvent[]>([]);
   const [next, setNext] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -32,8 +37,8 @@ export default function FeedScreen() {
 
   const load = useCallback(async (before?: number) => {
     if (scope === 'following' && !userId) return { events: [], next: null };
-    return api.events({ view, before, following: scope === 'following' ? userId! : undefined });
-  }, [scope, view, userId]);
+    return api.events({ view, before, chain, following: scope === 'following' ? userId! : undefined });
+  }, [scope, view, chain, userId]);
 
   const fetchFirst = useCallback(() => {
     load()
@@ -56,7 +61,7 @@ export default function FeedScreen() {
   };
 
   return (
-    <Screen title="FloorFeed" subtitle="Live Solana NFT trades from wallets with a track record">
+    <Screen title="FloorFeed" subtitle="Live NFT trades from wallets with a track record">
       <View style={[s.bar, { paddingHorizontal: pad }]}>
         <View style={s.seg}>
           {VIEWS.map((v) => (
@@ -76,7 +81,17 @@ export default function FeedScreen() {
           ))}
         </View>
       </View>
-      <Text style={[s.hint, { paddingHorizontal: pad }]}>{VIEWS.find((v) => v.key === view)!.hint}</Text>
+      <View style={[s.hintRow, { paddingHorizontal: pad }]}>
+        <Text style={s.hint}>{VIEWS.find((v) => v.key === view)!.hint}</Text>
+        <View style={s.chains}>
+          {CHAINS.map((c) => (
+            <Pressable key={c.key} accessibilityRole="button" accessibilityState={{ selected: chain === c.key }}
+              onPress={() => c.key !== chain && pick(() => setChain(c.key))} hitSlop={6}>
+              <Text style={[s.chainTxt, chain === c.key && s.chainOn]}>{c.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
 
       {loading ? (
         <ActivityIndicator style={{ marginTop: 40 }} color={C.accent} />
@@ -118,6 +133,10 @@ const s = StyleSheet.create({
   segBtn: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, backgroundColor: C.card, borderWidth: 1, borderColor: C.border },
   segOn: { backgroundColor: C.accent, borderColor: C.accent },
   segTxt: { color: C.text, fontWeight: '600', fontSize: 13 },
-  hint: { color: C.dim, fontSize: 12.5, paddingBottom: 12 },
+  hintRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', columnGap: 12, rowGap: 6, paddingBottom: 12 },
+  hint: { color: C.dim, fontSize: 12.5 },
+  chains: { flexDirection: 'row', gap: 12 },
+  chainTxt: { color: C.muted, fontSize: 12.5, fontWeight: '700' },
+  chainOn: { color: C.text, textDecorationLine: 'underline' },
   list: { paddingBottom: 120 },
 });

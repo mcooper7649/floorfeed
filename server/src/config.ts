@@ -91,7 +91,9 @@ export const LIVE_TIER_SIZE = 20;
 
 export type Chain = "solana" | "ethereum" | "base" | "polygon";
 
-// EVM collections, stats-only via OpenSea's keyless API (verified 2026-10-06).
+// EVM collections via OpenSea: stats for all, plus sales (with OPENSEA_API_KEY)
+// for the ones priced in ETH. Prices and P&L stay in each chain's native unit;
+// an EVM wallet's numbers are in ETH, a Solana wallet's in SOL.
 // `slug` doubles as the collection id in URLs; none collide with ME symbols.
 export const EVM_COLLECTIONS: { slug: string; name: string; chain: Chain; category: Category }[] = [
   { slug: "cryptopunks", name: "CryptoPunks", chain: "ethereum", category: "PFP" },
@@ -132,5 +134,13 @@ export const EVM_COLLECTIONS: { slug: string; name: string; chain: Chain; catego
 
 export const isEvm = (id: string) => EVM_COLLECTIONS.some((c) => c.slug === id);
 
+// Courtyard trades in USDC on Polygon at ~10k sales a day: stats only.
+export const EVM_SALES = EVM_COLLECTIONS.filter((c) => c.slug !== "courtyard-nft");
+
 export const collectionName = (symbol: string) =>
-  COLLECTIONS.find((c) => c.symbol === symbol)?.name ?? symbol;
+  COLLECTIONS.find((c) => c.symbol === symbol)?.name ?? EVM_COLLECTIONS.find((c) => c.slug === symbol)?.name ?? symbol;
+export const chainOf = (symbol: string): Chain => EVM_COLLECTIONS.find((c) => c.slug === symbol)?.chain ?? "solana";
+export const currencyOf = (symbol: string) => (isEvm(symbol) ? "ETH" : "SOL");
+// Wallets are one ecosystem each: 0x addresses are EVM (ETH), the rest Solana.
+export const isEvmWallet = (w: string) => w.startsWith("0x");
+export const walletUnit = (w: string) => (isEvmWallet(w) ? "ETH" : "SOL");

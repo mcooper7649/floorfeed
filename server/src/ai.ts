@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { collectionName, config } from "./config.ts";
+import { collectionName, config, currencyOf } from "./config.ts";
 import { db } from "./db.ts";
 import type { WalletStats } from "./pnl.ts";
 
@@ -27,14 +27,15 @@ function prompt(t: TakeInput) {
   const b = t.buyer;
   return JSON.stringify({
     collection: collectionName(t.collection),
-    price_sol: t.price,
-    floor_sol: t.floor,
-    avg_sale_24h_sol: t.avg24h,
-    volume_7d_sol: t.volume7d,
+    currency: currencyOf(t.collection), // every amount below is in this unit
+    price: t.price,
+    floor: t.floor,
+    avg_sale_24h: t.avg24h,
+    volume_7d: t.volume7d,
     buyer: {
       tracked_flips: b.flips,
       win_rate: b.winRate,
-      realized_pnl_sol: Number(b.realizedSol.toFixed(2)),
+      realized_pnl: Number(b.realizedSol.toFixed(4)),
       open_positions: b.openPositions,
       buys: b.buys,
     },
