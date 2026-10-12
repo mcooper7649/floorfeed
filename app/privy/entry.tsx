@@ -1,5 +1,6 @@
 import { PrivyProvider, usePrivy } from '@privy-io/react-auth';
-import { useEffect, useMemo } from 'react';
+import { useFundWallet } from '@privy-io/react-auth/solana';
+import { useCallback, useEffect, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import type { PrivyMountOptions, PrivyState } from '../src/lib/auth-types';
@@ -26,6 +27,7 @@ export function mount({ appId, theme, accent, onState }: PrivyMountOptions) {
 
 function Bridge({ onState }: { onState: (s: PrivyState) => void }) {
   const { ready, authenticated, user, login, logout, getAccessToken } = usePrivy();
+  const { fundWallet } = useFundWallet();
 
   const userId = authenticated && user ? user.id : null;
   const label = user?.email?.address ?? user?.google?.email ?? null;
@@ -34,9 +36,21 @@ function Bridge({ onState }: { onState: (s: PrivyState) => void }) {
   );
   const embeddedAddress = embedded && 'address' in embedded ? embedded.address : null;
 
+  const fundSol = useCallback(
+    (address: string, amountSol?: string) => fundWallet({
+      address,
+      options: {
+        amount: amountSol,
+        uiConfig: { receiveFundsTitle: 'Deposit SOL', receiveFundsSubtitle: 'Send SOL on the Solana network to your FloorFeed wallet.' },
+      },
+    }),
+    [fundWallet],
+  );
+  const fund = userId ? fundSol : null;
+
   const state = useMemo<PrivyState>(
-    () => ({ ready, userId, label, embeddedAddress, login: () => login(), logout, getAccessToken }),
-    [ready, userId, label, embeddedAddress, login, logout, getAccessToken],
+    () => ({ ready, userId, label, embeddedAddress, login: () => login(), logout, getAccessToken, fund }),
+    [ready, userId, label, embeddedAddress, login, logout, getAccessToken, fund],
   );
   useEffect(() => onState(state), [state, onState]);
   return null;

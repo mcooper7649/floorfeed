@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { DepositSheet } from '@/components/deposit-sheet';
 import { ModeToggle } from '@/components/mode-toggle';
 import { useBalance, useCapabilities, WalletSheet } from '@/components/wallet-button';
 import { C } from '@/constants/brand';
@@ -16,6 +17,7 @@ export function WalletCard() {
   const caps = useCapabilities();
   const balance = useBalance(w.address);
   const [open, setOpen] = useState(false);
+  const [deposit, setDeposit] = useState(false);
 
   return (
     <View style={s.card}>
@@ -37,6 +39,11 @@ export function WalletCard() {
             </Text>
           )}
         </View>
+        {w.supported && w.address && (
+          <Pressable accessibilityRole="button" onPress={() => setDeposit(true)} style={s.primary}>
+            <Text style={s.primaryTxt}>Deposit</Text>
+          </Pressable>
+        )}
         {w.supported && (
           <Pressable accessibilityRole="button" onPress={() => setOpen(true)} style={w.address ? s.secondary : s.primary}>
             <Text style={w.address ? s.secondaryTxt : s.primaryTxt}>{w.address ? 'Manage' : auth.supported ? 'Sign in' : 'Connect wallet'}</Text>
@@ -50,6 +57,7 @@ export function WalletCard() {
         </Text>
       )}
       <WalletSheet open={open} onClose={() => setOpen(false)} />
+      <DepositSheet open={deposit} onClose={() => setDeposit(false)} />
     </View>
   );
 }

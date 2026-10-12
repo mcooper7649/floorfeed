@@ -12,6 +12,7 @@ const NATIVE: AuthState = {
   embeddedAddress: null,
   login: () => {},
   logout: async () => {},
+  fund: null,
 };
 
 const Ctx = createContext<AuthState>(NATIVE);

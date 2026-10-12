@@ -30,6 +30,7 @@
     "expo-system-ui": "~57.0.4",
     "expo-web-browser": "~57.0.3",
     "lightweight-charts": "^5.2.1",
+    "qrcode": "^1.5.4",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
@@ -42,6 +43,7 @@
     "react-native-worklets": "0.10.1"
   },
   "devDependencies": {
+    "@types/qrcode": "^1.5.5",
     "@types/react": "~19.2.2",
     "@types/react-dom": "19.2.7",
     "esbuild": "0.28.2",

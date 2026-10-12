@@ -9,6 +9,10 @@ export type AuthState = {
   embeddedAddress: string | null; // the user's Privy Solana wallet
   login: () => void;
   logout: () => Promise<void>;
+  // Opens Privy's funding flow (card / Apple Pay via MoonPay or Coinbase,
+  // an exchange transfer, or another wallet) for any Solana address. Null
+  // until signed in: Privy only funds for authenticated users.
+  fund: ((address: string, amountSol?: string) => Promise<void>) | null;
 };
 
 // What the separately built Privy bundle (privy/entry.tsx) reports back.

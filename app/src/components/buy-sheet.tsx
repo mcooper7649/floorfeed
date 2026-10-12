@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Linking, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { DepositSheet } from '@/components/deposit-sheet';
 import { ModeChip } from '@/components/mode-toggle';
 import { NftImage } from '@/components/nft-image';
 import { C } from '@/constants/brand';
@@ -19,7 +20,9 @@ export function BuySheet({ symbol, open, onClose, onPaper }: {
 }) {
   const w = useWallet();
   const [quote, setQuote] = useState<{ key: string; q: BuyQuote } | { key: string; error: string } | null>(null);
-  const key = `${symbol}:${w.address}`;
+  const [deposit, setDeposit] = useState(false);
+  const [nonce, setNonce] = useState(0); // refetch the quote (and balance) after a deposit
+  const key = `${symbol}:${w.address}:${nonce}`;
 
   useEffect(() => {
     if (!open || !w.address) return;
@@ -74,12 +77,17 @@ export function BuySheet({ symbol, open, onClose, onPaper }: {
                 <Row label="Your wallet" value={q.balanceSol != null ? sol(q.balanceSol, 3) : '—'} />
               </View>
               {short != null && short > 0 && (
-                <Text style={s.err}>Not enough SOL: you need about {sol(short, 3)} more.</Text>
+                <>
+                  <Text style={s.err}>Not enough SOL: you need about {sol(short, 3)} more.</Text>
+                  <Pressable accessibilityRole="button" onPress={() => setDeposit(true)} style={s.primary}>
+                    <Text style={s.primaryTxt}>Deposit SOL</Text>
+                  </Pressable>
+                </>
               )}
 
               {q.reason && <Text style={s.meta}>{q.reason}</Text>}
-              <Pressable accessibilityRole="link" onPress={() => Linking.openURL(q.marketUrl)} style={s.primary}>
-                <Text style={s.primaryTxt}>Buy on Magic Eden ↗</Text>
+              <Pressable accessibilityRole="link" onPress={() => Linking.openURL(q.marketUrl)} style={short != null && short > 0 ? s.secondary : s.primary}>
+                <Text style={short != null && short > 0 ? s.secondaryTxt : s.primaryTxt}>Buy on Magic Eden ↗</Text>
               </Pressable>
             </>
           )}
@@ -96,6 +104,7 @@ export function BuySheet({ symbol, open, onClose, onPaper }: {
           </View>
         </Pressable>
       </Pressable>
+      <DepositSheet open={deposit} suggest={short ?? undefined} onClose={() => { setDeposit(false); setNonce((n) => n + 1); }} />
     </Modal>
   );
 }

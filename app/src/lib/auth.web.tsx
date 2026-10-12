@@ -28,6 +28,7 @@ const OFF: AuthState = {
   embeddedAddress: null,
   login: () => {},
   logout: async () => {},
+  fund: null,
 };
 
 const Ctx = createContext<AuthState>(OFF);
@@ -90,6 +91,7 @@ function PrivyLoader({ children }: { children: ReactNode }) {
         embeddedAddress: privy.embeddedAddress,
         login: privy.ready ? privy.login : () => { loginWhenReady.current = true; },
         logout: privy.logout,
+        fund: privy.fund,
       }
     : {
         ...OFF,

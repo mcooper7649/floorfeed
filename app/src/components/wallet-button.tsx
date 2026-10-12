@@ -2,6 +2,7 @@ import { Image } from 'expo-image';
 import { useEffect, useState } from 'react';
 import { Linking, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { DepositSheet } from '@/components/deposit-sheet';
 import { ModeChip, ModeToggle } from '@/components/mode-toggle';
 import { C } from '@/constants/brand';
 import { api, type Capabilities } from '@/lib/api';
@@ -62,6 +63,8 @@ export function WalletSheet({ open, onClose }: { open: boolean; onClose: () => v
   const w = useWallet();
   const auth = useAuth();
   const balance = useBalance(w.address);
+  const [deposit, setDeposit] = useState(false);
+  const openDeposit = () => { onClose(); setDeposit(true); };
 
   // Privy draws its own modal; close ours first so they don't stack.
   const signIn = () => { onClose(); auth.login(); };
@@ -73,6 +76,7 @@ export function WalletSheet({ open, onClose }: { open: boolean; onClose: () => v
   };
 
   return (
+    <>
     <Modal visible={open} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={s.backdrop} onPress={onClose}>
         <Pressable style={s.sheet} onPress={() => {}}>
@@ -91,8 +95,11 @@ export function WalletSheet({ open, onClose }: { open: boolean; onClose: () => v
                 </View>
               </View>
               <Text style={s.note}>
-                Your wallet&apos;s key is secured by Privy and never reaches FloorFeed. Send SOL to the address above to fund it.
+                Your wallet&apos;s key is secured by Privy and never reaches FloorFeed.
               </Text>
+              <Pressable accessibilityRole="button" onPress={openDeposit} style={s.primary}>
+                <Text style={s.primaryTxt}>Deposit SOL</Text>
+              </Pressable>
               {w.available.length > 0 && (
                 <>
                   <Text style={s.label}>OR USE A BROWSER WALLET</Text>
@@ -125,6 +132,9 @@ export function WalletSheet({ open, onClose }: { open: boolean; onClose: () => v
               <Text style={s.note}>
                 FloorFeed only sees your public address. Nothing is signed or sent without a prompt in {w.walletName}.
               </Text>
+              <Pressable accessibilityRole="button" onPress={openDeposit} style={s.primary}>
+                <Text style={s.primaryTxt}>Deposit SOL</Text>
+              </Pressable>
               <Pressable accessibilityRole="button" onPress={async () => { await w.disconnect(); onClose(); }} style={s.secondary}>
                 <Text style={s.secondaryTxt}>Disconnect</Text>
               </Pressable>
@@ -177,6 +187,8 @@ export function WalletSheet({ open, onClose }: { open: boolean; onClose: () => v
         </Pressable>
       </Pressable>
     </Modal>
+    <DepositSheet open={deposit} onClose={() => setDeposit(false)} />
+    </>
   );
 }
 
