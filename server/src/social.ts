@@ -3,6 +3,7 @@ import { cachedTake, getTake } from "./ai.ts";
 import { listCollections } from "./collections.ts";
 import { collectionName, config } from "./config.ts";
 import { db } from "./db.ts";
+import { TEASERS } from "./teasers.ts";
 import { walletStats } from "./pnl.ts";
 import { traderLeaderboard, traderProfile } from "./traders.ts";
 
@@ -11,8 +12,8 @@ import { traderLeaderboard, traderProfile } from "./traders.ts";
 // SOCIAL_AUTO_APPROVE); approved posts are published by the browser poster
 // (tools/x-poster), which pulls them from GET /social/next.
 
-export type Kind = "movers" | "bigsale" | "smartbuy" | "flipper";
-export const KINDS: Kind[] = ["movers", "bigsale", "smartbuy", "flipper"];
+export type Kind = "movers" | "bigsale" | "smartbuy" | "flipper" | "teaser";
+export const KINDS: Kind[] = ["movers", "bigsale", "smartbuy", "flipper", "teaser"];
 
 type Draft = { kind: Kind; key: string; text: string; image: string | null; ttlMs: number };
 
@@ -158,6 +159,33 @@ function flipper(key: string): Draft | null {
   return text ? { kind: "flipper", key, text, image: img, ttlMs: 12 * HOUR } : null;
 }
 
+// The next product teaser: never-posted ones first (in file order), then the
+// least recently used one, as long as it hasn't run in the last 21 days.
+// Draft keys end in the teaser id, which is how usage is tracked.
+const TEASER_REPEAT_MS = 21 * 24 * HOUR;
+function teaser(key: string): Draft | null {
+  const rows = db.prepare("SELECT key, MAX(created_at) AS t FROM social_posts WHERE kind = 'teaser' GROUP BY key").all() as { key: string; t: number }[];
+  const last = new Map<string, number>();
+  for (const r of rows) {
+    const id = r.key.split(":").pop()!;
+    last.set(id, Math.max(last.get(id) ?? 0, r.t));
+  }
+  const fresh = TEASERS.filter((t) => !last.has(t.id));
+  const t = fresh[0] ?? TEASERS
+    .filter((t) => Date.now() - last.get(t.id)! > TEASER_REPEAT_MS)
+    .sort((a, b) => last.get(a.id)! - last.get(b.id)!)[0];
+  if (!t) return null;
+  return { kind: "teaser", key: `${key}:${t.id}`, text: t.text, image: t.image ? link(`/social/${t.image}`) : null, ttlMs: 6 * HOUR };
+}
+export const freshTeasers = () => {
+  const used = new Set((db.prepare("SELECT key FROM social_posts WHERE kind = 'teaser'").all() as { key: string }[])
+    .map((r) => r.key.split(":").pop()));
+  return TEASERS.filter((t) => !used.has(t.id)).length;
+};
+
+// Teaser slots, UTC hours: ~9am, 11:30am, 2pm, 4:30pm and 7:30pm ET.
+const TEASER_SLOTS = [13, 15.5, 18, 20.5, 23.5];
+
 // When each kind is due (UTC). Keys make each slot fire once.
 function slotKey(kind: Kind, now = new Date()): string | null {
   const h = now.getUTCHours();
@@ -171,6 +199,10 @@ function slotKey(kind: Kind, now = new Date()): string | null {
       return today ? null : `smartbuy:${day()}`;
     }
     case "flipper": return now.getUTCDay() === 5 && h >= 17 ? `flipper:${day()}` : null; // Fridays
+    case "teaser": {                                              // only the latest slot that has passed
+      const i = TEASER_SLOTS.findLastIndex((s) => h + now.getUTCMinutes() / 60 >= s);
+      return i < 0 ? null : `teaser:${day()}:${i}`;
+    }
   }
 }
 
@@ -180,6 +212,7 @@ export async function generate(kind: Kind, key: string): Promise<Draft | null> {
     case "bigsale": return bigSale(key);
     case "smartbuy": return smartBuy(key);
     case "flipper": return flipper(key);
+    case "teaser": return teaser(key);
   }
 }
 
@@ -189,6 +222,7 @@ const insert = db.prepare(`INSERT OR IGNORE INTO social_posts (kind, key, text, 
   VALUES (@kind, @key, @text, @image, @status, @created_at, @expires_at)`);
 const byId = db.prepare("SELECT * FROM social_posts WHERE id = ?");
 const setStatus = db.prepare("UPDATE social_posts SET status = ?, decided_at = ? WHERE id = ? AND status = 'draft'");
+const skipStatus = db.prepare("UPDATE social_posts SET status = 'skipped', decided_at = ? WHERE id = ? AND status IN ('draft','approved')");
 
 async function save(d: Draft) {
   const now = Date.now();
@@ -207,7 +241,7 @@ export async function tick() {
   db.prepare("UPDATE social_posts SET status = 'expired' WHERE status IN ('draft','approved') AND expires_at < ?").run(Date.now());
   for (const kind of KINDS) {
     const key = slotKey(kind);
-    if (!key || db.prepare("SELECT 1 FROM social_posts WHERE key = ?").get(key)) continue;
+    if (!key || db.prepare("SELECT 1 FROM social_posts WHERE key = ? OR key LIKE ? || ':%'").get(key, key)) continue;
     try {
       const d = await generate(kind, key);
       // Remember empty slots too, so a quiet day isn't retried every tick.
@@ -261,7 +295,7 @@ async function tg<T = unknown>(method: string, body: object, timeoutMs = 15_000)
   return json.result;
 }
 
-const LABEL: Record<Kind, string> = { movers: "Floor movers", bigsale: "Biggest sale", smartbuy: "Smart-money buy", flipper: "Top flipper" };
+const LABEL: Record<Kind, string> = { movers: "Floor movers", bigsale: "Biggest sale", smartbuy: "Smart-money buy", flipper: "Top flipper", teaser: "Teaser" };
 const buttons = (id: number) => ({
   inline_keyboard: [[
     { text: "✅ Post", callback_data: `ok:${id}` },
@@ -269,11 +303,16 @@ const buttons = (id: number) => ({
   ]],
 });
 const statusOnly = (label: string) => ({ inline_keyboard: [[{ text: label, callback_data: "noop" }]] });
+const queued = (id: number) => ({
+  inline_keyboard: [[{ text: "🕒 Queued", callback_data: "noop" }, { text: "⏭ Skip", callback_data: `skip:${id}` }]],
+});
 
 async function sendForApproval(post: SocialPost, auto: boolean) {
   if (!tgOn()) return;
-  const caption = `📝 ${LABEL[post.kind]} draft #${post.id}${auto ? " (auto-approved)" : ""}\n\n${post.text}`;
-  const markup = auto ? statusOnly("🕒 Queued") : buttons(post.id);
+  const left = post.kind === "teaser" ? freshTeasers() : null;
+  const note = left != null && left <= 5 ? `\n\n(${left} unused teasers left; older ones repeat after 21 days)` : "";
+  const caption = `📝 ${LABEL[post.kind]} draft #${post.id}${auto ? " (auto-approved)" : ""}\n\n${post.text}${note}`;
+  const markup = auto ? queued(post.id) : buttons(post.id);
   let msg: { message_id: number };
   try {
     if (!post.image) throw new Error("no image");
@@ -306,7 +345,7 @@ async function handle(u: Update) {
       await tg("answerCallbackQuery", { callback_query_id: cb.id }).catch(() => {});
       return;
     }
-    const changed = setStatus.run(action === "ok" ? "approved" : "skipped", Date.now(), post.id).changes;
+    const changed = (action === "ok" ? setStatus.run("approved", Date.now(), post.id) : skipStatus.run(Date.now(), post.id)).changes;
     const note = !changed ? `Already ${post.status}` : action === "ok" ? "Queued for posting" : "Skipped";
     await tg("answerCallbackQuery", { callback_query_id: cb.id, text: note }).catch(() => {});
     if (changed) await updateCard(post, action === "ok" ? "🕒 Queued" : "⏭ Skipped");

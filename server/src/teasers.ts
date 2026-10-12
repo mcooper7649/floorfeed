@@ -1,0 +1,86 @@
+// Hand-written product teasers for X, posted on the "teaser" schedule in
+// social.ts. Ids are permanent (usage is tracked by id), so edit text freely
+// but never reuse an id for a different post. Images are screenshots served
+// by the web build from app/public/social/.
+//
+// Keep them true: "live" teasers describe what ships today; roadmap ones say
+// "coming"/"soon" and never give dates.
+
+export type Teaser = { id: string; text: string; image?: string };
+
+const SITE = "floorfeed.mycodedojo.com";
+
+export const TEASERS: Teaser[] = [
+  { id: "what", image: "feed.jpg",
+    text: `FloorFeed in one line: a social feed of Solana NFT trades from wallets with a track record.\n\nSee who's buying, how good they are, and copy them on paper first.\n\n${SITE}` },
+  { id: "clusters", image: "cluster.jpg",
+    text: "When 3+ wallets buy the same Solana collection within 6 hours, FloorFeed flags it as a cluster.\n\nNo KOL shill, no hype thread. Just wallets converging on-chain." },
+  { id: "sweeps", image: "feed.jpg",
+    text: "One wallet buying 3+ from the same collection inside 15 minutes? That's a sweep.\n\nFloorFeed puts it in your feed the moment it lands, so you see conviction before the floor moves." },
+  { id: "tiers", image: "leaders.jpg",
+    text: "Not every wallet is worth following.\n\nFloorFeed tags traders by their real flip history:\nElite: 15+ flips, 68%+ win rate, in profit\nPro: 5+ flips, 60%+ win rate, in profit\nNew: still proving it\nMM: market makers, filtered out" },
+  { id: "wins", image: "wins.jpg",
+    text: "The Wins tab: every profitable Solana NFT flip, newest first.\n\nBought at, sold at, realized P&L in SOL. Market makers excluded, so it's real traders only." },
+  { id: "sol-names", image: "wallet.jpg",
+    text: "Wallet addresses are unreadable. FloorFeed resolves .sol names everywhere: the feed, the leaderboard, collection pages, wallet profiles.\n\nKnow who's buying, not just what." },
+  { id: "charts", image: "chart.jpg",
+    text: "Rebuilt our collection charts on TradingView Lightweight Charts.\n\nRolling median price, every sale as a dot, volume underneath, floor line on top. 24H, 7D, 30D." },
+  { id: "paper", image: "portfolio.jpg",
+    text: "Think you can pick 'em? Prove it on paper first.\n\nEvery buy on FloorFeed has a one-tap paper buy at floor. Track your P&L against the wallets you copy. Zero SOL at risk." },
+  { id: "copy",
+    text: "See a proven flipper buy.\nTap Copy.\nYou're in the same collection at floor, on paper, in one tap.\n\nThat's the whole loop. Follow the wallets that win, skip the ones that don't." },
+  { id: "ai-takes", image: "feed.jpg",
+    text: "Notable buys on FloorFeed come with an AI take: how good is this wallet, how does the price compare to floor and the 24h average, what is volume saying.\n\nTwo sentences. No moon talk." },
+  { id: "leaderboard", image: "leaders.jpg",
+    text: "A leaderboard that doesn't lie:\n• realized P&L, not paper gains\n• ROI and win rate\n• average hold time\n• win streaks\n• market makers filtered out\n\nWho's actually good at flipping Solana NFTs?" },
+  { id: "follow",
+    text: "Follow any wallet and the Following tab becomes your own alpha feed: only the traders you trust, every buy, flip and sweep as it happens." },
+  { id: "markets", image: "markets.jpg",
+    text: `74 NFT collections tracked across Solana, Ethereum, Base and Polygon.\n\nFloors, 24h change and volume in one table, with charts a click away.\n\n${SITE}/markets` },
+  { id: "depth", image: "chart.jpg",
+    text: "A floor price hides a lot. Two listings at floor and the next one 40% higher is a very different market from a deep wall.\n\nEvery Solana collection page on FloorFeed has a floor depth chart, so you see which one you're in." },
+  { id: "top-flippers", image: "collection.jpg",
+    text: "Every collection page shows its top flippers: the wallets that have made the most trading that exact collection.\n\nFollow them before their next buy." },
+  { id: "sign-in",
+    text: "No seed phrase needed to start. Sign in to FloorFeed with email or Google and you get an embedded Solana wallet.\n\nAlready on Phantom? Connect it instead." },
+  { id: "real-portfolio", image: "portfolio.jpg",
+    text: "Connect a wallet and FloorFeed reads your real NFT holdings: floor value, estimated bid, and cost basis from your on-chain buys.\n\nOne switch flips between paper and real." },
+  { id: "mode-switch",
+    text: "Paper mode or Real mode, one switch.\n\nPurple buttons = practice.\nLime buttons = your actual wallet.\n\nHard to mix them up, by design." },
+  { id: "mobile", image: "mobile.jpg",
+    text: `Built mobile-first. The feed, charts and leaderboard all work in your phone's browser today, no install.\n\n${SITE}` },
+  { id: "ranking",
+    text: "The Top feed isn't chronological. It's ranked by:\n• who traded (their track record)\n• how big\n• how recent\n• how many proven wallets agree\n\nAnd no single wallet gets to flood it." },
+  { id: "losses", image: "wins.jpg",
+    text: "We show losses too.\n\nFlip cards say WIN or LOSS with realized P&L in SOL. A feed of only wins is marketing. You need both to judge a trader." },
+  { id: "wallet-page", image: "wallet.jpg",
+    text: "Tap any trader for their full profile: .sol name, tier, flips, win rate, realized P&L, the collections they flip best, and every recent buy and sell.\n\nHomework in 10 seconds." },
+  { id: "outliers", image: "chart.jpg",
+    text: "Rare-trait sales wreck most NFT price charts: one grail sells for 10x floor and the whole chart flattens.\n\nOurs plots every sale but scales to the median, so the trend stays readable." },
+  { id: "how", image: "feed.jpg",
+    text: "How FloorFeed works: we watch every sale across 40 Solana collections, match buys to sells, and score each wallet by how its flips actually went.\n\nSo the first card in your feed is the trade that matters." },
+  { id: "avatars", image: "leaders.jpg",
+    text: "Every trader on FloorFeed gets a face: the avatar is an NFT they still hold.\n\nSmall detail. Makes the feed feel like people instead of hashes." },
+  { id: "cluster-weights", image: "cluster.jpg",
+    text: "3 proven flippers buying the same collection = signal.\n3 wallets with no history = noise.\n\nFloorFeed weights every cluster by who's in it. Proven traders count for a lot, new wallets for little, market makers for nothing." },
+  { id: "reset",
+    text: "Blew up your paper portfolio? There's a reset button now.\n\nWipe your paper P&L and start fresh. Practice is supposed to be cheap." },
+  { id: "latest",
+    text: "Top tab = ranked signal.\nLatest tab = the raw firehose: every buy, flip and sweep across the Solana collections we track, as it lands.\nWins tab = profitable flips only.\n\nPick your speed." },
+  { id: "history", image: "chart.jpg",
+    text: "Every Solana collection on FloorFeed now has weeks of sales history behind its chart, not just the last day. Open any of the 40 and switch to 30D." },
+
+  // Roadmap
+  { id: "soon-alerts",
+    text: "Coming to FloorFeed: push alerts when a wallet you follow buys.\n\nYou shouldn't have to refresh all day to catch smart money." },
+  { id: "soon-buy",
+    text: "Coming soon: buy straight from the feed.\n\nSee the trade, check the cheapest listing, sign with your wallet. Done, without leaving FloorFeed." },
+  { id: "soon-mints",
+    text: "On the FloorFeed roadmap: a mints feed.\n\nWhich new collections are proven wallets minting, before the secondary market wakes up." },
+  { id: "soon-fees",
+    text: "Working on: marketplace fees and royalties in every P&L number on FloorFeed.\n\nReal profit, not gross. If a flip only broke even after fees, it shouldn't count as a win." },
+  { id: "soon-native",
+    text: "Native iOS and Android apps for FloorFeed are on the way. Same feed, plus notifications that land the second a wallet you follow moves." },
+  { id: "soon-eth",
+    text: "Solana collections on FloorFeed have deep sales history. Ethereum, Base and Polygon are next: full price charts, recent sales and top flippers for EVM collections too." },
+];
