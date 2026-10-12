@@ -10,7 +10,7 @@ import { collectionName, config, isEvm } from "./config.ts";
 import { db } from "./db.ts";
 import { feedEvents, traders } from "./feed.ts";
 import { startIngest } from "./ingest.ts";
-import { KINDS, generate, nextPost, reportResult, startSocial, xLength, type Kind } from "./social.ts";
+import { KINDS, generate, nextPost, postedSince, reportResult, startSocial, submitExternal, xLength } from "./social.ts";
 import { walletStats } from "./pnl.ts";
 import { card, renderPage, robots, sitemap } from "./seo.ts";
 import { nameFor, startNames } from "./sns.ts";
@@ -398,11 +398,32 @@ app.post("/social/:id/result", async (req, reply) => {
   return (await reportResult(id, b.ok, b.url ?? null, b.error ?? null)) ? { ok: true } : reply.code(409).send({ error: "not approved" });
 });
 
+// Drafts from other apps (CryptoThreads drops). One per kind per day.
+app.post("/social/draft", async (req, reply) => {
+  if (!posterAuth(req, reply)) return;
+  const b = z.object({
+    kind: z.literal("merch"),
+    key: z.string().min(1).max(80),
+    text: z.string().min(1).max(600),
+    image: z.string().url().nullish(),
+  }).parse(req.body);
+  if (xLength(b.text) > 280) return reply.code(400).send({ error: "too long for X" });
+  const r = await submitExternal({ ...b, image: b.image ?? null });
+  return "id" in r ? reply.code(201).send(r) : reply.code(409).send(r);
+});
+
+// Posted posts of a kind from the last N days, with their X URLs (for reading likes back).
+app.get("/social/posted", async (req, reply) => {
+  if (!posterAuth(req, reply)) return;
+  const q = z.object({ kind: z.literal("merch"), days: z.coerce.number().int().min(1).max(30).default(7) }).parse(req.query);
+  return postedSince(q.kind, Date.now() - q.days * 86_400_000);
+});
+
 // Dry run: what each generator would post right now (nothing is saved).
 app.get("/social/preview", async (req, reply) => {
   if (!posterAuth(req, reply)) return;
   const out = [];
-  for (const kind of KINDS as Kind[]) {
+  for (const kind of KINDS) {
     const d = await generate(kind, `${kind}:preview:${Date.now()}`);
     out.push(d ? { kind, chars: xLength(d.text), text: d.text, image: d.image } : { kind, text: null });
   }

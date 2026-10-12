@@ -12,8 +12,11 @@ import { traderLeaderboard, traderProfile } from "./traders.ts";
 // SOCIAL_AUTO_APPROVE); approved posts are published by the browser poster
 // (tools/x-poster), which pulls them from GET /social/next.
 
-export type Kind = "movers" | "bigsale" | "smartbuy" | "flipper" | "teaser";
-export const KINDS: Kind[] = ["movers", "bigsale", "smartbuy", "flipper", "teaser"];
+// Kinds FloorFeed drafts from its own data on a schedule.
+export type GenKind = "movers" | "bigsale" | "smartbuy" | "flipper" | "teaser";
+export const KINDS: GenKind[] = ["movers", "bigsale", "smartbuy", "flipper", "teaser"];
+// Kinds other apps submit through POST /social/draft ("merch": CryptoThreads drops).
+export type Kind = GenKind | "merch";
 
 type Draft = { kind: Kind; key: string; text: string; image: string | null; ttlMs: number };
 
@@ -187,7 +190,7 @@ export const freshTeasers = () => {
 const TEASER_SLOTS = [13, 15.5, 18, 20.5, 23.5];
 
 // When each kind is due (UTC). Keys make each slot fire once.
-function slotKey(kind: Kind, now = new Date()): string | null {
+function slotKey(kind: GenKind, now = new Date()): string | null {
   const h = now.getUTCHours();
   switch (kind) {
     case "movers": return h >= 14 ? `movers:${day()}` : null;    // ~10am ET
@@ -206,7 +209,7 @@ function slotKey(kind: Kind, now = new Date()): string | null {
   }
 }
 
-export async function generate(kind: Kind, key: string): Promise<Draft | null> {
+export async function generate(kind: GenKind, key: string): Promise<Draft | null> {
   switch (kind) {
     case "movers": return movers(key);
     case "bigsale": return bigSale(key);
@@ -253,6 +256,27 @@ export async function tick() {
   }
 }
 
+// --- Drafts from other apps --------------------------------------------
+
+/**
+ * A post submitted by another app (CryptoThreads' trending drops). At most one
+ * per kind per UTC day, so a busy collector can't flood the account; same key
+ * twice is ignored. Goes through the usual approval (SOCIAL_AUTO_APPROVE).
+ */
+export async function submitExternal(d: { kind: "merch"; key: string; text: string; image: string | null }) {
+  const today = Date.parse(`${day()}T00:00:00Z`);
+  if (db.prepare("SELECT 1 FROM social_posts WHERE kind = ? AND created_at >= ? AND status NOT IN ('skipped','expired','failed')").get(d.kind, today)) {
+    return { error: "daily limit" as const };
+  }
+  const post = await save({ ...d, key: `${d.kind}:${d.key}`, ttlMs: 12 * HOUR });
+  return post ? { id: post.id } : { error: "duplicate" as const };
+}
+
+/** Recent posted posts of a kind, for reading engagement back. */
+export const postedSince = (kind: Kind, since: number) =>
+  db.prepare("SELECT key, post_url, posted_at FROM social_posts WHERE kind = ? AND status = 'posted' AND posted_at >= ? ORDER BY posted_at DESC")
+    .all(kind, since) as { key: string; post_url: string | null; posted_at: number }[];
+
 // --- Poster API helpers -------------------------------------------------
 
 // The next approved post, if the spacing rule allows posting now.
@@ -295,7 +319,7 @@ async function tg<T = unknown>(method: string, body: object, timeoutMs = 15_000)
   return json.result;
 }
 
-const LABEL: Record<Kind, string> = { movers: "Floor movers", bigsale: "Biggest sale", smartbuy: "Smart-money buy", flipper: "Top flipper", teaser: "Teaser" };
+const LABEL: Record<Kind, string> = { movers: "Floor movers", bigsale: "Biggest sale", smartbuy: "Smart-money buy", flipper: "Top flipper", teaser: "Teaser", merch: "CryptoThreads drop" };
 const buttons = (id: number) => ({
   inline_keyboard: [[
     { text: "✅ Post", callback_data: `ok:${id}` },
@@ -356,7 +380,7 @@ async function handle(u: Update) {
   if (!m || String(m.chat.id) !== config.telegramChatId || !m.text) return;
   const [cmd, arg] = m.text.trim().split(/\s+/);
   if (cmd !== "/draft") return;
-  const kinds = arg && KINDS.includes(arg as Kind) ? [arg as Kind] : KINDS;
+  const kinds = arg && KINDS.includes(arg as GenKind) ? [arg as GenKind] : KINDS;
   for (const kind of kinds) {
     const d = await generate(kind, `${kind}:manual:${Date.now()}`);
     if (d) await save(d);
