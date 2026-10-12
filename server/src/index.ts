@@ -12,6 +12,7 @@ import { feedEvents, traders } from "./feed.ts";
 import { startIngest } from "./ingest.ts";
 import { KINDS, generate, nextPost, reportResult, startSocial, xLength, type Kind } from "./social.ts";
 import { walletStats } from "./pnl.ts";
+import { card, renderPage, robots, sitemap } from "./seo.ts";
 import { nameFor, startNames } from "./sns.ts";
 import { traderLeaderboard, traderProfile } from "./traders.ts";
 
@@ -406,6 +407,23 @@ app.get("/social/preview", async (req, reply) => {
     out.push(d ? { kind, chars: xLength(d.text), text: d.text, image: d.image } : { kind, text: null });
   }
   return out;
+});
+
+// --- SEO: Caddy sends page requests here as /seo/<path> (see seo.ts) ---
+app.get("/seo/robots.txt", async (_req, reply) => reply.type("text/plain").header("cache-control", "public, max-age=3600").send(robots()));
+app.get("/seo/sitemap.xml", async (_req, reply) => reply.type("application/xml").header("cache-control", "public, max-age=3600").send(sitemap()));
+app.get("/seo/og/:kind/:file", async (req, reply) => {
+  const { kind, file } = req.params as { kind: string; file: string };
+  const m = file.match(/^(.+)\.png$/);
+  if (!m || (kind !== "collection" && kind !== "wallet")) return reply.code(404).send();
+  const png = await card(kind, decodeURIComponent(m[1]));
+  if (!png) return reply.code(404).send();
+  return reply.type("image/png").header("cache-control", "public, max-age=1800").send(png);
+});
+app.get("/seo/*", async (req, reply) => {
+  const path = "/" + ((req.params as { "*": string })["*"] ?? "");
+  const { status, html } = await renderPage(path);
+  return reply.code(status).type("text/html; charset=utf-8").header("cache-control", "public, max-age=60").send(html);
 });
 
 // INGEST=0 runs the API only. This machine and production share a public IP,

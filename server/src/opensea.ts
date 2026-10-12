@@ -26,7 +26,7 @@ async function get<T>(path: string, attempt = 0): Promise<T> {
     fetch(BASE + path, {
       headers: {
         accept: "application/json",
-        "user-agent": "FloorFeed/0.1 (+https://floorfeed.mycodedojo.com)",
+        "user-agent": "FloorFeed/0.1 (+https://floorfeed.io)",
         ...(process.env.OPENSEA_API_KEY ? { "x-api-key": process.env.OPENSEA_API_KEY } : {}),
       },
       signal: AbortSignal.timeout(15_000),

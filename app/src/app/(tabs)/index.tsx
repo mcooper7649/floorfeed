@@ -7,6 +7,7 @@ import { C } from '@/constants/brand';
 import { api, type FeedEvent, type FeedView } from '@/lib/api';
 import { columnsFor, useLayout } from '@/lib/layout';
 import { useSession } from '@/lib/session';
+import { useTitle } from '@/lib/use-title';
 
 type Scope = 'all' | 'following';
 
@@ -17,6 +18,7 @@ const VIEWS: { key: FeedView; label: string; hint: string }[] = [
 ];
 
 export default function FeedScreen() {
+  useTitle('FloorFeed: live Solana NFT trades from proven wallets');
   const { userId, following } = useSession();
   const [scope, setScope] = useState<Scope>('all');
   const [view, setView] = useState<FeedView>('top');

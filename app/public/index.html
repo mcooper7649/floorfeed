@@ -8,21 +8,25 @@
     <meta name="description" content="Live Solana NFT buys from wallets with a track record: flips, P&amp;L leaderboards, paper trading and AI trade takes." />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="FloorFeed" />
-    <meta property="og:url" content="https://floorfeed.mycodedojo.com/" />
+    <meta property="og:url" content="https://floorfeed.io/" />
     <meta property="og:title" content="FloorFeed" />
     <meta property="og:description" content="Live Solana NFT buys from wallets with a track record: flips, P&amp;L leaderboards, paper trading and AI trade takes." />
-    <meta property="og:image" content="https://floorfeed.mycodedojo.com/og.jpg" />
+    <meta property="og:image" content="https://floorfeed.io/og.jpg" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="627" />
     <meta property="og:image:alt" content="FloorFeed feed of recent Solana NFT buys" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:image" content="https://floorfeed.mycodedojo.com/og.jpg" />
+    <meta name="twitter:image" content="https://floorfeed.io/og.jpg" />
+    <meta name="twitter:site" content="@FloorFeed" />
+    <meta name="theme-color" content="#0B0B10" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
     <style id="expo-reset">
       /* These styles make the body full-height */
       html,
       body {
         height: 100%;
+        background-color: #0B0B10;
       }
       /* These styles disable body scrolling if you are using <ScrollView> */
       body {
@@ -34,6 +38,21 @@
         height: 100%;
         flex: 1;
       }
+    </style>
+    <!-- Plain-HTML page summary the server puts in #root for crawlers; the app replaces it on boot. -->
+    <style>
+      #ssr { color: #F4F4F6; font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; max-width: 860px; margin: 0 auto; padding: 24px 16px; overflow: auto; }
+      #ssr a { color: #B8FF3C; text-decoration: none; }
+      #ssr h1 { font-size: 28px; margin: 18px 0 8px; }
+      #ssr h2 { font-size: 18px; margin: 22px 0 8px; }
+      #ssr p, #ssr li, #ssr dd, #ssr footer { color: #C9C9D3; }
+      #ssr nav { display: inline; margin-left: 12px; color: #6E6E80; }
+      #ssr table { border-collapse: collapse; width: 100%; font-size: 14px; }
+      #ssr th, #ssr td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #262631; }
+      #ssr dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; }
+      #ssr dt { color: #9797A6; }
+      #ssr dd { margin: 0; }
+      #ssr code { word-break: break-all; }
     </style>
   </head>
 

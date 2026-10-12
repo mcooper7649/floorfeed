@@ -8,6 +8,7 @@ import { api, type Leaderboard, type LeaderSort, type LeaderWindow } from '@/lib
 import { signedSol } from '@/lib/format';
 import { useLayout } from '@/lib/layout';
 import { useSession } from '@/lib/session';
+import { useTitle } from '@/lib/use-title';
 
 const WINDOWS: { key: LeaderWindow; label: string }[] = [
   { key: '7', label: '7D' }, { key: '30', label: '30D' }, { key: 'all', label: 'All' },
@@ -17,6 +18,7 @@ const SORTS: { key: LeaderSort; label: string }[] = [
 ];
 
 export default function LeaderboardScreen() {
+  useTitle('Top Solana NFT flippers: 30-day P&L leaderboard | FloorFeed');
   const { following, toggleFollow } = useSession();
   const [win, setWin] = useState<LeaderWindow>('30');
   const [sort, setSort] = useState<LeaderSort>('pnl');

@@ -11,6 +11,7 @@ import { api, type WalletDetail } from '@/lib/api';
 import { holdTime, pct, shortAddr, signedSol, sol, timeAgo } from '@/lib/format';
 import { useLayout } from '@/lib/layout';
 import { useSession } from '@/lib/session';
+import { useTitle } from '@/lib/use-title';
 
 export default function WalletScreen() {
   const { address } = useLocalSearchParams<{ address: string }>();
@@ -18,6 +19,11 @@ export default function WalletScreen() {
   const [data, setData] = useState<WalletDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { wide, pad, maxWidth } = useLayout();
+
+  const who = data ? data.identity?.name ?? shortAddr(address) : null;
+  useTitle(data && (data.profile.flips
+    ? `${who}: Solana NFT trader, ${signedSol(data.profile.realizedSol)} P&L | FloorFeed`
+    : `${who}: Solana NFT wallet | FloorFeed`));
 
   useEffect(() => { api.wallet(address).then(setData).catch((e) => setError(e.message)); }, [address]);
 

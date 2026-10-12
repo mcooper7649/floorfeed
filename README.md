@@ -6,7 +6,7 @@
 
 A mobile social-trading app modeled on [FOMO](https://fomo.family) (the memecoin app) and rebuilt for NFTs.
 
-### [▶ Live demo: floorfeed.mycodedojo.com](https://floorfeed.mycodedojo.com)
+### [▶ Live: floorfeed.io](https://floorfeed.io)
 <sub>Paper trading on live Solana mainnet data. Responsive: phone layout on mobile, multi-column layout on desktop.</sub>
 
 ![Expo SDK 57](https://img.shields.io/badge/Expo_SDK-57-000020?logo=expo&logoColor=white)

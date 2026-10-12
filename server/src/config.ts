@@ -18,7 +18,9 @@ export const config = {
   tensorApiKey: process.env.TENSOR_API_KEY ?? "",
   // X posting: drafts go to Telegram for approval, then a browser poster on
   // the host publishes them (no paid X API). All optional.
-  siteUrl: process.env.SITE_URL ?? "https://floorfeed.mycodedojo.com",
+  siteUrl: process.env.SITE_URL ?? "https://floorfeed.io",
+  // Where the static web build is served (the SEO renderer reads its index.html).
+  webOrigin: process.env.WEB_ORIGIN ?? "http://127.0.0.1:8020",
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN ?? "",
   telegramChatId: process.env.TELEGRAM_CHAT_ID ?? "",
   socialToken: process.env.SOCIAL_TOKEN ?? "", // shared secret for the poster

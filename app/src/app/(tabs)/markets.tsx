@@ -12,6 +12,7 @@ import { api, type Chain, type CollectionSummary, type MarketCategory } from '@/
 import { amt, pct, usdCompact } from '@/lib/format';
 import { columnsFor, useLayout } from '@/lib/layout';
 import { useSession } from '@/lib/session';
+import { useTitle } from '@/lib/use-title';
 
 type ChainFilter = 'all' | Chain;
 type CatFilter = 'all' | MarketCategory | 'watch';
@@ -49,6 +50,7 @@ const sortKey: Record<Sort, (c: CollectionSummary) => number> = {
 export default function MarketsScreen() {
   const { watchlist, toggleWatch } = useSession();
   const [rows, setRows] = useState<CollectionSummary[]>([]);
+  useTitle(rows.length ? `NFT floor prices today: ${rows.length} Solana & Ethereum collections | FloorFeed` : null);
   const [refreshing, setRefreshing] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { q } = useLocalSearchParams<{ q?: string }>();

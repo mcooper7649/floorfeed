@@ -13,6 +13,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY package.json tsconfig.json ./
 COPY src ./src
+COPY assets ./assets
 ENV PORT=8030 DB_PATH=/data/floorfeed.db NODE_ENV=production
 RUN mkdir -p /data && chown node:node /data
 VOLUME /data

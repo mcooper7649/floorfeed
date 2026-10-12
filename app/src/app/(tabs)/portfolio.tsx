@@ -11,8 +11,10 @@ import { shortAddr, signedSol, sol } from '@/lib/format';
 import { useTradeMode } from '@/lib/mode';
 import { useSession } from '@/lib/session';
 import { useWallet } from '@/lib/wallet';
+import { useTitle } from '@/lib/use-title';
 
 export default function PortfolioScreen() {
+  useTitle('Portfolio | FloorFeed');
   const { mode } = useTradeMode();
   const w = useWallet();
   return mode === 'real' && w.address ? <RealPortfolio address={w.address} /> : <PaperPortfolio />;

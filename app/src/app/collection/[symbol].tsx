@@ -23,6 +23,7 @@ import { columnsFor, useLayout } from '@/lib/layout';
 import { useTradeMode } from '@/lib/mode';
 import { fmtDay, fmtSol } from '@/lib/scale';
 import { useSession } from '@/lib/session';
+import { useTitle } from '@/lib/use-title';
 
 const RANGES = [1, 7, 30] as const;
 const web = Platform.OS === 'web';
@@ -40,6 +41,7 @@ export default function CollectionScreen() {
   const [buy, setBuy] = useState<string | null>(null);
   const { mode } = useTradeMode();
   const [buyOpen, setBuyOpen] = useState(false);
+  useTitle(data && `${data.name} floor price, chart & ${data.source === 'opensea' ? 'stats' : 'top flippers'} | FloorFeed`);
 
   const fetchData = useCallback(() => {
     api.collection(symbol, range).then((d) => { setData(d); setError(null); })

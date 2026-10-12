@@ -8,7 +8,7 @@
 
 export type Teaser = { id: string; text: string; image?: string };
 
-const SITE = "floorfeed.mycodedojo.com";
+const SITE = "floorfeed.io";
 
 export const TEASERS: Teaser[] = [
   { id: "what", image: "feed.jpg",
