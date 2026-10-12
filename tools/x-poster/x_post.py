@@ -24,6 +24,7 @@ from playwright.sync_api import sync_playwright
 API = os.environ.get("FLOORFEED_API", "http://127.0.0.1:8030")
 TOKEN = os.environ["SOCIAL_TOKEN"]
 STATE = os.path.expanduser(os.environ.get("X_STATE", "~/world-monitor/storage_state.json"))
+HANDLE = os.environ.get("X_HANDLE", "FloorFeed")
 UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
 
 
@@ -50,6 +51,22 @@ def download(url):
     return f.name
 
 
+def find_post(pg, text):
+    """URL of a recent post on our profile starting with this text, if any."""
+    pg.goto(f"https://x.com/{HANDLE}", wait_until="domcontentloaded")
+    first_line = text.split("\n")[0][:25]
+    for _ in range(8):
+        arts = pg.locator("article").all()[:6]
+        for a in arts:
+            if first_line in a.inner_text():
+                href = a.locator("a time").first.locator("xpath=..").get_attribute("href")
+                return "https://x.com" + href if href else "https://x.com/" + HANDLE
+        if arts:
+            return None
+        time.sleep(2)
+    return None
+
+
 def publish(post):
     image = None
     if post.get("image"):
@@ -63,6 +80,11 @@ def publish(post):
         ctx = b.new_context(storage_state=STATE, user_agent=UA, viewport={"width": 1280, "height": 1000})
         pg = ctx.new_page()
         try:
+            # A previous attempt may have posted before failing; don't post twice.
+            existing = find_post(pg, post["text"])
+            if existing:
+                print("already on the profile:", existing, flush=True)
+                return existing
             pg.goto("https://x.com/compose/post", wait_until="domcontentloaded")
             box = pg.locator('[data-testid="tweetTextarea_0"]').first
             box.wait_for(timeout=30_000)
@@ -86,25 +108,22 @@ def publish(post):
                 time.sleep(1)
             time.sleep(random.uniform(1, 3))
             btn.click()
-            # The composer closes once the post is accepted.
-            pg.locator('[data-testid="tweetTextarea_0"]').first.wait_for(state="detached", timeout=60_000)
+            # Once the post is accepted X leaves /compose/post for the timeline
+            # (which has its own inline composer, so don't wait on the textarea).
+            for _ in range(60):
+                if "/compose/" not in pg.url:
+                    break
+                time.sleep(1)
+            else:
+                raise TimeoutError("composer did not close")
             time.sleep(4)
 
-            # Find the new post's URL on our own profile.
-            handle = (pg.locator('[data-testid="AppTabBar_Profile_Link"]').first.get_attribute("href") or "").strip("/")
             url = None
-            if handle:
-                pg.goto(f"https://x.com/{handle}", wait_until="domcontentloaded")
-                first_line = post["text"].split("\n")[0][:40]
-                for _ in range(10):
-                    for a in pg.locator("article").all()[:5]:
-                        if first_line[:25] in a.inner_text():
-                            href = a.locator("a time").first.locator("xpath=..").get_attribute("href")
-                            url = "https://x.com" + href if href else None
-                            break
-                    if url:
-                        break
-                    time.sleep(2)
+            for _ in range(3):  # the profile can lag a few seconds behind
+                url = find_post(pg, post["text"])
+                if url:
+                    break
+                time.sleep(4)
             ctx.storage_state(path=STATE)  # keep refreshed cookies
             os.chmod(STATE, 0o600)
             return url
