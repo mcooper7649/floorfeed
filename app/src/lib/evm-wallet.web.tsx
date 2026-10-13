@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, use, useCallback, useEffect, useState, type ReactNode } from 'react';
 
+import { chainById } from '@/constants/chains';
+
 import { useAuth } from './auth';
 import type { EvmTx } from './auth-types';
 import type { EvmWalletState } from './wallet-types';
@@ -82,7 +84,20 @@ export function EvmWalletProvider({ children }: { children: ReactNode }) {
     const p = wallet.provider;
     const want = hex(tx.chainId);
     const current = await p.request({ method: 'eth_chainId' }).catch(() => null);
-    if (current !== want) await p.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: want }] });
+    if (current !== want) {
+      try {
+        await p.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: want }] });
+      } catch (e) {
+        // 4902: the wallet doesn't know this network yet (common for Abstract, Ink). Add it, which also switches.
+        const info = chainById(tx.chainId)?.[1];
+        if ((e as { code?: number }).code !== 4902 || !info?.rpc) throw e;
+        await p.request({ method: 'wallet_addEthereumChain', params: [{
+          chainId: want, chainName: info.name, rpcUrls: [info.rpc],
+          nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+          blockExplorerUrls: info.explorer ? [info.explorer] : undefined,
+        }] });
+      }
+    }
     const hash = await p.request({
       method: 'eth_sendTransaction',
       params: [{ from: address, to: tx.to, data: tx.data, value: hex(BigInt(tx.value)), ...(tx.gas ? { gas: hex(BigInt(tx.gas)) } : {}) }],

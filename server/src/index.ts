@@ -9,8 +9,9 @@ import { cheapestListings, collectionDetail, listCollections } from "./collectio
 import { COLLECTIONS, collectionName, config, isEvm } from "./config.ts";
 import { db } from "./db.ts";
 import { feedEvents, traders } from "./feed.ts";
+import { loadDiscovered } from "./discovery.ts";
 import { itemDetail, warmRarity } from "./items.ts";
-import { EVM_ADDRESS_RE, evmBalances, evmBuyTx, evmHoldings, evmQuote } from "./trade-evm.ts";
+import { EVM_ADDRESS_RE, evmBalances, evmBuyTx, evmHoldings, evmQuote, totalEth } from "./trade-evm.ts";
 import { startIngest } from "./ingest.ts";
 import { KINDS, generate, nextPost, postedSince, reportResult, startSocial, submitExternal, xLength } from "./social.ts";
 import { walletStats } from "./pnl.ts";
@@ -460,7 +461,7 @@ app.get("/chain/evm/balance/:address", async (req, reply) => {
   const { address } = req.params as { address: string };
   if (!EVM_ADDRESS_RE.test(address)) return reply.code(400).send({ error: "Not an EVM address" });
   const b = await evmBalances(address);
-  return { ...b, eth: b.ethereum + b.base };
+  return { ...b, eth: totalEth(b) };
 });
 
 app.get("/chain/evm/holdings/:address", async (req, reply) => {
@@ -520,6 +521,7 @@ app.get("/seo/*", async (req, reply) => {
 
 // INGEST=0 runs the API only. This machine and production share a public IP,
 // and so Magic Eden's rate limit.
+loadDiscovered(); // last run's discovered EVM collections, before anything reads the lists
 if (process.env.INGEST !== "0") startIngest();
 // Rank every Solana collection's items in the background (weekly refresh),
 // starting after boot so it doesn't compete with the first polls.

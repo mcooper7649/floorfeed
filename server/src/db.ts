@@ -99,6 +99,15 @@ CREATE TABLE IF NOT EXISTS nft_items (
   rank       INTEGER
 );
 CREATE INDEX IF NOT EXISTS nft_items_collection ON nft_items(collection, rank);
+-- EVM collections found by discovery.ts (each chain's top by 7-day volume).
+CREATE TABLE IF NOT EXISTS evm_discovered (
+  slug     TEXT PRIMARY KEY,
+  name     TEXT NOT NULL,
+  chain    TEXT NOT NULL,
+  category TEXT NOT NULL,
+  rank     INTEGER NOT NULL,
+  seen_at  INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS collection_traits (
   symbol      TEXT PRIMARY KEY,
   total       INTEGER NOT NULL,

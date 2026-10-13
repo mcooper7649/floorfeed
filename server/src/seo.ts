@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import http from "node:http";
 import { Resvg } from "@resvg/resvg-js";
 import { listCollections } from "./collections.ts";
-import { COLLECTIONS, EVM_COLLECTIONS, config, isEvmWallet, walletUnit } from "./config.ts";
+import { COLLECTIONS, EVM_COLLECTIONS, chainName, config, isEvmWallet, walletUnit } from "./config.ts";
 import { db } from "./db.ts";
 import { traders } from "./feed.ts";
 import { collectionFlippers } from "./pnl.ts";
@@ -53,7 +53,6 @@ const leaders = cached(10 * MIN, () =>
 const evmLeaders = cached(10 * MIN, () =>
   traderLeaderboard({ windowDays: 30, sort: "pnl", minFlips: 3, hideMarketMakers: true, limit: 50, chain: "evm" }));
 
-const chainLabel: Record<string, string> = { solana: "Solana", ethereum: "Ethereum", base: "Base", polygon: "Polygon" };
 
 // --- the HTML shell --------------------------------------------------------
 
@@ -153,7 +152,7 @@ type Coll = ReturnType<typeof listCollections>[number];
 
 const collRow = (c: Coll) => {
   const ch = pct(c.change24hPct);
-  return `<tr><td><a href="/collection/${encodeURIComponent(c.symbol)}">${esc(c.name)}</a></td><td>${chainLabel[c.chain] ?? c.chain}</td><td>${amt(c.floor, c.currency)}</td><td>${ch ?? "–"}</td><td>${amt(c.volume7d, c.currency)}</td></tr>`;
+  return `<tr><td><a href="/collection/${encodeURIComponent(c.symbol)}">${esc(c.name)}</a></td><td>${chainName(c.chain)}</td><td>${amt(c.floor, c.currency)}</td><td>${ch ?? "–"}</td><td>${amt(c.volume7d, c.currency)}</td></tr>`;
 };
 const collTable = (rows: Coll[]) =>
   `<table><thead><tr><th>Collection</th><th>Chain</th><th>Floor</th><th>24h</th><th>7d volume</th></tr></thead><tbody>${rows.map(collRow).join("")}</tbody></table>`;
@@ -200,12 +199,17 @@ function home(): Page {
   };
 }
 
+// "Solana, Ethereum, Base and Abstract": the chains that currently have collections.
+const chainList = (names: string[]) => (names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names[0] ?? "");
+
 function marketsPage(): Page {
   const all = markets();
+  const chains = [...new Set(all.map((c) => chainName(c.chain)))];
+  const evmChains = chains.filter((c) => c !== "Solana");
   const sol = all.filter((c) => c.chain === "solana").length;
   return {
     title: `NFT floor prices today: ${all.length} Solana & Ethereum collections | FloorFeed`,
-    description: `Live floor prices, 24h change and 7-day volume for ${all.length} NFT collections on Solana, Ethereum, Base and Polygon, with price charts, listings and top flippers for each.`,
+    description: `Live floor prices, 24h change and 7-day volume for ${all.length} NFT collections on ${chainList(chains)}, with price charts, listings and top flippers for each.`,
     path: "/markets",
     jsonLd: [crumbs([[NAME, "/"], ["Markets", "/markets"]]), {
       "@context": "https://schema.org",
@@ -217,7 +221,7 @@ function marketsPage(): Page {
     }],
     body: doc(`
       <h1>NFT floor prices</h1>
-      <p>${all.length} collections (${sol} on Solana via Magic Eden, ${all.length - sol} on Ethereum, Base and Polygon via OpenSea), sorted by 7-day volume. Floors refresh every few minutes.</p>
+      <p>${all.length} collections (${sol} on Solana via Magic Eden, ${all.length - sol} on ${chainList(evmChains)} via OpenSea), sorted by 7-day volume. Floors refresh every few minutes.</p>
       ${collTable(all)}`),
   };
 }
@@ -247,10 +251,10 @@ function collectionPage(symbol: string): Page | null {
   const floorUsd = usd(c.floorUsd);
   const lead = c.floor != null
     ? `${c.name} floor price is ${amt(c.floor, c.currency)}${floorUsd ? ` (${floorUsd})` : ""}${ch ? `, ${ch} in 24h` : ""}.`
-    : `${c.name} on ${chainLabel[c.chain]}.`;
+    : `${c.name} on ${chainName(c.chain)}.`;
   const vol = c.volume7d ? ` 7-day volume ${amt(c.volume7d, c.currency)}.` : "";
   const description = clip(evm
-    ? `${lead}${vol} Live sales, price chart, owners and the wallets flipping ${c.name} on ${chainLabel[c.chain]}.`
+    ? `${lead}${vol} Live sales, price chart, owners and the wallets flipping ${c.name} on ${chainName(c.chain)}.`
     : `${lead}${vol} Live sales, price chart, cheapest listings and the wallets flipping ${c.name} for profit.`, 300);
 
   const flippers = collectionFlippers(symbol, 8).filter((f) => f.flips >= 2);
@@ -264,7 +268,7 @@ function collectionPage(symbol: string): Page | null {
     ["24h sales", c.sales24h != null ? String(c.sales24h) : null],
     ["Listed", c.listed != null ? num(c.listed, 0) : null],
     ["Owners", c.owners != null ? num(c.owners, 0) : null],
-    ["Chain", chainLabel[c.chain] ?? c.chain],
+    ["Chain", chainName(c.chain)],
     ["Category", c.category],
   ];
 
@@ -443,7 +447,7 @@ async function collectionCard(symbol: string) {
     ${wordmark}
     <rect x="788" y="64" width="348" height="348" rx="28" fill="${CARD}" stroke="${BORDER}" stroke-width="2"/>
     ${art ? `<clipPath id="a"><rect x="790" y="66" width="344" height="344" rx="26"/></clipPath><image x="790" y="66" width="344" height="344" preserveAspectRatio="xMidYMid slice" clip-path="url(#a)" xlink:href="${art}"/>` : `<text x="962" y="270" font-size="140" font-weight="800" fill="${DIM}" text-anchor="middle">${esc(c.name.slice(0, 1))}</text>`}
-    <text x="64" y="170" font-size="24" font-weight="600" fill="${ACCENT}" letter-spacing="2">${esc(`${chainLabel[c.chain] ?? c.chain} · ${c.category}`.toUpperCase())}</text>
+    <text x="64" y="170" font-size="24" font-weight="600" fill="${ACCENT}" letter-spacing="2">${esc(`${chainName(c.chain)} · ${c.category}`.toUpperCase())}</text>
     <text x="64" y="${170 + size + 14}" font-size="${size}" font-weight="800" fill="${TEXT}">${esc(clip(c.name, 26))}</text>
     ${spark(c.spark, 64, 290, 640, 70, chColor)}
     ${stat(64, "Floor", amt(c.floor, c.currency))}

@@ -1,6 +1,6 @@
-import { createPublicClient, encodeFunctionData, formatEther, http, parseAbiItem, type Hex } from "viem";
-import { base, mainnet } from "viem/chains";
-import { EVM_SALES, config } from "./config.ts";
+import { createPublicClient, encodeFunctionData, formatEther, http, parseAbiItem, type Hex, type PublicClient } from "viem";
+import { abstract, arbitrum, base, ink, mainnet } from "viem/chains";
+import { EVM_CHAINS, EVM_SALES, config } from "./config.ts";
 import { db } from "./db.ts";
 import { getOsAccountNfts, getOsBestListing, getOsBestListings, getOsFulfillment } from "./opensea.ts";
 
@@ -10,31 +10,38 @@ import { getOsAccountNfts, getOsBestListing, getOsBestListings, getOsFulfillment
 // balance fails here, not in the wallet), and hands it to the user's wallet,
 // which shows it and asks them to confirm.
 
+// OpenSea's asset URLs use the API chain names (Polygon is "matic").
+const osAssetChain = (c: string) => (c === "polygon" ? "matic" : c);
+
 export const EVM_ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/;
 
+// Chains where FloorFeed reads balances and builds buys. All use ETH for gas
+// and prices. RPCs default to public endpoints; override per chain in .env.
+const rpc = (url: string) => http(url, { timeout: 15_000 });
 const clients = {
-  ethereum: createPublicClient({ chain: mainnet, transport: http(process.env.ETH_RPC_URL || "https://ethereum-rpc.publicnode.com", { timeout: 15_000 }) }),
-  base: createPublicClient({ chain: base, transport: http(process.env.BASE_RPC_URL || "https://base-rpc.publicnode.com", { timeout: 15_000 }) }),
+  ethereum: createPublicClient({ chain: mainnet, transport: rpc(process.env.ETH_RPC_URL || "https://ethereum-rpc.publicnode.com") }),
+  base: createPublicClient({ chain: base, transport: rpc(process.env.BASE_RPC_URL || "https://base-rpc.publicnode.com") }),
+  abstract: createPublicClient({ chain: abstract, transport: rpc(process.env.ABSTRACT_RPC_URL || "https://api.mainnet.abs.xyz") }),
+  ink: createPublicClient({ chain: ink, transport: rpc(process.env.INK_RPC_URL || "https://rpc-gel.inkonchain.com") }),
+  arbitrum: createPublicClient({ chain: arbitrum, transport: rpc(process.env.ARBITRUM_RPC_URL || "https://arbitrum-one-rpc.publicnode.com") }),
 };
 type EvmChain = keyof typeof clients;
-const isTradable = (c: string): c is EvmChain => c === "ethereum" || c === "base";
-const chainIds: Record<EvmChain, number> = { ethereum: 1, base: 8453 };
+const TRADABLE = Object.keys(clients) as EvmChain[];
+const isTradable = (c: string): c is EvmChain => (TRADABLE as string[]).includes(c);
 
 // --- balances and holdings ---
 
-const balanceCache = new Map<string, { at: number; v: { ethereum: number; base: number } }>();
+const balanceCache = new Map<string, { at: number; v: Record<EvmChain, number> }>();
 export async function evmBalances(address: string) {
   const key = address.toLowerCase();
   const hit = balanceCache.get(key);
   if (hit && Date.now() - hit.at < 15_000) return hit.v;
-  const [e, b] = await Promise.all([
-    clients.ethereum.getBalance({ address: address as Hex }).catch(() => 0n),
-    clients.base.getBalance({ address: address as Hex }).catch(() => 0n),
-  ]);
-  const v = { ethereum: Number(formatEther(e)), base: Number(formatEther(b)) };
+  const wei = await Promise.all(TRADABLE.map((c) => (clients[c] as unknown as PublicClient).getBalance({ address: address as Hex }).catch(() => 0n)));
+  const v = Object.fromEntries(TRADABLE.map((c, i) => [c, Number(formatEther(wei[i]))])) as Record<EvmChain, number>;
   balanceCache.set(key, { at: Date.now(), v });
   return v;
 }
+export const totalEth = (b: Record<string, number>) => Object.values(b).reduce((a, x) => a + x, 0);
 
 const holdingsCache = new Map<string, { at: number; data: Awaited<ReturnType<typeof loadEvmHoldings>> }>();
 export async function evmHoldings(address: string) {
@@ -62,6 +69,7 @@ async function loadEvmHoldings(address: string) {
     const mint = `${n.contract}:${n.identifier}`;
     return {
       mint,
+      chain: tracked.get(n.collection)!.chain,
       name: n.name,
       image: n.image,
       collection: { symbol: n.collection, name: tracked.get(n.collection)!.name, floor },
@@ -69,7 +77,7 @@ async function loadEvmHoldings(address: string) {
       boughtAt: (lastBuy.get(address, mint) as { price: number } | undefined)?.price ?? null,
     };
   }).sort((x, y) => (y.estValue ?? 0) - (x.estValue ?? 0));
-  const eth = balances.ethereum + balances.base;
+  const eth = totalEth(balances);
   const nftValue = nfts.reduce((t, n) => t + (n.estValue ?? 0), 0);
   return { address, eth, balances, nftValue, totalValue: eth + nftValue, nfts, untracked: all.length - nfts.length };
 }
@@ -105,7 +113,7 @@ export async function evmQuote(symbol: string, buyer: string | undefined, id: st
     balanceEth: balances && isTradable(chain) ? balances[chain] : null,
     executable: tradable,
     reason: !listing ? "No ETH listing is live right now." : !tradable ? `Buying on ${chain} isn't supported yet.` : null,
-    marketUrl: listing ? `https://opensea.io/assets/${chain}/${listing.mint.replace(":", "/")}` : `https://opensea.io/collection/${symbol}`,
+    marketUrl: listing ? `https://opensea.io/assets/${osAssetChain(chain)}/${listing.mint.replace(":", "/")}` : `https://opensea.io/collection/${symbol}`,
   };
 }
 
@@ -120,7 +128,8 @@ export async function evmBuyTx(p: { orderHash: string; protocolAddress: string; 
   const abi = parseAbiItem(`function ${tx.function}`) as ReturnType<typeof parseAbiItem> & { name: string };
   const data = encodeFunctionData({ abi: [abi], functionName: abi.name, args: toArgs(tx.input_data) as never });
   const value = BigInt(tx.value);
-  const client = clients[p.chain];
+  // The chains' client types differ (Abstract is zkSync-based); the calls used here are common to all.
+  const client = clients[p.chain] as unknown as PublicClient;
   // Dry run as the buyer: catches a listing that just sold, a short balance,
   // or a bad encoding before the wallet ever sees it.
   let gas: bigint;
@@ -135,7 +144,8 @@ export async function evmBuyTx(p: { orderHash: string; protocolAddress: string; 
   const fees = await client.estimateFeesPerGas().catch(() => null);
   const gasCostEth = fees?.maxFeePerGas ? Number(formatEther(gas * fees.maxFeePerGas)) : null;
   return {
-    chainId: chainIds[p.chain],
+    chainId: EVM_CHAINS[p.chain].id,
+    explorerTx: `${EVM_CHAINS[p.chain].explorer}/tx/`,
     to: tx.to,
     data,
     value: value.toString(),

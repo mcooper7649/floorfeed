@@ -5,20 +5,19 @@ import { DepositSheet } from '@/components/deposit-sheet';
 import { ModeChip } from '@/components/mode-toggle';
 import { NftImage } from '@/components/nft-image';
 import { C } from '@/constants/brand';
+import { chainById, chainName } from '@/constants/chains';
 import { T } from '@/constants/type';
 import { api, type EvmQuote } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useEvmWallet } from '@/lib/evm-wallet';
 import { sol } from '@/lib/format';
 
-// Real-mode buy on Ethereum/Base: the cheapest OpenSea listing (or one NFT's
+// Real-mode buy on Ethereum and its L2s (Base, Abstract, Ink, Arbitrum): the cheapest OpenSea listing (or one NFT's
 // listing when `id` is given). FloorFeed builds the Seaport transaction and
 // simulates it; the user's wallet shows it and asks them to confirm. Nothing
 // is sent without that confirmation.
-const explorer = (chainId: number, hash: string) =>
-  `${chainId === 8453 ? 'https://basescan.org' : 'https://etherscan.io'}/tx/${hash}`;
 
-type Step = { kind: 'idle' } | { kind: 'preparing' } | { kind: 'confirm' } | { kind: 'sent'; hash: string; chainId: number }
+type Step = { kind: 'idle' } | { kind: 'preparing' } | { kind: 'confirm' } | { kind: 'sent'; hash: string; url: string }
   | { kind: 'error'; message: string };
 
 export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
@@ -60,7 +59,7 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
       });
       setStep({ kind: 'confirm' });
       const hash = await w.send(tx);
-      setStep({ kind: 'sent', hash, chainId: tx.chainId });
+      setStep({ kind: 'sent', hash, url: `${tx.explorerTx ?? `${chainById(tx.chainId)?.[1].explorer ?? 'https://etherscan.io'}/tx/`}${hash}` });
     } catch (e) {
       const msg = (e as Error).message || 'The purchase did not go through.';
       setStep({ kind: 'error', message: /reject|denied|cancel/i.test(msg) ? 'You cancelled in your wallet. Nothing was sent.' : msg });
@@ -98,7 +97,7 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
             <View style={{ gap: 10 }}>
               <Text style={s.ok}>✓ Purchase submitted</Text>
               <Text style={s.meta}>It usually confirms within a minute. The NFT then shows up in your Real portfolio.</Text>
-              <Pressable accessibilityRole="link" onPress={() => Linking.openURL(explorer(step.chainId, step.hash))} style={s.secondary}>
+              <Pressable accessibilityRole="link" onPress={() => Linking.openURL(step.url)} style={s.secondary}>
                 <Text style={s.secondaryTxt}>View transaction ↗</Text>
               </Pressable>
             </View>
@@ -115,7 +114,7 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
                 <NftImage uri={q.listing?.image ?? null} name={q.collection.name} ratio={1} radius={12} px={160} style={{ width: 72 }} />
                 <View style={{ flex: 1, gap: 2 }}>
                   <Text style={s.name}>{q.listing?.name ?? q.collection.name}</Text>
-                  <Text style={s.meta}>{q.collection.name} · {q.chain === 'base' ? 'Base' : 'Ethereum'} · OpenSea listing</Text>
+                  <Text style={s.meta}>{q.collection.name} · {chainName(q.chain)} · OpenSea listing</Text>
                   <Text style={s.price}>{price != null ? sol(price, 3, 'ETH') : '—'}</Text>
                 </View>
               </View>

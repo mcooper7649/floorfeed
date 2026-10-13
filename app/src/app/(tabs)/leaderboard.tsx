@@ -13,7 +13,7 @@ import { useSession } from '@/lib/session';
 import { useTitle } from '@/lib/use-title';
 
 // P&L is in each chain's unit (SOL vs ETH), so the boards are separate.
-const CHAINS: { key: Ecosystem; label: string }[] = [{ key: 'solana', label: 'Solana' }, { key: 'evm', label: 'Ethereum' }];
+const CHAINS: { key: Ecosystem; label: string }[] = [{ key: 'solana', label: 'Solana' }, { key: 'evm', label: 'Ethereum & L2s' }];
 const WINDOWS: { key: LeaderWindow; label: string }[] = [
   { key: '7', label: '7D' }, { key: '30', label: '30D' }, { key: 'all', label: 'All' },
 ];

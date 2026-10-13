@@ -1,6 +1,7 @@
 import { COLLECTIONS, EVM_COLLECTIONS, EVM_SALES, LIVE_TIER_SIZE, config } from "./config.ts";
 import { db } from "./db.ts";
 import { PRIORITY, getCollectionMeta, getSales, getStats, type MeActivity } from "./magiceden.ts";
+import { discoverEvm } from "./discovery.ts";
 import { getOsInfo, getOsSales, getOsStats, hasOsKey, type OsSale } from "./opensea.ts";
 import { refreshPrices } from "./prices.ts";
 
@@ -205,7 +206,7 @@ const setEvmInfo = db.prepare(
 );
 
 export async function refreshEvmStats() {
-  for (const c of EVM_COLLECTIONS) {
+  for (const c of [...EVM_COLLECTIONS]) { // copy: discovery may update the list mid-loop
     try {
       const st = await getOsStats(c.slug);
       const now = Date.now();
@@ -260,7 +261,7 @@ export async function refreshEvmSales() {
   if (!hasOsKey()) return;
   const now = Math.floor(Date.now() / 1000);
   let added = 0;
-  for (const c of EVM_SALES) {
+  for (const c of [...EVM_SALES]) {
     try {
       const latest = (latestFor.get(c.slug) as { t: number | null }).t;
       added += latest
@@ -278,7 +279,7 @@ export async function refreshEvmSales() {
 export async function deepenEvmSales() {
   if (!hasOsKey()) return;
   const target = Math.floor(Date.now() / 1000) - EVM_BACKFILL_DAYS * 86_400;
-  for (const c of EVM_SALES) {
+  for (const c of [...EVM_SALES]) {
     const oldest = (oldestFor.get(c.slug) as { t: number | null }).t;
     if (oldest == null || oldest <= target + 86_400) continue;
     try {
@@ -304,6 +305,7 @@ function every(ms: number, fn: () => Promise<void>) {
 
 export function startIngest() {
   every(config.statsPollMs, refreshPrices);
+  every(24 * 3_600_000, discoverEvm);
   every(config.statsPollMs, refreshEvmStats);
   every(config.activityPollMs, refreshEvmSales);
   // After the first backfill has had time to run.

@@ -1,15 +1,15 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { C } from '@/constants/brand';
+import { CHAINS } from '@/constants/chains';
 import type { Chain } from '@/lib/api';
 
 // Text label (never color alone) identifies the chain.
-const LABEL: Record<Chain, string> = { solana: 'SOL', ethereum: 'ETH', base: 'BASE', polygon: 'POL' };
 
 export function ChainBadge({ chain }: { chain: Chain }) {
   return (
     <View style={s.badge}>
-      <Text style={s.txt}>{LABEL[chain]}</Text>
+      <Text style={s.txt}>{CHAINS[chain]?.badge ?? chain.toUpperCase()}</Text>
     </View>
   );
 }

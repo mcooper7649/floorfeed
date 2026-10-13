@@ -89,13 +89,31 @@ export const COLLECTIONS: { symbol: string; name: string; category: Category }[]
 
 export const LIVE_TIER_SIZE = 20;
 
-export type Chain = "solana" | "ethereum" | "base" | "polygon";
+export type Chain = "solana" | "ethereum" | "base" | "polygon" | "abstract" | "ink" | "arbitrum";
+
+// EVM chains FloorFeed tracks. All price NFTs in ETH except Polygon, where
+// the one tracked collection (Courtyard) trades in USDC and is stats-only.
+// `discover` = how many top collections by 7-day volume to add automatically.
+export const EVM_CHAINS: Record<Exclude<Chain, "solana">, { name: string; id: number; explorer: string; discover: number }> = {
+  ethereum: { name: "Ethereum", id: 1, explorer: "https://etherscan.io", discover: 15 },
+  base: { name: "Base", id: 8453, explorer: "https://basescan.org", discover: 15 },
+  abstract: { name: "Abstract", id: 2741, explorer: "https://abscan.org", discover: 15 },
+  ink: { name: "Ink", id: 57073, explorer: "https://explorer.inkonchain.com", discover: 10 },
+  arbitrum: { name: "Arbitrum", id: 42161, explorer: "https://arbiscan.io", discover: 10 },
+  polygon: { name: "Polygon", id: 137, explorer: "https://polygonscan.com", discover: 0 },
+};
+export const chainName = (c: string) => (c === "solana" ? "Solana" : EVM_CHAINS[c as keyof typeof EVM_CHAINS]?.name ?? c);
 
 // EVM collections via OpenSea: stats for all, plus sales (with OPENSEA_API_KEY)
 // for the ones priced in ETH. Prices and P&L stay in each chain's native unit;
 // an EVM wallet's numbers are in ETH, a Solana wallet's in SOL.
 // `slug` doubles as the collection id in URLs; none collide with ME symbols.
-export const EVM_COLLECTIONS: { slug: string; name: string; chain: Chain; category: Category }[] = [
+export type EvmCollection = { slug: string; name: string; chain: Chain; category: Category; auto?: boolean };
+
+// Hand-picked EVM collections. discovery.ts appends each chain's current top
+// collections (marked `auto`) to this same array at runtime, so everything
+// that reads it sees the discovered ones too.
+export const EVM_COLLECTIONS: EvmCollection[] = [
   { slug: "cryptopunks", name: "CryptoPunks", chain: "ethereum", category: "PFP" },
   { slug: "pudgypenguins", name: "Pudgy Penguins", chain: "ethereum", category: "PFP" },
   { slug: "boredapeyachtclub", name: "Bored Ape Yacht Club", chain: "ethereum", category: "PFP" },
@@ -135,7 +153,15 @@ export const EVM_COLLECTIONS: { slug: string; name: string; chain: Chain; catego
 export const isEvm = (id: string) => EVM_COLLECTIONS.some((c) => c.slug === id);
 
 // Courtyard trades in USDC on Polygon at ~10k sales a day: stats only.
-export const EVM_SALES = EVM_COLLECTIONS.filter((c) => c.slug !== "courtyard-nft");
+// Kept in place (not reassigned) so importers always see the current list.
+export const EVM_SALES: EvmCollection[] = [];
+export function syncEvmLists(discovered: EvmCollection[]) {
+  const curated = EVM_COLLECTIONS.filter((c) => !c.auto);
+  const known = new Set([...curated.map((c) => c.slug), ...COLLECTIONS.map((c) => c.symbol)]);
+  EVM_COLLECTIONS.splice(0, EVM_COLLECTIONS.length, ...curated, ...discovered.filter((c) => !known.has(c.slug)));
+  EVM_SALES.splice(0, EVM_SALES.length, ...EVM_COLLECTIONS.filter((c) => c.slug !== "courtyard-nft"));
+}
+syncEvmLists([]);
 
 export const collectionName = (symbol: string) =>
   COLLECTIONS.find((c) => c.symbol === symbol)?.name ?? EVM_COLLECTIONS.find((c) => c.slug === symbol)?.name ?? symbol;

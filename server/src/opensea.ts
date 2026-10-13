@@ -243,3 +243,17 @@ export async function getOsFulfillment(orderHash: string, chain: string, protoco
   if (!tx) throw new Error("OpenSea returned no transaction for this listing");
   return tx;
 }
+
+// Top collections on a chain by 7-day volume (metadata only; no prices).
+export async function getOsTopCollections(chain: string, limit = 25) {
+  const r = await get<{ collections: {
+    collection: string; name: string; category?: string | null; is_disabled?: boolean; is_nsfw?: boolean;
+  }[] }>(`/collections?chain=${osChain(chain)}&order_by=seven_day_volume&limit=${limit}`);
+  return r.collections;
+}
+
+export async function getOsWeek(slug: string) {
+  const s = await get<{ total: { floor_price?: number; floor_price_symbol?: string }; intervals: Interval[] }>(`/collections/${slug}/stats`);
+  const week = s.intervals.find((i) => i.interval === "seven_day");
+  return { floor: s.total.floor_price ?? null, symbol: s.total.floor_price_symbol || "", sales7d: week?.sales ?? 0, volume7d: week?.volume ?? 0 };
+}

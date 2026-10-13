@@ -10,6 +10,7 @@ import { Button, Card, ListRow, RowAction, SectionHeader } from '@/components/ui
 import { WalletSheet } from '@/components/wallet-button';
 import { WalletsCard } from '@/components/wallet-card';
 import { C } from '@/constants/brand';
+import { openseaAsset } from '@/constants/chains';
 import { T, display } from '@/constants/type';
 import { api, type EvmHoldings, type Holding, type Holdings, type PaperPosition } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -190,7 +191,7 @@ function PositionRow({ p, onSell }: { p: PaperPosition; onSell: () => void }) {
 
 // --- Real -------------------------------------------------------------------
 
-type Row = Holding & { unit: 'SOL' | 'ETH'; chain: 'solana' | 'evm' };
+type Row = Holding & { unit: 'SOL' | 'ETH'; chain: 'solana' | 'evm'; evmChain?: string };
 
 function RealPortfolio({ solAddress, evmAddress }: { solAddress: string | null; evmAddress: string | null }) {
   const { pad } = useLayout();
@@ -219,7 +220,7 @@ function RealPortfolio({ solAddress, evmAddress }: { solAddress: string | null; 
   const error = (solData && 'error' in solData && solData.error) || (evm && 'error' in evm && evm.error) || null;
   const rows: Row[] = [
     ...(sh?.nfts ?? []).map((n) => ({ ...n, unit: 'SOL' as const, chain: 'solana' as const })),
-    ...(eh?.nfts ?? []).map((n) => ({ ...n, unit: 'ETH' as const, chain: 'evm' as const })),
+    ...(eh?.nfts ?? []).map((n) => ({ ...n, unit: 'ETH' as const, chain: 'evm' as const, evmChain: n.chain })),
   ];
   const untracked = (sh?.untracked ?? 0) + (eh?.untracked ?? 0);
 
@@ -263,7 +264,7 @@ function RealPortfolio({ solAddress, evmAddress }: { solAddress: string | null; 
         const p = n.boughtAt != null && n.estValue != null ? n.estValue - n.boughtAt : null;
         const sellUrl = n.chain === 'solana'
           ? `https://magiceden.io/item-details/${n.mint}`
-          : `https://opensea.io/assets/ethereum/${n.mint.replace(':', '/')}`;
+          : openseaAsset(n.evmChain ?? 'ethereum', n.mint);
         return (
           <ListRow
             onPress={() => router.push({ pathname: '/item/[symbol]/[id]', params: { symbol: n.collection.symbol, id: n.mint } })}

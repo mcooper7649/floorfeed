@@ -1,5 +1,5 @@
 import { rpc } from "./chain.ts";
-import { COLLECTIONS, EVM_COLLECTIONS, chainOf, collectionName, currencyOf, isEvm } from "./config.ts";
+import { COLLECTIONS, EVM_CHAINS, EVM_COLLECTIONS, chainOf, collectionName, currencyOf, isEvm } from "./config.ts";
 import { db } from "./db.ts";
 import { traders } from "./feed.ts";
 import { getTokenListing } from "./magiceden.ts";
@@ -250,7 +250,7 @@ export async function itemDetail(symbol: string, id: string) {
     history,
     marketUrl,
     explorerUrl: evm
-      ? `${chain === "base" ? "https://basescan.org" : chain === "polygon" ? "https://polygonscan.com" : "https://etherscan.io"}/nft/${id.replace(":", "/")}`
+      ? `${EVM_CHAINS[chain as keyof typeof EVM_CHAINS]?.explorer ?? "https://etherscan.io"}/nft/${id.replace(":", "/")}`
       : `https://solscan.io/token/${id}`,
   };
 }

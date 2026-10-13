@@ -8,6 +8,7 @@ import { NftImage } from '@/components/nft-image';
 import { Empty, Screen } from '@/components/screen';
 import { Sparkline } from '@/components/sparkline';
 import { Chip, ChipRow, Stat } from '@/components/ui';
+import { chainName } from '@/constants/chains';
 import { C } from '@/constants/brand';
 import { T } from '@/constants/type';
 import { api, type Chain, type CollectionSummary, type MarketCategory } from '@/lib/api';
@@ -20,10 +21,8 @@ type ChainFilter = 'all' | Chain;
 type CatFilter = 'all' | MarketCategory | 'watch';
 type Sort = 'volume' | 'change' | 'floor' | 'sales';
 
-const CHAINS: { key: ChainFilter; label: string }[] = [
-  { key: 'all', label: 'All chains' }, { key: 'solana', label: 'Solana' }, { key: 'ethereum', label: 'Ethereum' },
-  { key: 'base', label: 'Base' }, { key: 'polygon', label: 'Polygon' },
-];
+// Chain chips in this order, shown only for chains that have collections.
+const CHAIN_ORDER: Chain[] = ['solana', 'ethereum', 'base', 'abstract', 'ink', 'arbitrum', 'polygon'];
 const CATEGORIES: { key: MarketCategory; blurb: string }[] = [
   { key: 'PFP', blurb: 'Profile-picture collections and their communities' },
   { key: 'Art', blurb: 'Generative and 1/1 art' },
@@ -62,6 +61,10 @@ export default function MarketsScreen() {
   const [seenQ, setSeenQ] = useState(q);
   if (q !== seenQ) { setSeenQ(q); setQuery(q ?? ''); }
   const [chain, setChain] = useState<ChainFilter>('all');
+  const chainChips = useMemo<{ key: ChainFilter; label: string }[]>(() => [
+    { key: 'all', label: 'All chains' },
+    ...CHAIN_ORDER.filter((c) => rows.some((r) => r.chain === c)).map((c) => ({ key: c, label: chainName(c) })),
+  ], [rows]);
   const [cat, setCat] = useState<CatFilter>('all');
   const [sort, setSort] = useState<Sort>('volume');
 
@@ -164,7 +167,7 @@ export default function MarketsScreen() {
         />
         <View style={wide ? { flex: 1 } : null}>
           <ChipRow groups={[
-            <Chips key="c" items={CHAINS} value={chain} onChange={setChain} />,
+            <Chips key="c" items={chainChips} value={chain} onChange={setChain} />,
             // Phones have no sortable table header, so sorting lives here.
             !wide && <Chips key="s" items={SORTS} value={sort} onChange={setSort} />,
           ]} />
@@ -191,7 +194,7 @@ export default function MarketsScreen() {
   );
 
   return (
-    <Screen title="Markets" subtitle="NFT collections on Solana, Ethereum, Base and Polygon, ranked by volume in USD">
+    <Screen title="Markets" subtitle="NFT collections on Solana, Ethereum and its L2s, ranked by volume in USD">
       <FlatList
         data={visible}
         keyExtractor={(r) => r.symbol}

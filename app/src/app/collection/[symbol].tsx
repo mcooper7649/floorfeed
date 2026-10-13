@@ -17,6 +17,7 @@ import { PriceChart } from '@/components/price-chart';
 import { Empty } from '@/components/screen';
 import { TopNav } from '@/components/top-nav';
 import { Chip, Stat as UiStat } from '@/components/ui';
+import { chainName } from '@/constants/chains';
 import { C } from '@/constants/brand';
 import { T, display } from '@/constants/type';
 import { api, type CollectionDetail } from '@/lib/api';
@@ -30,7 +31,6 @@ import { useTitle } from '@/lib/use-title';
 
 const RANGES = [1, 7, 30] as const;
 const web = Platform.OS === 'web';
-const CHAIN_NAME = { solana: 'Solana', ethereum: 'Ethereum', base: 'Base', polygon: 'Polygon' } as const;
 
 export default function CollectionScreen() {
   const { symbol } = useLocalSearchParams<{ symbol: string }>();
@@ -193,7 +193,7 @@ export default function CollectionScreen() {
               <Text {...display} style={wide ? T.displayL : T.display}>{data.name}</Text>
               <View style={s.badgeRow}>
                 <ChainBadge chain={data.chain} />
-                <Text style={s.desc}>{CHAIN_NAME[data.chain]} · {data.category} · data from {market}</Text>
+                <Text style={s.desc}>{chainName(data.chain)} · {data.category} · data from {market}</Text>
               </View>
             </View>
           </View>

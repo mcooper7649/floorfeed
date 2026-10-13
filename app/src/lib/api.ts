@@ -120,7 +120,7 @@ export type Leaderboard = {
   rows: TraderProfile[];
 };
 
-export type Chain = 'solana' | 'ethereum' | 'base' | 'polygon';
+export type Chain = 'solana' | 'ethereum' | 'base' | 'polygon' | 'abstract' | 'ink' | 'arbitrum';
 
 // One NFT (GET /items/:symbol/:id). id = Solana mint or EVM contract:tokenId.
 export type ItemDetail = {
@@ -234,6 +234,7 @@ export type Capabilities = { buy: { enabled: boolean; magiceden: boolean; tensor
 
 export type Holding = {
   mint: string;
+  chain?: string; // EVM holdings: which chain
   name: string | null;
   image: string | null;
   collection: { symbol: string; name: string; floor: number | null };
@@ -271,6 +272,7 @@ export type EvmQuote = {
 };
 export type EvmBuyTx = {
   chainId: number; to: string; data: string; value: string; valueEth: number; gas: string; gasCostEth: number | null;
+  explorerTx?: string;
 };
 
 export const api = {

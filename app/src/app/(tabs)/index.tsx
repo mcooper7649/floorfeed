@@ -14,7 +14,7 @@ import { useTitle } from '@/lib/use-title';
 type Scope = 'all' | 'following';
 
 const CHAINS: { key: FeedChain; label: string }[] = [
-  { key: 'all', label: 'All chains' }, { key: 'solana', label: 'Solana' }, { key: 'evm', label: 'Ethereum' },
+  { key: 'all', label: 'All chains' }, { key: 'solana', label: 'Solana' }, { key: 'evm', label: 'Ethereum & L2s' },
 ];
 
 const VIEWS: { key: FeedView; label: string; hint: string }[] = [
