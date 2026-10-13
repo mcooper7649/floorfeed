@@ -1,11 +1,12 @@
-import { Link, Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Platform, StyleSheet, Text, View } from 'react-native';
 
 import { CollIcon } from '@/components/coll-icon';
 import { Empty } from '@/components/screen';
 import { Avatar, TierBadge } from '@/components/event-card';
 import { TopNav } from '@/components/top-nav';
+import { Button, ListRow, Stat as UiStat } from '@/components/ui';
 import { C } from '@/constants/brand';
 import { T, display } from '@/constants/type';
 import { api, type WalletDetail } from '@/lib/api';
@@ -86,27 +87,24 @@ export default function WalletScreen() {
                 ? "Nearly all of this wallet's buys are filled by accepted bids, the pattern of a bidding bot, so it's likely a market maker rather than a discretionary trader."
                 : "Most of this wallet's trades run through AMM pools, so it's likely a market maker rather than a discretionary trader."}</Text>
             )}
-            <Pressable onPress={() => toggleFollow(address)} style={[s.follow, isFollowing && s.following, wide && { alignSelf: 'flex-start', paddingHorizontal: 32 }]}>
-              <Text style={[s.followTxt, isFollowing && { color: C.text }]}>
-                {isFollowing ? 'Following · get alerts on buys' : 'Follow this wallet'}
-              </Text>
-            </Pressable>
+            <View style={wide ? { alignSelf: 'flex-start' } : null}>
+              <Button tone={isFollowing ? 'secondary' : 'primary'} onPress={() => toggleFollow(address)}
+                label={isFollowing ? 'Following this wallet' : 'Follow this wallet'} />
+            </View>
             <Text style={s.section}>Recent activity</Text>
           </View>
         }
         ListEmptyComponent={<Empty text="No tracked trades." />}
         renderItem={({ item: t }) => (
-          <Link href={{ pathname: '/item/[symbol]/[id]', params: { symbol: t.symbol, id: t.mint } }} asChild>
-          <Pressable style={s.row}>
-            <CollIcon name={t.collection} uri={t.image} size={52} radius={10} />
-            <View style={{ flex: 1 }}>
-              <Text style={s.name}>{t.collection}</Text>
-              <Text style={s.meta}>{timeAgo(t.blockTime)} ago</Text>
-            </View>
-            <Text style={[s.side, { color: t.side === 'buy' ? C.up : C.down }]}>{t.side === 'buy' ? 'Buy' : 'Sell'}</Text>
-            <Text style={s.price}>{sol(t.price, 2, u)}</Text>
-          </Pressable>
-          </Link>
+          <ListRow
+            onPress={() => router.push({ pathname: '/item/[symbol]/[id]', params: { symbol: t.symbol, id: t.mint } })}
+            art={<CollIcon name={t.collection} uri={t.image} size={44} radius={10} />}
+            title={t.collection}
+            meta={`${timeAgo(t.blockTime)} ago`}
+            value={sol(t.price, 2, u)}
+            sub={t.side === 'buy' ? 'Bought' : 'Sold'}
+            subColor={t.side === 'buy' ? C.up : C.down}
+          />
         )}
       />
     </View>
@@ -114,10 +112,7 @@ export default function WalletScreen() {
 }
 
 const Stat = ({ label, value, color, wide }: { label: string; value: string; color?: string; wide?: boolean }) => (
-  <View style={[s.stat, wide && { flexBasis: '22%' }]}>
-    <Text style={s.statLabel}>{label}</Text>
-    <Text style={[s.statVal, color ? { color } : null]}>{value}</Text>
-  </View>
+  <UiStat label={label} value={value} color={color} style={{ flexBasis: wide ? '22%' : '45%' }} />
 );
 
 const s = StyleSheet.create({
@@ -125,23 +120,12 @@ const s = StyleSheet.create({
   title: { flexShrink: 1 },
   head: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  addr: { color: C.dim, fontSize: 13, fontVariant: ['tabular-nums'] },
+  addr: T.metaNum,
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  stat: { flexGrow: 1, flexBasis: '45%', backgroundColor: C.card, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: C.border },
-  statLabel: { color: C.dim, fontSize: 11, fontWeight: '600', letterSpacing: 0.3 },
-  statVal: { color: C.text, fontSize: 21, fontWeight: '600', marginTop: 2, fontVariant: ['tabular-nums'] },
-  follow: { backgroundColor: C.accent, borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
-  following: { backgroundColor: C.card, borderWidth: 1, borderColor: C.border },
-  followTxt: { color: C.accentInk, fontWeight: '600' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, borderWidth: 1, borderColor: C.border, paddingHorizontal: 10, paddingVertical: 4 },
-  chipTxt: { color: C.text, fontWeight: '600', fontSize: 13 },
-  chipMeta: { color: C.dim, fontSize: 12 },
-  note: { color: C.dim, fontSize: 13, lineHeight: 18 },
+  chipTxt: { ...T.label, color: C.text },
+  chipMeta: T.metaNum,
+  note: T.meta,
   section: { ...T.title, marginTop: 8 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
-  name: { color: C.text, fontWeight: '600' },
-  meta: { color: C.dim, fontSize: 12 },
-  side: { fontWeight: '600', fontSize: 11, letterSpacing: 0.3 },
-  price: { color: C.text, fontWeight: '600', width: 82, textAlign: 'right', fontVariant: ['tabular-nums'] },
 });

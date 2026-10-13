@@ -5,6 +5,7 @@ import { DepositSheet } from '@/components/deposit-sheet';
 import { ModeChip } from '@/components/mode-toggle';
 import { NftImage } from '@/components/nft-image';
 import { C } from '@/constants/brand';
+import { T } from '@/constants/type';
 import { api, type BuyQuote } from '@/lib/api';
 import { sol } from '@/lib/format';
 import { useWallet } from '@/lib/wallet';
@@ -122,19 +123,19 @@ const s = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: '#000000AA', alignItems: 'center', justifyContent: 'center', padding: 16 },
   sheet: { width: '100%', maxWidth: 440, backgroundColor: C.card, borderRadius: 20, padding: 20, gap: 14, borderWidth: 1, borderColor: C.border },
   head: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  title: { color: C.text, fontSize: 21, fontWeight: '600' },
+  title: T.title,
   item: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   loading: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 20, justifyContent: 'center' },
-  name: { color: C.text, fontWeight: '600', fontSize: 15 },
-  price: { color: C.text, fontWeight: '600', fontSize: 21, fontVariant: ['tabular-nums'], marginTop: 2 },
-  meta: { color: C.dim, fontSize: 13, lineHeight: 18 },
+  name: T.bodyStrong,
+  price: { ...T.value, marginTop: 2 },
+  meta: T.meta,
   rows: { gap: 8, padding: 12, borderRadius: 12, backgroundColor: C.cardHi },
   row: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
-  val: { color: C.text, fontSize: 13, fontVariant: ['tabular-nums'] },
-  err: { color: C.down, fontSize: 13 },
+  val: { ...T.metaNum, color: C.text },
+  err: { ...T.meta, color: C.down },
   primary: { backgroundColor: C.accent, borderRadius: 12, paddingVertical: 13, alignItems: 'center' },
-  primaryTxt: { color: C.accentInk, fontWeight: '600', fontSize: 15 },
+  primaryTxt: { ...T.button, color: C.accentInk },
   footer: { flexDirection: 'row', gap: 10 },
   secondary: { borderRadius: 12, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: C.border, backgroundColor: C.cardHi },
-  secondaryTxt: { color: C.text, fontWeight: '600' },
+  secondaryTxt: { ...T.button, color: C.text },
 });

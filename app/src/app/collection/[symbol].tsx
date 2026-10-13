@@ -16,6 +16,7 @@ import { NftImage, Pill } from '@/components/nft-image';
 import { PriceChart } from '@/components/price-chart';
 import { Empty } from '@/components/screen';
 import { TopNav } from '@/components/top-nav';
+import { Chip, Stat as UiStat } from '@/components/ui';
 import { C } from '@/constants/brand';
 import { T, display } from '@/constants/type';
 import { api, type CollectionDetail } from '@/lib/api';
@@ -161,11 +162,11 @@ export default function CollectionScreen() {
             <Pressable style={s.listRow}>
               <Text style={s.rank}>{i + 1}</Text>
               <Avatar t={f} size={32} />
-              <View style={{ flex: 1 }}>
-                <Text style={s.rowTitle} numberOfLines={1}>{f.name ?? shortAddr(f.wallet)}</Text>
-                <Text style={s.rowMeta}>{f.wins}/{f.flips} profitable flips</Text>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={T.bodyStrong} numberOfLines={1}>{f.name ?? shortAddr(f.wallet)}</Text>
+                <Text style={T.metaNum}>{f.wins} of {f.flips} flips profitable</Text>
               </View>
-              <Text style={[s.rowVal, { color: f.realizedSol >= 0 ? C.up : C.down }]}>{signedSol(f.realizedSol, 2, cur)}</Text>
+              <Text style={[T.num, { color: f.realizedSol >= 0 ? C.up : C.down }]}>{signedSol(f.realizedSol, 2, cur)}</Text>
             </Pressable>
           </Link>
         ))}
@@ -250,12 +251,8 @@ export default function CollectionScreen() {
             <>
               {/* One filter row, above everything it scopes */}
               <View style={s.filters}>
-                {RANGES.map((r) => (
-                  <Pressable key={r} onPress={() => pickRange(r)} style={[s.chip, range === r && s.chipOn]}>
-                    <Text style={[s.chipTxt, range === r && { color: C.accentInk }]}>{r === 1 ? '24H' : `${r}D`}</Text>
-                  </Pressable>
-                ))}
-                {partial && <Text style={s.note}>tracking since {fmtDay(data.historyStartsAt!)}</Text>}
+                {RANGES.map((r) => <Chip key={r} label={r === 1 ? '24H' : `${r}D`} on={range === r} onPress={() => pickRange(r)} />)}
+                {partial && <Text style={s.note}>Tracking since {fmtDay(data.historyStartsAt!)}</Text>}
               </View>
 
               {wide ? (
@@ -337,57 +334,46 @@ const Section = ({ title, sub, children }: { title: string; sub?: string; childr
   </View>
 );
 
+// Header stats: label over value, on the page background (no tiles).
 const Stat = ({ label, value, sub }: { label: string; value: string; sub?: string }) => (
-  <View style={[s.stat, !useLayout().wide && { flexBasis: '42%' }]}>
-    <Text style={s.statVal}>{value}</Text>
-    <Text style={s.statLabel}>{label}{sub ? <Text style={s.statSub}>  ·  {sub}</Text> : null}</Text>
-  </View>
+  <UiStat tone="plain" label={label} value={value} sub={sub} style={!useLayout().wide ? { flexBasis: '42%' } : undefined} />
 );
 
 const s = StyleSheet.create({
   banner: { width: '100%', backgroundColor: C.card, overflow: 'hidden' },
   page: { width: '100%', alignSelf: 'center', gap: 16 },
-  hero: { flexDirection: 'row', alignItems: 'flex-end', gap: 18 },
+  hero: { flexDirection: 'row', alignItems: 'flex-end', gap: 16 },
   avatarRing: { borderWidth: 4, borderColor: C.bg, backgroundColor: C.bg },
   titleRow: { flex: 1, gap: 6, paddingBottom: 6 },
   title: { color: C.text, fontSize: 28, fontWeight: '600', letterSpacing: -0.5 },
   badgeRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  desc: { color: C.dim, fontSize: 13, lineHeight: 19 },
-  about: { fontSize: 15, lineHeight: 21 },
-  stats: { flexDirection: 'row', flexWrap: 'wrap', gap: 22, rowGap: 14, paddingVertical: 4 },
-  stat: { gap: 2 },
-  statVal: { color: C.text, fontSize: 21, fontWeight: '600', fontVariant: ['tabular-nums'] },
-  statLabel: { color: C.dim, fontSize: 13, fontWeight: '600' },
-  statSub: { color: C.dim, fontWeight: '400' },
+  desc: T.meta,
+  about: { ...T.body, color: C.dim },
+  stats: { flexDirection: 'row', flexWrap: 'wrap', gap: 24, rowGap: 16, paddingVertical: 4 },
   actions: { flexDirection: 'row', gap: 10 },
   statsWide: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' },
-  cta: { backgroundColor: C.accent, borderRadius: 12, paddingVertical: 13, paddingHorizontal: 28, alignItems: 'center' },
-  ctaTxt: { color: C.accentInk, fontWeight: '600', fontSize: 15 },
-  ctaAlt: { borderRadius: 12, paddingVertical: 13, paddingHorizontal: 24, alignItems: 'center', borderWidth: 1, borderColor: C.border, backgroundColor: C.card },
-  ctaAltTxt: { color: C.text, fontWeight: '600', fontSize: 15 },
+  cta: { backgroundColor: C.accent, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 24, alignItems: 'center' },
+  ctaTxt: { ...T.button, color: C.accentInk },
+  ctaAlt: { borderRadius: 12, paddingVertical: 12, paddingHorizontal: 24, alignItems: 'center', borderWidth: 1, borderColor: C.border, backgroundColor: C.cardHi },
+  ctaAltTxt: { ...T.button, color: C.text },
   filters: { flexDirection: 'row', gap: 8, alignItems: 'center', marginTop: 4 },
-  chip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, backgroundColor: C.card, borderWidth: 1, borderColor: C.border },
-  chipOn: { backgroundColor: C.accent, borderColor: C.accent },
-  chipTxt: { color: C.text, fontWeight: '600', fontSize: 13 },
-  note: { color: C.dim, fontSize: 12, marginLeft: 4 },
+  note: { ...T.caption, marginLeft: 4 },
   cols: { flexDirection: 'row', gap: 16, alignItems: 'flex-start' },
-  card: { backgroundColor: C.card, borderRadius: 18, padding: 16, gap: 8, borderWidth: 1, borderColor: C.border },
+  card: { backgroundColor: C.card, borderRadius: 16, padding: 16, gap: 10, borderWidth: 1, borderColor: C.border },
   cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  cardTitle: { color: C.text, fontSize: 15, fontWeight: '600' },
-  sectionTitle: { color: C.text, fontSize: 21, fontWeight: '600', letterSpacing: -0.3 },
-  link: { color: C.accent, fontWeight: '600', fontSize: 13 },
+  cardTitle: T.bodyStrong,
+  sectionTitle: T.title,
+  link: { ...T.label, color: C.accent },
   tRow: { flexDirection: 'row', paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
-  tHead: { color: C.dim, fontSize: 11, fontWeight: '600', letterSpacing: 0.3 },
-  tCell: { color: C.text, fontSize: 13, fontVariant: ['tabular-nums'] },
+  tHead: { ...T.caption, fontWeight: '500', color: C.dim },
+  tCell: { ...T.metaNum, color: C.text },
   num: { flex: 1, textAlign: 'right' },
   listRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 },
-  rank: { color: C.dim, width: 18, fontWeight: '600' },
-  rowTitle: { color: C.text, fontWeight: '600' },
-  rowMeta: { color: C.dim, fontSize: 12 },
-  rowVal: { color: C.text, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  rank: { ...T.num, color: C.dim, width: 18 },
+  rowMeta: T.metaNum,
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  item: { backgroundColor: C.card, borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: C.border },
+  item: { backgroundColor: C.card, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: C.border },
   itemBody: { padding: 10, gap: 2 },
-  itemName: { color: C.dim, fontSize: 13, fontWeight: '600' },
-  itemPrice: { color: C.text, fontSize: 15, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  itemName: T.caption,
+  itemPrice: T.num,
 });

@@ -3,7 +3,9 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/event-card';
 import { Sparkline } from '@/components/sparkline';
+import { FollowButton, Stat } from '@/components/ui';
 import { C } from '@/constants/brand';
+import { T } from '@/constants/type';
 import type { TraderProfile } from '@/lib/api';
 import { holdTime, pct, shortAddr, signedSol, timeAgo, unitFor } from '@/lib/format';
 
@@ -15,102 +17,83 @@ export function TraderCard({ t, rank, following, onToggleFollow }: {
 }) {
   const up = t.realizedSol >= 0;
   const u = unitFor(t.wallet);
+  const notes = [
+    t.bestFlip && `Best flip ${signedSol(t.bestFlip.pnlSol, 2, u)} on ${t.bestFlip.collection}.`,
+    t.worstFlipSol != null && t.worstFlipSol < 0 && `Worst ${signedSol(t.worstFlipSol, 2, u)}.`,
+    u === 'SOL'
+      ? `${Math.round(t.poolShare * 100)}% of trades through AMM pools.`
+      : `${Math.round((t.bidBuyShare ?? 0) * 100)}% of buys filled by accepted bids.`,
+  ].filter(Boolean).join(' ');
   return (
     // Plain Pressable + router.push (not <Link>): on web a Link renders an <a>,
     // and the nested Follow button would trigger navigation too.
     <Pressable style={s.card} onPress={() => router.push({ pathname: '/wallet/[address]', params: { address: t.wallet } })}>
-        <View style={s.row}>
-          <Text style={[s.rank, rank <= 3 && { color: C.accent }]}>{rank}</Text>
-          <Avatar t={t} size={40} />
-          <View style={{ flex: 1, gap: 4 }}>
-            <Text style={s.addr} numberOfLines={1}>{t.name ?? shortAddr(t.wallet)}</Text>
-            <View style={s.badges}>
-              {t.streak >= 3 && <Badge text={`${t.streak} win streak`} tone="up" />}
-              {t.likelyMarketMaker && <Badge text="Likely market maker" tone="dim" />}
-              {t.lastActive != null && <Badge text={`active ${timeAgo(t.lastActive)} ago`} tone="dim" />}
-            </View>
+      <View style={s.row}>
+        <Text style={[T.title, s.rank, rank <= 3 && { color: C.accent }]}>{rank}</Text>
+        <Avatar t={t} size={40} />
+        <View style={{ flex: 1, gap: 4, minWidth: 0 }}>
+          <Text style={T.bodyStrong} numberOfLines={1}>{t.name ?? shortAddr(t.wallet)}</Text>
+          <View style={s.badges}>
+            {t.streak >= 3 && <Badge text={`${t.streak} wins in a row`} tone="up" />}
+            {t.likelyMarketMaker && <Badge text="Likely market maker" tone="dim" />}
+            {t.lastActive != null && <Text style={T.caption}>Active {timeAgo(t.lastActive)} ago</Text>}
           </View>
-          <Pressable hitSlop={10} onPress={onToggleFollow} style={[s.follow, following && s.following]}>
-            <Text style={[s.followTxt, following && { color: C.dim }]}>{following ? 'Following' : 'Follow'}</Text>
-          </Pressable>
         </View>
+        <FollowButton on={following} onPress={onToggleFollow} />
+      </View>
 
-        <View style={[s.row, { alignItems: 'flex-end' }]}>
-          <View style={{ flex: 1 }}>
-            <Text style={s.label}>Realized P&L</Text>
-            <Text numberOfLines={1} style={[s.pnl, { color: up ? C.up : C.down }]}>{signedSol(t.realizedSol, 2, u)}</Text>
-          </View>
-          {t.roiPct != null && (
-            <View style={[s.roi, { backgroundColor: (t.roiPct >= 0 ? C.up : C.down) + '22' }]}>
-              <Text style={[s.roiTxt, { color: t.roiPct >= 0 ? C.up : C.down }]}>{pct(t.roiPct)} ROI</Text>
-            </View>
-          )}
-          <Sparkline values={t.series} width={84} height={34} />
+      <View style={[s.row, { alignItems: 'flex-end' }]}>
+        <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
+          <Text style={T.label}>Realized profit</Text>
+          <Text numberOfLines={1} style={[T.value, { color: up ? C.up : C.down }]}>{signedSol(t.realizedSol, 2, u)}</Text>
         </View>
-
-        <View style={s.grid}>
-          <Stat label="Win rate" value={t.winRate == null ? '—' : `${Math.round(t.winRate * 100)}%`} sub={`${t.wins}/${t.flips} flips`} />
-          <Stat label="Avg / flip" value={t.avgPnlSol == null ? '—' : signedSol(t.avgPnlSol, 2, u).replace(` ${u}`, '')} sub={u} />
-          <Stat label="Avg hold" value={t.avgHoldHours == null ? '—' : holdTime(t.avgHoldHours)} />
-          <Stat label="Holding" value={String(t.openPositions)} sub={t.openPositions ? `${signedSol(t.unrealizedSol, 2, u)} open` : undefined} />
-        </View>
-
-        {t.collections.length > 0 && (
-          <View style={s.chips}>
-            {t.collections.map((c) => (
-              <View key={c.symbol} style={s.chip}>
-                <Text style={s.chipTxt} numberOfLines={1}>{c.name}</Text>
-                <Text style={s.chipMeta}>×{c.flips} · <Text style={{ color: c.pnlSol >= 0 ? C.up : C.down }}>{signedSol(c.pnlSol, 1, u)}</Text></Text>
-              </View>
-            ))}
+        {t.roiPct != null && (
+          <View style={[s.roi, { backgroundColor: (t.roiPct >= 0 ? C.up : C.down) + '22' }]}>
+            <Text style={[T.label, { color: t.roiPct >= 0 ? C.up : C.down }]}>{pct(t.roiPct)} ROI</Text>
           </View>
         )}
+        <Sparkline values={t.series} width={84} height={34} />
+      </View>
 
-        <Text style={s.foot}>
-          {t.bestFlip ? <>Best flip <Text style={{ color: C.up }}>{signedSol(t.bestFlip.pnlSol, 2, u)}</Text> on {t.bestFlip.collection}</> : null}
-          {t.worstFlipSol != null && t.worstFlipSol < 0 ? <> · worst <Text style={{ color: C.down }}>{signedSol(t.worstFlipSol, 2, u)}</Text></> : null}
-          {u === 'SOL' ? ` · ${Math.round(t.poolShare * 100)}% of trades via AMM pools` : ` · ${Math.round((t.bidBuyShare ?? 0) * 100)}% of buys via accepted bids`}
-        </Text>
+      <View style={s.grid}>
+        <Stat tone="inset" style={s.stat} label="Win rate" value={t.winRate == null ? '—' : `${Math.round(t.winRate * 100)}%`} sub={`${t.wins} of ${t.flips}`} />
+        <Stat tone="inset" style={s.stat} label="Per flip" value={t.avgPnlSol == null ? '—' : signedSol(t.avgPnlSol, 2, u)} />
+        <Stat tone="inset" style={s.stat} label="Avg hold" value={t.avgHoldHours == null ? '—' : holdTime(t.avgHoldHours)} />
+        <Stat tone="inset" style={s.stat} label="Holding" value={String(t.openPositions)} sub={t.openPositions ? signedSol(t.unrealizedSol, 2, u) : undefined} />
+      </View>
+
+      {t.collections.length > 0 && (
+        <View style={s.chips}>
+          {t.collections.map((c) => (
+            <View key={c.symbol} style={s.chip}>
+              <Text style={[T.label, { color: C.text, flexShrink: 1 }]} numberOfLines={1}>{c.name}</Text>
+              <Text style={T.metaNum}>×{c.flips} <Text style={{ color: c.pnlSol >= 0 ? C.up : C.down }}>{signedSol(c.pnlSol, 1, u)}</Text></Text>
+            </View>
+          ))}
+        </View>
+      )}
+
+      <Text style={T.caption}>{notes}</Text>
     </Pressable>
   );
 }
 
 const Badge = ({ text, tone }: { text: string; tone: 'up' | 'dim' }) => (
   <View style={[s.badge, tone === 'up' && { backgroundColor: C.up + '22', borderColor: C.up + '55' }]}>
-    <Text style={[s.badgeTxt, tone === 'up' && { color: C.up }]}>{text}</Text>
-  </View>
-);
-
-const Stat = ({ label, value, sub }: { label: string; value: string; sub?: string }) => (
-  <View style={s.stat}>
-    <Text style={s.label}>{label}</Text>
-    <Text style={s.statVal}>{value}</Text>
-    {sub ? <Text style={s.statSub}>{sub}</Text> : null}
+    <Text style={[T.caption, { color: tone === 'up' ? C.up : C.dim }]}>{text}</Text>
   </View>
 );
 
 const s = StyleSheet.create({
-  card: { backgroundColor: C.card, borderRadius: 18, padding: 14, gap: 12, borderWidth: 1, borderColor: C.border },
+  card: { backgroundColor: C.card, borderRadius: 16, padding: 16, gap: 14, borderWidth: 1, borderColor: C.border },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  rank: { color: C.dim, width: 22, fontWeight: '600', fontSize: 18 },
-  addr: { color: C.text, fontWeight: '600', fontSize: 15 },
-  badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  badge: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2, borderWidth: 1, borderColor: C.border, backgroundColor: C.cardHi },
-  badgeTxt: { color: C.dim, fontSize: 11, fontWeight: '600' },
-  follow: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: C.text },
-  following: { backgroundColor: 'transparent', borderWidth: 1, borderColor: C.border },
-  followTxt: { color: C.bg, fontWeight: '600', fontSize: 13 },
-  label: { color: C.dim, fontSize: 12, fontWeight: '600' },
-  pnl: { fontSize: 21, lineHeight: 26, fontWeight: '600', letterSpacing: -0.2, fontVariant: ['tabular-nums'], flexShrink: 1 },
-  roi: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, marginBottom: 4 },
-  roiTxt: { fontWeight: '600', fontSize: 13 },
-  grid: { flexDirection: 'row', gap: 6 },
-  stat: { flex: 1, backgroundColor: C.cardHi, borderRadius: 10, padding: 8, gap: 1 },
-  statVal: { color: C.text, fontWeight: '600', fontSize: 15 },
-  statSub: { color: C.dim, fontSize: 11 },
+  rank: { width: 22, color: C.dim },
+  badges: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
+  badge: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 1, borderWidth: 1, borderColor: C.border, backgroundColor: C.cardHi },
+  roi: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, marginBottom: 2 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  // Four across on wide cards, two by two on phones.
+  stat: { flexBasis: 0, flexGrow: 1, minWidth: 128 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, borderWidth: 1, borderColor: C.border, paddingHorizontal: 10, paddingVertical: 4, maxWidth: '100%' },
-  chipTxt: { color: C.text, fontWeight: '600', fontSize: 13, flexShrink: 1 },
-  chipMeta: { color: C.dim, fontSize: 12 },
-  foot: { color: C.dim, fontSize: 12, lineHeight: 17 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 999, borderWidth: 1, borderColor: C.border, paddingHorizontal: 10, paddingVertical: 4, maxWidth: '100%' },
 });

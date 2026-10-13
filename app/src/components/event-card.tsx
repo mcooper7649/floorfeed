@@ -9,7 +9,9 @@ import { EvmBuySheet } from '@/components/evm-buy-sheet';
 import { CollIcon } from '@/components/coll-icon';
 import { MODE_COLOR } from '@/components/mode-toggle';
 import { NftImage, Pill } from '@/components/nft-image';
+import { FollowButton } from '@/components/ui';
 import { C } from '@/constants/brand';
+import { T } from '@/constants/type';
 import {
   api, type BuyEvent, type ClusterEvent, type FeedEvent, type FlipEvent, type SweepEvent, type Take, type Tier, type Trader,
 } from '@/lib/api';
@@ -55,10 +57,10 @@ export function Avatar({ t, size = 36, ring }: { t: Who; size?: number; ring?: b
 }
 
 const TIER: Record<Exclude<Tier, null>, { label: string; color: string }> = {
-  elite: { label: 'TOP FLIPPER', color: C.accent },
-  pro: { label: 'PROVEN', color: C.up },
-  mm: { label: 'MARKET MAKER', color: C.dim },
-  new: { label: 'NEW', color: C.dim },
+  elite: { label: 'Top flipper', color: C.accent },
+  pro: { label: 'Proven', color: C.up },
+  mm: { label: 'Market maker', color: C.dim },
+  new: { label: 'New', color: C.dim },
 };
 
 export function TierBadge({ tier }: { tier: Tier }) {
@@ -96,9 +98,7 @@ function TraderRow({ t }: { t: Trader }) {
           </View>
         </Pressable>
       </Link>
-      <Pressable onPress={() => toggleFollow(t.wallet)} style={on ? s.following : s.follow}>
-        <Text style={[s.followTxt, on && { color: C.dim }]}>{on ? 'Following' : 'Follow'}</Text>
-      </Pressable>
+      <FollowButton on={on} onPress={() => toggleFollow(t.wallet)} />
     </View>
   );
 }
@@ -204,7 +204,7 @@ function BuyCard({ e, tile }: { e: BuyEvent; tile?: boolean }) {
   const below = e.vsFloorPct != null && e.vsFloorPct <= 0;
   const aiTake = takeState !== 'none' && (
     <View style={s.take}>
-      <Text style={s.takeLabel}>AI TAKE</Text>
+      <Text style={s.takeLabel}>AI take</Text>
       {takeState === 'loading' ? (
         <View style={s.row}><ActivityIndicator size="small" color={C.ai} /><Text style={s.meta}>  reading this trade…</Text></View>
       ) : (
@@ -288,7 +288,7 @@ function FlipCard({ e, tile }: { e: FlipEvent; tile?: boolean }) {
         <Link href={itemHref(e.collection.symbol, e.mint)} asChild>
           <Pressable>
             <NftImage uri={e.image} name={e.collection.name}>
-              <Pill text={`${win ? 'WIN' : 'LOSS'} ${pct(e.pnlPct)}`} tone={win ? 'up' : 'down'} style={{ top: 10, left: 10 }} />
+              <Pill text={`${win ? 'Win' : 'Loss'} ${pct(e.pnlPct)}`} tone={win ? 'up' : 'down'} style={{ top: 10, left: 10 }} />
               <Pill text={`${timeAgo(e.t)} ago`} style={{ top: 10, right: 10 }} />
             </NftImage>
           </Pressable>
@@ -305,7 +305,7 @@ function FlipCard({ e, tile }: { e: FlipEvent; tile?: boolean }) {
   }
   return (
     <Card>
-      <Kicker text={win ? 'WIN' : 'LOSS'} color={color} />
+      <Kicker text={win ? 'Win' : 'Loss'} color={color} />
       <TraderRow t={e.wallet} />
       <View style={s.trade}>
         <CollIcon name={e.collection.name} uri={e.image} size={96} radius={14} />
@@ -336,7 +336,7 @@ function SweepCard({ e, tile }: { e: SweepEvent; tile?: boolean }) {
     <Link href={collHref(e.collection.symbol)} asChild>
       <Pressable>
         <Mosaic images={e.images} name={e.collection.name} tile={tile}
-          badge={tile ? <Pill text={`SWEEP ×${e.count}`} style={{ top: 10, left: 10 }} /> : undefined} />
+          badge={tile ? <Pill text={`Sweep ×${e.count}`} style={{ top: 10, left: 10 }} /> : undefined} />
       </Pressable>
     </Link>
   );
@@ -355,7 +355,7 @@ function SweepCard({ e, tile }: { e: SweepEvent; tile?: boolean }) {
   }
   return (
     <Card>
-      <Kicker text={`SWEEP ×${e.count}`} color={C.accent} />
+      <Kicker text={`Sweep ×${e.count}`} color={C.accent} />
       <TraderRow t={e.wallet} />
       {detail}
       {art}
@@ -403,7 +403,7 @@ function ClusterCard({ e, tile }: { e: ClusterEvent; tile?: boolean }) {
     <Link href={collHref(e.collection.symbol)} asChild>
       <Pressable>
         <Mosaic images={e.images} name={e.collection.name} tile={tile}
-          badge={tile ? <Pill text="CLUSTER" style={{ top: 10, left: 10 }} /> : undefined} />
+          badge={tile ? <Pill text="Cluster" style={{ top: 10, left: 10 }} /> : undefined} />
       </Pressable>
     </Link>
   );
@@ -421,7 +421,7 @@ function ClusterCard({ e, tile }: { e: ClusterEvent; tile?: boolean }) {
   }
   return (
     <Card accent={C.accent + '66'}>
-      <Kicker text="CLUSTER" color={C.accent} />
+      <Kicker text="Cluster" color={C.accent} />
       {body}
       {art}
       <CopyCta coll={e.collection} />
@@ -430,41 +430,38 @@ function ClusterCard({ e, tile }: { e: ClusterEvent; tile?: boolean }) {
 }
 
 const s = StyleSheet.create({
-  card: { backgroundColor: C.card, borderRadius: 18, padding: 14, gap: 12, borderWidth: 1, borderColor: C.border },
+  card: { backgroundColor: C.card, borderRadius: 16, padding: 16, gap: 12, borderWidth: 1, borderColor: C.border },
   tile: { flex: 1, padding: 0, gap: 0, overflow: 'hidden' },
-  tileBody: { flex: 1, padding: 14, gap: 12 },
+  tileBody: { flex: 1, padding: 16, gap: 12 },
   row: { flexDirection: 'row', alignItems: 'center' },
   who: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
-  name: { color: C.text, fontWeight: '600', fontSize: 15, flexShrink: 1 },
+  name: { ...T.bodyStrong, flexShrink: 1 },
   avatar: { alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   avatarTxt: { color: C.text, fontWeight: '600' },
-  badge: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 5, paddingVertical: 1 },
-  badgeTxt: { fontSize: 11, fontWeight: '600', letterSpacing: 0.3 },
-  meta: { color: C.dim, fontSize: 13 },
-  follow: { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 7, backgroundColor: C.text },
-  following: { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 7, borderWidth: 1, borderColor: C.border },
-  followTxt: { color: C.bg, fontWeight: '600', fontSize: 13 },
+  badge: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 7, paddingVertical: 1 },
+  badgeTxt: { ...T.caption, fontWeight: '600' },
+  meta: T.metaNum,
   trade: { flexDirection: 'row', gap: 12, alignItems: 'center' },
-  verb: { color: C.dim, fontSize: 13 },
+  verb: T.meta,
   chev: { color: C.dim, fontSize: 28, fontWeight: '300', paddingHorizontal: 4 },
   coll: { color: C.text, fontWeight: '600' },
-  big: { color: C.text, fontSize: 21, fontWeight: '600', fontVariant: ['tabular-nums'] },
-  headline: { color: C.text, fontSize: 18, fontWeight: '600', lineHeight: 23 },
-  kicker: { fontSize: 11, fontWeight: '600', letterSpacing: 0.3, marginBottom: -4 },
+  big: T.value,
+  headline: T.title,
+  kicker: { ...T.label, fontWeight: '600', marginBottom: -4 },
   take: { backgroundColor: '#A78BFA14', borderRadius: 12, padding: 10, gap: 4, borderLeftWidth: 3, borderLeftColor: C.ai },
-  takeLabel: { color: C.ai, fontSize: 11, fontWeight: '600', letterSpacing: 0.3 },
-  takeTxt: { color: C.text, fontSize: 13, lineHeight: 19 },
+  takeLabel: { ...T.caption, color: C.ai, fontWeight: '600' },
+  takeTxt: { ...T.meta, color: C.text },
   cta: { backgroundColor: C.accent, borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
-  ctaTxt: { color: C.accentInk, fontWeight: '600', fontSize: 15 },
+  ctaTxt: { ...T.button, color: C.accentInk },
   ghost: { borderRadius: 12, paddingVertical: 11, alignItems: 'center', borderWidth: 1, borderColor: C.border },
-  ghostTxt: { color: C.text, fontWeight: '600', fontSize: 15 },
+  ghostTxt: { ...T.button, color: C.text },
   mosaic: { width: '100%', aspectRatio: 1, flexDirection: 'row', flexWrap: 'wrap' },
   cellFull: { width: '100%', height: '100%' },
   cellHalf: { width: '50%', height: '100%' },
   cellQuarter: { width: '50%', height: '50%' },
   cellStack: { width: '100%', height: '50%' },
-  banner: { flexDirection: 'row', height: 132, gap: 4, borderRadius: 14, overflow: 'hidden' },
+  banner: { flexDirection: 'row', height: 132, gap: 4, borderRadius: 12, overflow: 'hidden' },
   bannerCell: { flex: 1, height: '100%' },
   stack: { flexDirection: 'row' },
 });

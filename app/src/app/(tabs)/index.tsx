@@ -3,7 +3,9 @@ import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Tex
 
 import { EventCard } from '@/components/event-card';
 import { Empty, Screen } from '@/components/screen';
+import { Chip, ChipRow } from '@/components/ui';
 import { C } from '@/constants/brand';
+import { T } from '@/constants/type';
 import { api, type FeedChain, type FeedEvent, type FeedView } from '@/lib/api';
 import { columnsFor, useLayout } from '@/lib/layout';
 import { useSession } from '@/lib/session';
@@ -16,9 +18,9 @@ const CHAINS: { key: FeedChain; label: string }[] = [
 ];
 
 const VIEWS: { key: FeedView; label: string; hint: string }[] = [
-  { key: 'top', label: 'Top', hint: 'Ranked by who traded, how big, and how recently (72h)' },
-  { key: 'latest', label: 'Latest', hint: 'Every buy, flip and sweep as it lands' },
-  { key: 'wins', label: 'Wins', hint: 'Profitable flips, newest first' },
+  { key: 'top', label: 'Top', hint: 'The last 72 hours, ranked by who traded, how much and how recently.' },
+  { key: 'latest', label: 'Latest', hint: 'Every buy, flip and sweep as it happens.' },
+  { key: 'wins', label: 'Wins', hint: 'Profitable flips, newest first.' },
 ];
 
 export default function FeedScreen() {
@@ -62,36 +64,22 @@ export default function FeedScreen() {
 
   return (
     <Screen title="FloorFeed" subtitle="Live NFT trades from wallets with a track record">
-      <View style={[s.bar, { paddingHorizontal: pad }]}>
-        <View style={s.seg}>
-          {VIEWS.map((v) => (
-            <Pressable key={v.key} onPress={() => v.key !== view && pick(() => setView(v.key))}
-              style={view === v.key ? s.tabOn : s.tab}>
-              <Text style={[s.tabTxt, view === v.key && { color: C.text }]}>{v.label}</Text>
-            </Pressable>
-          ))}
-        </View>
-        <View style={s.seg}>
-          {(['all', 'following'] as const).map((m) => (
-            <Pressable key={m} onPress={() => m !== scope && pick(() => setScope(m))} style={[s.segBtn, scope === m && s.segOn]}>
-              <Text style={[s.segTxt, scope === m && { color: C.bg }]}>
-                {m === 'all' ? 'Everyone' : `Following${following.size ? ` (${following.size})` : ''}`}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
+      <View style={[s.tabs, { paddingHorizontal: pad }]}>
+        {VIEWS.map((v) => (
+          <Pressable key={v.key} accessibilityRole="tab" accessibilityState={{ selected: view === v.key }}
+            onPress={() => v.key !== view && pick(() => setView(v.key))} style={[s.tab, view === v.key && s.tabOn]}>
+            <Text style={[T.bodyStrong, { color: view === v.key ? C.text : C.dim }]}>{v.label}</Text>
+          </Pressable>
+        ))}
       </View>
-      <View style={[s.hintRow, { paddingHorizontal: pad }]}>
-        <Text style={s.hint}>{VIEWS.find((v) => v.key === view)!.hint}</Text>
-        <View style={s.chains}>
-          {CHAINS.map((c) => (
-            <Pressable key={c.key} accessibilityRole="button" accessibilityState={{ selected: chain === c.key }}
-              onPress={() => c.key !== chain && pick(() => setChain(c.key))} hitSlop={6}>
-              <Text style={[s.chainTxt, chain === c.key && s.chainOn]}>{c.label}</Text>
-            </Pressable>
-          ))}
-        </View>
-      </View>
+      <ChipRow pad={pad} groups={[
+        (['all', 'following'] as const).map((m) => (
+          <Chip key={m} on={scope === m} onPress={() => m !== scope && pick(() => setScope(m))}
+            label={m === 'all' ? 'Everyone' : `Following${following.size ? ` ${following.size}` : ''}`} />
+        )),
+        CHAINS.map((c) => <Chip key={c.key} label={c.label} on={chain === c.key} onPress={() => c.key !== chain && pick(() => setChain(c.key))} />),
+      ]} />
+      <Text style={[T.meta, s.hint, { paddingHorizontal: pad }]}>{VIEWS.find((v) => v.key === view)!.hint}</Text>
 
       {loading ? (
         <ActivityIndicator style={{ marginTop: 40 }} color={C.accent} />
@@ -125,18 +113,9 @@ export default function FeedScreen() {
 }
 
 const s = StyleSheet.create({
-  bar: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 10, paddingBottom: 6 },
-  seg: { flexDirection: 'row', gap: 8 },
-  tab: { paddingHorizontal: 4, paddingVertical: 6, borderBottomWidth: 2, borderBottomColor: 'transparent' },
-  tabOn: { paddingHorizontal: 4, paddingVertical: 6, borderBottomWidth: 2, borderBottomColor: C.accent },
-  tabTxt: { color: C.dim, fontWeight: '600', fontSize: 15, marginRight: 8 },
-  segBtn: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, backgroundColor: C.card, borderWidth: 1, borderColor: C.border },
-  segOn: { backgroundColor: C.accent, borderColor: C.accent },
-  segTxt: { color: C.text, fontWeight: '600', fontSize: 13 },
-  hintRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', columnGap: 12, rowGap: 6, paddingBottom: 12 },
-  hint: { color: C.dim, fontSize: 13 },
-  chains: { flexDirection: 'row', gap: 12 },
-  chainTxt: { color: C.muted, fontSize: 13, fontWeight: '600' },
-  chainOn: { color: C.text, textDecorationLine: 'underline' },
+  tabs: { flexDirection: 'row', gap: 20, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border, marginBottom: 6 },
+  tab: { paddingVertical: 10, borderBottomWidth: 2, borderBottomColor: 'transparent', marginBottom: -StyleSheet.hairlineWidth },
+  tabOn: { borderBottomColor: C.accent },
+  hint: { paddingTop: 2, paddingBottom: 12 },
   list: { paddingBottom: 120 },
 });

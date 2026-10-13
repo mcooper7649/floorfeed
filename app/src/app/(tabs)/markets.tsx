@@ -7,6 +7,7 @@ import { CollIcon } from '@/components/coll-icon';
 import { NftImage } from '@/components/nft-image';
 import { Empty, Screen } from '@/components/screen';
 import { Sparkline } from '@/components/sparkline';
+import { Chip, ChipRow, Stat } from '@/components/ui';
 import { C } from '@/constants/brand';
 import { T } from '@/constants/type';
 import { api, type Chain, type CollectionSummary, type MarketCategory } from '@/lib/api';
@@ -104,10 +105,10 @@ export default function MarketsScreen() {
   const header = (
     <View style={{ gap: 14 }}>
       <View style={s.tiles}>
-        <Tile label="7d volume" value={totalVol ? usdCompact(totalVol) : '—'} />
-        {wide && <Tile label="24h volume" value={vol24 ? usdCompact(vol24) : '—'} />}
-        <Tile label="Collections" value={String(rows.length || '—')} />
-        <Tile label="Chains" value={String(chains || '—')} />
+        <Stat label="7d volume" value={totalVol ? usdCompact(totalVol) : '—'} style={s.tile} />
+        {wide && <Stat label="24h volume" value={vol24 ? usdCompact(vol24) : '—'} style={s.tile} />}
+        <Stat label="Collections" value={String(rows.length || '—')} style={s.tile} />
+        <Stat label="Chains" value={String(chains || '—')} style={s.tile} />
       </View>
 
       {trending.length > 0 && !query && cat === 'all' && chain === 'all' && (
@@ -161,21 +162,15 @@ export default function MarketsScreen() {
           autoCapitalize="none"
           clearButtonMode="while-editing"
         />
-        <View style={wide ? { flex: 1, gap: 8 } : { gap: 8 }}>
-          <ChipRow items={CHAINS} value={chain} onChange={setChain} />
-          <ChipRow items={CATS} value={cat} onChange={setCat} />
+        <View style={wide ? { flex: 1 } : null}>
+          <ChipRow groups={[
+            <Chips key="c" items={CHAINS} value={chain} onChange={setChain} />,
+            // Phones have no sortable table header, so sorting lives here.
+            !wide && <Chips key="s" items={SORTS} value={sort} onChange={setSort} />,
+          ]} />
+          <ChipRow groups={[<Chips key="k" items={CATS} value={cat} onChange={setCat} />]} />
         </View>
       </View>
-      {!wide && (
-        <View style={s.sortRow}>
-          <Text style={s.meta}>Sort</Text>
-          {SORTS.map((o) => (
-            <Pressable key={o.key} onPress={() => setSort(o.key)} hitSlop={6}>
-              <Text style={[s.sortTxt, sort === o.key && s.sortOn]}>{o.label}</Text>
-            </Pressable>
-          ))}
-        </View>
-      )}
 
       {activeCat && (
         <View style={s.catHead}>
@@ -187,16 +182,16 @@ export default function MarketsScreen() {
         </View>
       )}
 
-      <Text style={s.count}>
+      <Text style={[T.meta, { paddingBottom: 4 }]}>
         {visible.length} {visible.length === 1 ? 'collection' : 'collections'}
-        {sort === 'change' ? ' · floor change builds up from our own snapshots' : ''}
+        {sort === 'change' ? '. Floor change uses our own price snapshots, so new collections fill in over time.' : ''}
       </Text>
       {wide && <TableHead sort={sort} onSort={setSort} />}
     </View>
   );
 
   return (
-    <Screen title="Markets" subtitle="NFT collections on Solana, Ethereum, Base and Polygon, ranked in USD">
+    <Screen title="Markets" subtitle="NFT collections on Solana, Ethereum, Base and Polygon, ranked by volume in USD">
       <FlatList
         data={visible}
         keyExtractor={(r) => r.symbol}
@@ -355,76 +350,46 @@ function TableRow({ c, rank, watched, onWatch }: { c: CollectionSummary; rank: n
   );
 }
 
-function ChipRow<K extends string>({ items, value, onChange }: { items: { key: K; label: string }[]; value: K; onChange: (k: K) => void }) {
-  // Fixed-height wrapper: a horizontal ScrollView collapses its height on web.
-  return (
-    <View style={{ height: 36 }}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, alignItems: 'center' }}>
-        {items.map((i) => (
-          <Pressable key={i.key} onPress={() => onChange(i.key)} style={[s.chip, value === i.key && s.chipOn]}>
-            <Text style={[s.chipTxt, value === i.key && { color: C.accentInk }]}>{i.label}</Text>
-          </Pressable>
-        ))}
-      </ScrollView>
-    </View>
-  );
+function Chips<K extends string>({ items, value, onChange }: { items: { key: K; label: string }[]; value: K; onChange: (k: K) => void }) {
+  return items.map((i) => <Chip key={i.key} label={i.label} on={value === i.key} onPress={() => onChange(i.key)} />);
 }
-
-const Tile = ({ label, value }: { label: string; value: string }) => (
-  <View style={s.tile}>
-    <Text style={s.tileLabel}>{label}</Text>
-    <Text style={s.tileVal}>{value}</Text>
-  </View>
-);
 
 const s = StyleSheet.create({
   tiles: { flexDirection: 'row', gap: 8 },
-  tile: { flex: 1, backgroundColor: C.card, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: C.border },
-  tileLabel: { color: C.dim, fontSize: 12, fontWeight: '600' },
-  tileVal: { color: C.text, fontSize: 21, fontWeight: '600', marginTop: 2 },
+  tile: { flex: 1, flexBasis: 0 },
   section: { ...T.title },
   catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   catCard: { backgroundColor: C.card, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: C.border },
   mosaic: { flexDirection: 'row', gap: 2, backgroundColor: C.border },
   catBody: { padding: 12, gap: 4 },
-  catName: { color: C.text, fontWeight: '600', fontSize: 15 },
-  catBlurb: { color: C.dim, fontSize: 12, lineHeight: 16 },
-  catHead: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.card, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: C.border },
-  catHeadName: { color: C.text, fontWeight: '600', fontSize: 18 },
-  clear: { color: C.accent, fontWeight: '600' },
+  catName: T.bodyStrong,
+  catBlurb: T.caption,
+  catHead: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.card, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: C.border },
+  catHeadName: T.title,
+  clear: { ...T.label, color: C.accent },
   trend: { backgroundColor: C.card, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: C.border },
   trendRank: { position: 'absolute', top: 8, left: 8, minWidth: 26, height: 26, borderRadius: 8, backgroundColor: '#0B0B10CC', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
-  trendRankTxt: { color: C.text, fontWeight: '600', fontSize: 13 },
-  trendBody: { padding: 10, gap: 8 },
+  trendRankTxt: { ...T.label, color: C.text },
+  trendBody: { padding: 12, gap: 8 },
   trendStats: { flexDirection: 'row', justifyContent: 'space-between' },
-  trendLabel: { color: C.dim, fontSize: 11, fontWeight: '600' },
-  trendVal: { color: C.text, fontWeight: '600', fontSize: 13, fontVariant: ['tabular-nums'] },
+  trendLabel: T.caption,
+  trendVal: { ...T.num, fontSize: 13 },
   filterWide: { flexDirection: 'row', gap: 16, alignItems: 'flex-start' },
   thRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: C.border, marginTop: 4 },
-  th: { color: C.dim, fontSize: 12, fontWeight: '600', letterSpacing: 0.3 },
+  th: { ...T.caption, fontWeight: '500', color: C.dim },
   tr: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
   trMain: { flex: 1, flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
-  rankTxt: { color: C.dim, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  rankTxt: { ...T.num, color: C.dim },
   nameCell: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingRight: 12 },
-  td: { color: C.text, fontWeight: '600', fontSize: 15, fontVariant: ['tabular-nums'] },
-  search: {
-    backgroundColor: C.card, borderRadius: 12, borderWidth: 1, borderColor: C.border,
-    color: C.text, paddingHorizontal: 14, paddingVertical: 11, fontSize: 15,
-  },
-  chip: { paddingHorizontal: 13, paddingVertical: 7, borderRadius: 999, backgroundColor: C.card, borderWidth: 1, borderColor: C.border },
-  chipOn: { backgroundColor: C.accent, borderColor: C.accent },
-  chipTxt: { color: C.text, fontWeight: '600', fontSize: 13 },
-  sortRow: { flexDirection: 'row', gap: 14, alignItems: 'center', paddingTop: 2 },
-  sortTxt: { color: C.dim, fontWeight: '600', fontSize: 13 },
-  sortOn: { color: C.text, textDecorationLine: 'underline' },
-  count: { color: C.dim, fontSize: 12, paddingBottom: 4 },
+  td: T.num,
+  search: { ...T.body, backgroundColor: C.card, borderRadius: 12, borderWidth: 1, borderColor: C.border, paddingHorizontal: 14, paddingVertical: 11 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
   rowMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
   star: { color: C.dim, fontSize: 18, width: 20, textAlign: 'center' },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  name: { color: C.text, fontWeight: '600', fontSize: 15, flexShrink: 1 },
-  meta: { color: C.dim, fontSize: 12 },
+  name: { ...T.bodyStrong, flexShrink: 1 },
+  meta: T.metaNum,
   right: { width: 92, alignItems: 'flex-end', gap: 2 },
-  floor: { color: C.text, fontWeight: '600', fontSize: 13, fontVariant: ['tabular-nums'] },
-  change: { fontWeight: '600', fontSize: 12 },
+  floor: T.num,
+  change: { ...T.metaNum, fontWeight: '500' },
 });

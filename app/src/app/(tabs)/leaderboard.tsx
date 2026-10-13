@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import { Empty, Screen } from '@/components/screen';
+import { Chip, ChipRow } from '@/components/ui';
 import { TraderCard } from '@/components/trader-card';
 import { C } from '@/constants/brand';
+import { T } from '@/constants/type';
 import { api, type Ecosystem, type Leaderboard, type LeaderSort, type LeaderWindow } from '@/lib/api';
 import { signedSol } from '@/lib/format';
 import { useLayout } from '@/lib/layout';
@@ -47,31 +49,19 @@ export default function LeaderboardScreen() {
   const sm = data?.summary;
 
   return (
-    <Screen title="Leaders" subtitle="Wallets ranked on completed flips (buy → sell of the same NFT), gross of fees">
-      {/* Fixed-height wrapper: a horizontal ScrollView collapses its height on web */}
-      <View style={s.filterBar}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[s.filters, { paddingHorizontal: pad }]}>
-        {CHAINS.map((c) => (
-          <Chip key={c.key} label={c.label} on={chain === c.key} onPress={() => change(() => setChain(c.key))} />
-        ))}
-        <View style={s.sep} />
-        {WINDOWS.map((w) => (
-          <Chip key={w.key} label={w.label} on={win === w.key} onPress={() => change(() => setWin(w.key))} />
-        ))}
-        <View style={s.sep} />
-        {SORTS.map((o) => (
-          <Chip key={o.key} label={o.label} on={sort === o.key} onPress={() => change(() => setSort(o.key))} />
-        ))}
-        <View style={s.sep} />
-        <Chip label={chain === 'evm' ? 'Hide bid bots' : 'Hide market makers'} on={hideMM} onPress={() => change(() => setHideMM((v) => !v))} />
-      </ScrollView>
-      </View>
+    <Screen title="Leaders" subtitle="Wallets ranked by completed flips: buying an NFT and selling it later. Before fees.">
+      <ChipRow pad={pad} groups={[
+        CHAINS.map((c) => <Chip key={c.key} label={c.label} on={chain === c.key} onPress={() => change(() => setChain(c.key))} />),
+        WINDOWS.map((w) => <Chip key={w.key} label={w.label} on={win === w.key} onPress={() => change(() => setWin(w.key))} />),
+        SORTS.map((o) => <Chip key={o.key} label={o.label} on={sort === o.key} onPress={() => change(() => setSort(o.key))} />),
+        <Chip key="mm" label={chain === 'evm' ? 'Hide bid bots' : 'Hide market makers'} on={hideMM} onPress={() => change(() => setHideMM((v) => !v))} />,
+      ]} />
 
       {sm && (
-        <Text style={[s.summary, { paddingHorizontal: pad }]}>
-          {sm.wallets} wallets with 3+ flips · {sm.flips.toLocaleString()} flips · {sm.profitableWallets} profitable ·{' '}
-          <Text style={{ color: sm.realizedSol >= 0 ? C.up : C.down }}>{signedSol(sm.realizedSol, 1, chain === 'evm' ? 'ETH' : 'SOL')}</Text> combined
-          {sm.hiddenMarketMakers ? ` · ${sm.hiddenMarketMakers} likely market makers hidden` : ''}
+        <Text style={[T.metaNum, s.summary, { paddingHorizontal: pad }]}>
+          {sm.wallets} wallets with 3+ flips made {sm.flips.toLocaleString()} flips; {sm.profitableWallets} are in profit,{' '}
+          <Text style={{ color: sm.realizedSol >= 0 ? C.up : C.down }}>{signedSol(sm.realizedSol, 1, chain === 'evm' ? 'ETH' : 'SOL')}</Text> combined.
+          {sm.hiddenMarketMakers ? ` ${sm.hiddenMarketMakers} likely ${chain === 'evm' ? 'bid bots' : 'market makers'} hidden.` : ''}
         </Text>
       )}
 
@@ -101,18 +91,6 @@ export default function LeaderboardScreen() {
   );
 }
 
-const Chip = ({ label, on, onPress }: { label: string; on: boolean; onPress: () => void }) => (
-  <Pressable onPress={onPress} style={[s.chip, on && s.chipOn]}>
-    <Text style={[s.chipTxt, on && { color: C.accentInk }]}>{label}</Text>
-  </Pressable>
-);
-
 const s = StyleSheet.create({
-  filterBar: { height: 46 },
-  filters: { paddingHorizontal: 16, gap: 8, alignItems: 'center' },
-  sep: { width: 1, height: 20, backgroundColor: C.border, marginHorizontal: 2 },
-  chip: { paddingHorizontal: 13, paddingVertical: 7, borderRadius: 999, backgroundColor: C.card, borderWidth: 1, borderColor: C.border },
-  chipOn: { backgroundColor: C.accent, borderColor: C.accent },
-  chipTxt: { color: C.text, fontWeight: '600', fontSize: 13 },
-  summary: { color: C.dim, fontSize: 13, lineHeight: 18, paddingHorizontal: 16, paddingBottom: 10 },
+  summary: { paddingTop: 4, paddingBottom: 12 },
 });

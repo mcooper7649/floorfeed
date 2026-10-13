@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { WalletButton } from '@/components/wallet-button';
 import { C } from '@/constants/brand';
+import { T, display } from '@/constants/type';
 import { useLayout } from '@/lib/layout';
 
 const LINKS = [
@@ -36,8 +37,8 @@ export function TopNav({ back }: { back?: boolean }) {
         )}
         <Link href="/" asChild>
           <Pressable style={s.brand} accessibilityLabel="FloorFeed home">
-            <View style={s.mark}><Text style={s.markTxt}>F</Text></View>
-            <Text style={s.brandTxt}>FloorFeed</Text>
+            <View style={s.mark}><Text {...display} style={s.markTxt}>F</Text></View>
+            <Text {...display} style={s.brandTxt}>FloorFeed</Text>
           </Pressable>
         </Link>
 
@@ -82,12 +83,12 @@ const s = StyleSheet.create({
   backTxt: { color: C.text, fontSize: 36, fontWeight: '300', lineHeight: 36 },
   brand: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   mark: { width: 30, height: 30, borderRadius: 9, backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center' },
-  markTxt: { color: C.accentInk, fontWeight: '700', fontSize: 18 },
-  brandTxt: { color: C.text, fontWeight: '600', fontSize: 18, letterSpacing: -0.3 },
+  markTxt: { color: C.accentInk, fontWeight: '700', fontSize: 18, lineHeight: 22 },
+  brandTxt: { color: C.text, fontWeight: '700', fontSize: 21, letterSpacing: -0.4 },
   links: { flexDirection: 'row', gap: 4, flex: 1 },
   link: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
   linkOn: { backgroundColor: C.cardHi },
-  linkTxt: { color: C.dim, fontWeight: '600', fontSize: 15 },
+  linkTxt: { ...T.bodyStrong, color: C.dim },
   search: {
     width: 280, backgroundColor: C.card, borderRadius: 12, borderWidth: 1, borderColor: C.border,
     color: C.text, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15,

@@ -8,6 +8,7 @@ import { Avatar, TierBadge } from '@/components/event-card';
 import { NftImage, Pill } from '@/components/nft-image';
 import { Empty } from '@/components/screen';
 import { TopNav } from '@/components/top-nav';
+import { Stat } from '@/components/ui';
 import { C } from '@/constants/brand';
 import { T, display } from '@/constants/type';
 import { api, type ItemDetail } from '@/lib/api';
@@ -20,11 +21,11 @@ import { useTitle } from '@/lib/use-title';
 function band(rank: number, total: number | null) {
   if (!total) return null;
   const p = rank / total;
-  if (p <= 0.01) return { label: 'LEGENDARY', color: '#FFB547' };
-  if (p <= 0.05) return { label: 'EPIC', color: C.ai };
-  if (p <= 0.15) return { label: 'RARE', color: '#4DA3FF' };
-  if (p <= 0.4) return { label: 'UNCOMMON', color: C.up };
-  return { label: 'COMMON', color: C.dim };
+  if (p <= 0.01) return { label: 'Legendary', color: '#FFB547' };
+  if (p <= 0.05) return { label: 'Epic', color: C.ai };
+  if (p <= 0.15) return { label: 'Rare', color: '#4DA3FF' };
+  if (p <= 0.4) return { label: 'Uncommon', color: C.up };
+  return { label: 'Common', color: C.dim };
 }
 
 const pctLabel = (p: number) => (p < 0.1 ? '<0.1%' : p < 10 ? `${p.toFixed(1)}%` : `${Math.round(p)}%`);
@@ -200,43 +201,36 @@ export default function ItemScreen() {
 }
 
 const Fact = ({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) => (
-  <View style={s.fact}>
-    <Text style={s.label}>{label}</Text>
-    <Text style={[s.factVal, color ? { color } : null]} numberOfLines={1}>{value}</Text>
-    {sub ? <Text style={s.meta} numberOfLines={1}>{sub}</Text> : null}
-  </View>
+  <Stat label={label} value={value} sub={sub} color={color} style={{ flexBasis: '30%', minWidth: 140 }} />
 );
 
 const s = StyleSheet.create({
   fill: { flex: 1, backgroundColor: C.bg },
   collRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  collName: { color: C.accent, fontWeight: '600', fontSize: 15 },
-  title: { color: C.text, fontSize: 28, fontWeight: '600', letterSpacing: -0.5 },
+  collName: { ...T.label, color: C.accent },
   statRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  fact: { flexGrow: 1, flexBasis: '30%', minWidth: 140, backgroundColor: C.card, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: C.border, gap: 2 },
-  factVal: { color: C.text, fontSize: 21, fontWeight: '600', fontVariant: ['tabular-nums'] },
   label: T.label,
-  meta: { color: C.dim, fontSize: 13 },
-  note: { color: C.dim, fontSize: 13, lineHeight: 18 },
-  owner: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.card, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: C.border },
+  meta: T.metaNum,
+  note: T.caption,
+  owner: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.card, borderRadius: 16, padding: 12, borderWidth: 1, borderColor: C.border },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  ownerName: { color: C.text, fontWeight: '600', fontSize: 15, flexShrink: 1 },
+  ownerName: { ...T.bodyStrong, flexShrink: 1 },
   chev: { color: C.dim, fontSize: 21 },
   ctaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   primary: { flexGrow: 1, backgroundColor: C.accent, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center' },
-  primaryTxt: { color: C.accentInk, fontWeight: '600' },
+  primaryTxt: { ...T.button, color: C.accentInk },
   secondary: { flexGrow: 1, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center', borderWidth: 1, borderColor: C.border, backgroundColor: C.cardHi },
-  secondaryTxt: { color: C.text, fontWeight: '600' },
+  secondaryTxt: { ...T.button, color: C.text },
   section: T.title,
   traitGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  trait: { flexGrow: 1, flexBasis: '46%', backgroundColor: C.card, borderRadius: 12, padding: 10, borderWidth: 1, borderColor: C.border, gap: 3 },
+  trait: { flexGrow: 1, flexBasis: '46%', backgroundColor: C.card, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: C.border, gap: 2 },
   traitType: T.caption,
-  traitVal: { color: C.text, fontSize: 15, fontWeight: '600' },
+  traitVal: T.bodyStrong,
   bar: { height: 4, borderRadius: 2, backgroundColor: C.grid, overflow: 'hidden', marginTop: 4 },
   barFill: { height: 4, borderRadius: 2 },
-  traitPct: { color: C.dim, fontSize: 12, fontVariant: ['tabular-nums'] },
+  traitPct: T.metaNum,
   saleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
-  saleWho: { color: C.text, fontSize: 15 },
-  link: { color: C.text, fontWeight: '600' },
-  salePrice: { color: C.text, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  saleWho: T.body,
+  link: { ...T.bodyStrong },
+  salePrice: T.num,
 });
