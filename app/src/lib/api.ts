@@ -252,6 +252,27 @@ export type BuyQuote = {
   marketUrl: string;
 };
 
+// Ethereum / Base (amounts in ETH).
+export type EvmHoldings = {
+  address: string; eth: number; balances: { ethereum: number; base: number };
+  nftValue: number; totalValue: number; nfts: Holding[]; untracked: number;
+};
+export type EvmQuote = {
+  collection: { symbol: string; name: string; floor: number | null };
+  chain: string;
+  listing: {
+    mint: string; price: number; orderHash: string | null; protocolAddress: string | null; chain: string;
+    name: string | null; image: string | null;
+  } | null;
+  balanceEth: number | null;
+  executable: boolean;
+  reason: string | null;
+  marketUrl: string;
+};
+export type EvmBuyTx = {
+  chainId: number; to: string; data: string; value: string; valueEth: number; gas: string; gasCostEth: number | null;
+};
+
 export const api = {
   // Verifies the Privy token and moves this device's follows/paper trades to the account.
   session: (deviceId: string) => send('POST', '/auth/session', { deviceId }) as Promise<{ userId: string }>,
@@ -259,6 +280,16 @@ export const api = {
   balance: (address: string) => req<{ lamports: number; sol: number }>(`/chain/balance/${address}`),
   holdings: (address: string) => req<Holdings>(`/chain/holdings/${address}`),
   quote: (symbol: string, buyer: string) => req<BuyQuote>(`/trade/quote/${symbol}?buyer=${buyer}`),
+  evmBalance: (address: string) => req<{ ethereum: number; base: number; eth: number }>(`/chain/evm/balance/${address}`),
+  evmHoldings: (address: string) => req<EvmHoldings>(`/chain/evm/holdings/${address}`),
+  evmQuote: (symbol: string, buyer?: string, id?: string) => {
+    const q = new URLSearchParams();
+    if (buyer) q.set('buyer', buyer);
+    if (id) q.set('id', id);
+    return req<EvmQuote>(`/trade/evm/quote/${encodeURIComponent(symbol)}?${q}`);
+  },
+  evmBuyTx: (b: { orderHash: string; protocolAddress: string; chain: string; buyer: string }) =>
+    send('POST', '/trade/evm/buy-tx', b) as Promise<EvmBuyTx>,
   feed: (p: { before?: number; following?: string } = {}) => {
     const q = new URLSearchParams({ limit: '25' });
     if (p.before) q.set('before', String(p.before));

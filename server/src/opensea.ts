@@ -39,6 +39,24 @@ async function get<T>(path: string, attempt = 0): Promise<T> {
   return (await res.json()) as T;
 }
 
+async function post<T>(path: string, body: unknown): Promise<T> {
+  const res = await throttled(() =>
+    fetch(BASE + path, {
+      method: "POST",
+      headers: {
+        accept: "application/json", "content-type": "application/json",
+        "user-agent": "FloorFeed/0.1 (+https://floorfeed.io)",
+        ...(process.env.OPENSEA_API_KEY ? { "x-api-key": process.env.OPENSEA_API_KEY } : {}),
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(15_000),
+    }),
+  );
+  const json = (await res.json().catch(() => ({}))) as T & { errors?: string[] };
+  if (!res.ok) throw new Error(json.errors?.join("; ") || `OpenSea ${res.status} ${path}`);
+  return json;
+}
+
 type Interval = { interval: string; volume: number; sales: number };
 
 export async function getOsStats(slug: string) {
@@ -157,11 +175,16 @@ export async function getOsTraits(slug: string) {
 // Cheapest active listing for one NFT, in ETH (null when not listed).
 export async function getOsBestListing(slug: string, id: string) {
   try {
-    const r = await get<{ price?: { current?: { value: string; decimals: number; currency: string } }; order_hash?: string }>(
-      `/listings/collection/${slug}/nfts/${id}/best`);
+    const r = await get<{
+      price?: { current?: { value: string; decimals: number; currency: string } };
+      order_hash?: string; protocol_address?: string; chain?: string;
+    }>(`/listings/collection/${slug}/nfts/${id}/best`);
     const p = r.price?.current;
     if (!p || !["ETH", "WETH"].includes(p.currency)) return null;
-    return { price: Number(p.value) / 10 ** p.decimals, orderHash: r.order_hash ?? null };
+    return {
+      price: Number(p.value) / 10 ** p.decimals, orderHash: r.order_hash ?? null,
+      protocolAddress: r.protocol_address ?? null, chain: r.chain ?? "ethereum",
+    };
   } catch {
     return null; // 404 = not listed
   }
@@ -171,6 +194,8 @@ export async function getOsBestListing(slug: string, id: string) {
 export async function getOsBestListings(slug: string, limit = 20) {
   const r = await get<{ listings: {
     order_hash: string;
+    chain?: string;
+    protocol_address?: string;
     price?: { current?: { value: string; decimals: number; currency: string } };
     protocol_data?: { parameters?: { offer?: { token: string; identifierOrCriteria: string }[] } };
   }[] }>(`/listings/collection/${slug}/best?limit=${limit}`);
@@ -178,6 +203,43 @@ export async function getOsBestListings(slug: string, limit = 20) {
     const p = l.price?.current;
     const o = l.protocol_data?.parameters?.offer?.[0];
     if (!p || !o || !["ETH", "WETH"].includes(p.currency)) return [];
-    return [{ mint: `${o.token.toLowerCase()}:${o.identifierOrCriteria}`, price: Number(p.value) / 10 ** p.decimals, orderHash: l.order_hash }];
+    return [{
+      mint: `${o.token.toLowerCase()}:${o.identifierOrCriteria}`, price: Number(p.value) / 10 ** p.decimals,
+      orderHash: l.order_hash, protocolAddress: l.protocol_address ?? null, chain: l.chain ?? "ethereum",
+    }];
   }).sort((a, b) => a.price - b.price);
+}
+
+// A wallet's NFTs on one chain (up to `pages` x 200).
+export async function getOsAccountNfts(chain: string, address: string, pages = 3) {
+  const out: { collection: string; contract: string; identifier: string; name: string | null; image: string | null }[] = [];
+  let next: string | undefined;
+  for (let i = 0; i < pages; i++) {
+    const q = new URLSearchParams({ limit: "200" });
+    if (next) q.set("next", next);
+    const r = await get<{ nfts: { collection: string; contract: string; identifier: string; name?: string | null;
+      display_image_url?: string | null; image_url?: string | null }[]; next?: string | null }>(
+      `/chain/${osChain(chain)}/account/${address}/nfts?${q}`);
+    for (const n of r.nfts) {
+      out.push({ collection: n.collection, contract: n.contract.toLowerCase(), identifier: n.identifier,
+        name: n.name ?? null, image: n.display_image_url || n.image_url || null });
+    }
+    if (!r.next) break;
+    next = r.next;
+  }
+  return out;
+}
+
+// Seaport fill data for a listing, for `fulfiller` to send. OpenSea returns the
+// function signature and its arguments decoded; trade-evm.ts encodes them.
+export async function getOsFulfillment(orderHash: string, chain: string, protocolAddress: string, fulfiller: string) {
+  const r = await post<{ fulfillment_data?: { transaction?: {
+    function: string; chain: number; to: string; value: string | number; input_data: Record<string, unknown>;
+  } } }>("/listings/fulfillment_data", {
+    listing: { hash: orderHash, chain: osChain(chain), protocol_address: protocolAddress },
+    fulfiller: { address: fulfiller },
+  });
+  const tx = r.fulfillment_data?.transaction;
+  if (!tx) throw new Error("OpenSea returned no transaction for this listing");
+  return tx;
 }

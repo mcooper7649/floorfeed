@@ -5,6 +5,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { BuySheet } from '@/components/buy-sheet';
+import { EvmBuySheet } from '@/components/evm-buy-sheet';
 import { CollIcon } from '@/components/coll-icon';
 import { MODE_COLOR } from '@/components/mode-toggle';
 import { NftImage, Pill } from '@/components/nft-image';
@@ -128,14 +129,6 @@ function CopyCta({ coll, copiedFrom }: { coll: FeedEvent['collection']; copiedFr
     }
   };
   const f = floor ? ` · ${sol(floor, 2, coll.currency)}` : '';
-  // Paper works on every SOL/ETH collection; real buys are Solana-only for now.
-  if (coll.chain !== 'solana' && mode === 'real') {
-    return (
-      <Link href={collHref(symbol)} asChild>
-        <Pressable style={s.ghost}><Text style={s.ghostTxt}>See {coll.name} ›</Text></Pressable>
-      </Link>
-    );
-  }
   return (
     <>
       <Pressable onPress={() => (mode === 'real' ? (tap(), setOpen(true)) : paperBuy())}
@@ -146,7 +139,9 @@ function CopyCta({ coll, copiedFrom }: { coll: FeedEvent['collection']; copiedFr
             : state === 'busy' ? 'Buying…' : state}
         </Text>
       </Pressable>
-      <BuySheet symbol={symbol} open={open} onClose={() => setOpen(false)} onPaper={paperBuy} />
+      {coll.chain === 'solana'
+        ? <BuySheet symbol={symbol} open={open} onClose={() => setOpen(false)} onPaper={paperBuy} />
+        : <EvmBuySheet symbol={symbol} open={open} onClose={() => setOpen(false)} onPaper={paperBuy} />}
     </>
   );
 }

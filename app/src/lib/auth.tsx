@@ -13,6 +13,9 @@ const NATIVE: AuthState = {
   login: () => {},
   logout: async () => {},
   fund: null,
+  evmAddress: null,
+  sendEvm: null,
+  fundEth: null,
 };
 
 const Ctx = createContext<AuthState>(NATIVE);

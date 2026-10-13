@@ -13,7 +13,15 @@ export type AuthState = {
   // an exchange transfer, or another wallet) for any Solana address. Null
   // until signed in: Privy only funds for authenticated users.
   fund: ((address: string, amountSol?: string) => Promise<void>) | null;
+  // Ethereum: the user's Privy wallet on Ethereum/Base, a way to send a
+  // transaction from it (Privy shows it and asks to confirm; resolves to the
+  // tx hash), and the same card/exchange funding flow for ETH.
+  evmAddress: string | null;
+  sendEvm: ((tx: EvmTx) => Promise<string>) | null;
+  fundEth: ((address: string, amountEth?: string, chainId?: number) => Promise<void>) | null;
 };
+
+export type EvmTx = { to: string; data: string; value: string; chainId: number; gas?: string };
 
 // What the separately built Privy bundle (privy/entry.tsx) reports back.
 export type PrivyState = Omit<AuthState, 'supported'> & {

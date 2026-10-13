@@ -6,20 +6,24 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { C } from '@/constants/brand';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { useEvmWallet } from '@/lib/evm-wallet';
 import { useWallet } from '@/lib/wallet';
 
-// "Deposit": get SOL into the active wallet, two ways. Buy with a card or
+// "Deposit": get SOL (or ETH) into the active wallet, two ways. Buy with a card or
 // Apple Pay through Privy's funding flow (MoonPay / Coinbase do the payment
 // and any ID checks), or send SOL from an exchange or another wallet to the
 // address / QR. The balance polls while the sheet is open, so a deposit shows
 // up here as soon as it lands.
-const AMOUNTS = [0.25, 0.5, 1, 2];
+const AMOUNTS = { solana: [0.25, 0.5, 1, 2], ethereum: [0.01, 0.05, 0.1, 0.25] };
+const UNIT = { solana: 'SOL', ethereum: 'ETH' } as const;
+type DepositChain = keyof typeof UNIT;
 const POLL_MS = 5000;
 
-export function DepositSheet({ open, onClose, suggest }: {
+export function DepositSheet({ open, onClose, suggest, chain = 'solana' }: {
   open: boolean;
   onClose: () => void;
-  suggest?: number; // SOL the user is short by, preselected when given
+  suggest?: number; // amount the user is short by, preselected when given
+  chain?: DepositChain; // SOL to the Solana wallet, or ETH to the Ethereum one
 }) {
   // Privy draws its own modal; hide ours while it's up so they don't stack.
   const [funding, setFunding] = useState(false);
@@ -27,25 +31,32 @@ export function DepositSheet({ open, onClose, suggest }: {
     <Modal visible={open && !funding} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={s.backdrop} onPress={onClose}>
         <Pressable style={s.sheet} onPress={() => {}}>
-          {open && <Body onClose={onClose} suggest={suggest} setFunding={setFunding} />}
+          {open && <Body onClose={onClose} suggest={suggest} setFunding={setFunding} chain={chain} />}
         </Pressable>
       </Pressable>
     </Modal>
   );
 }
 
-function Body({ onClose, suggest, setFunding }: {
+function Body({ onClose, suggest, setFunding, chain }: {
   onClose: () => void;
   suggest?: number;
   setFunding: (v: boolean) => void;
+  chain: DepositChain;
 }) {
-  const w = useWallet();
+  const sw = useWallet();
+  const ew = useEvmWallet();
+  const w = chain === 'ethereum' ? ew : sw;
   const auth = useAuth();
   const address = w.address;
+  const unit = UNIT[chain];
+  const base = AMOUNTS[chain];
+  const step = chain === 'ethereum' ? 1000 : 100;
   const amounts = suggest && suggest > 0
-    ? [...new Set([Math.ceil(suggest * 100) / 100, ...AMOUNTS])].sort((a, b) => a - b).slice(0, 4)
-    : AMOUNTS;
-  const [amount, setAmount] = useState(suggest && suggest > 0 ? amounts.find((a) => a >= suggest)! : 0.5);
+    ? [...new Set([Math.ceil(suggest * step) / step, ...base])].sort((a, b) => a - b).slice(0, 4)
+    : base;
+  const [amount, setAmount] = useState(suggest && suggest > 0 ? amounts.find((a) => a >= suggest)! : base[1]);
+  const fundFn = chain === 'ethereum' ? auth.fundEth : auth.fund;
   const [qr, setQr] = useState<string | null>(null);
   const [bal, setBal] = useState<number | null>(null);
   const [start, setStart] = useState<number | null>(null);
@@ -64,15 +75,15 @@ function Body({ onClose, suggest, setFunding }: {
   useEffect(() => {
     if (!address) return;
     let alive = true;
-    const tick = () => api.balance(address).then((b) => {
+    const tick = () => (chain === 'ethereum' ? api.evmBalance(address).then((b) => b.ethereum) : api.balance(address).then((b) => b.sol)).then((v) => {
       if (!alive) return;
-      setBal(b.sol);
-      setStart((s0) => s0 ?? b.sol);
+      setBal(v);
+      setStart((s0) => s0 ?? v);
     }).catch(() => {});
     tick();
     const id = setInterval(tick, POLL_MS);
     return () => { alive = false; clearInterval(id); };
-  }, [address]);
+  }, [address, chain]);
 
   const received = bal != null && start != null && bal - start > 0.000001 ? bal - start : null;
 
@@ -86,11 +97,11 @@ function Body({ onClose, suggest, setFunding }: {
 
   const buy = async () => {
     if (!address) return;
-    if (!auth.fund) { onClose(); auth.login(); return; }
+    if (!fundFn) { onClose(); auth.login(); return; }
     setError(null);
     setFunding(true);
     try {
-      await auth.fund(address, String(amount));
+      await fundFn(address, String(amount));
     } catch (e) {
       setError((e as Error).message || 'The card flow could not open.');
     } finally {
@@ -101,8 +112,8 @@ function Body({ onClose, suggest, setFunding }: {
   if (!address) {
     return (
       <>
-        <Text style={s.title}>Deposit SOL</Text>
-        <Text style={s.note}>Sign in or connect a wallet first, then come back here to add SOL.</Text>
+        <Text style={s.title}>Deposit {unit}</Text>
+        <Text style={s.note}>Sign in or connect a wallet first, then come back here to add {unit}.</Text>
         <Pressable accessibilityRole="button" onPress={() => { onClose(); auth.login(); }} style={s.primary}>
           <Text style={s.primaryTxt}>{auth.supported ? 'Sign in' : 'Close'}</Text>
         </Pressable>
@@ -113,14 +124,14 @@ function Body({ onClose, suggest, setFunding }: {
   return (
     <>
       <View style={s.head}>
-        <Text style={s.title}>Deposit SOL</Text>
-        <Text style={s.balance}>{bal != null ? `${bal.toFixed(4)} SOL` : '…'}</Text>
+        <Text style={s.title}>Deposit {unit}</Text>
+        <Text style={s.balance}>{bal != null ? `${bal.toFixed(4)} ${unit}` : '…'}</Text>
       </View>
       <Text style={s.meta}>To {w.walletName ?? 'your wallet'} · {address.slice(0, 4)}…{address.slice(-4)}</Text>
 
       {received != null && (
         <View style={s.received}>
-          <Text style={s.receivedTxt}>✓ Received +{received.toFixed(4)} SOL</Text>
+          <Text style={s.receivedTxt}>✓ Received +{received.toFixed(4)} {unit}</Text>
           <Text style={s.meta}>You can buy now.</Text>
         </View>
       )}
@@ -129,12 +140,12 @@ function Body({ onClose, suggest, setFunding }: {
       <View style={s.chips}>
         {amounts.map((a) => (
           <Pressable key={a} accessibilityRole="button" onPress={() => setAmount(a)} style={[s.chip, amount === a && s.chipOn]}>
-            <Text style={[s.chipTxt, amount === a && { color: C.accentInk }]}>{a} SOL</Text>
+            <Text style={[s.chipTxt, amount === a && { color: C.accentInk }]}>{a} {unit}</Text>
           </Pressable>
         ))}
       </View>
       <Pressable accessibilityRole="button" onPress={buy} style={s.primary}>
-        <Text style={s.primaryTxt}>{auth.fund ? `Buy ${amount} SOL` : 'Sign in to buy with card'}</Text>
+        <Text style={s.primaryTxt}>{fundFn ? `Buy ${amount} ${unit}` : 'Sign in to buy with card'}</Text>
       </Pressable>
       <Text style={s.fine}>
         Payment is handled by MoonPay, who may ask for ID the first time. FloorFeed never sees your card. You can change the amount there.
@@ -153,7 +164,11 @@ function Body({ onClose, suggest, setFunding }: {
           </Pressable>
         </View>
       </View>
-      <Text style={s.fine}>Send SOL on the Solana network only. Tokens sent on other networks can be lost.</Text>
+      <Text style={s.fine}>
+        {chain === 'ethereum'
+          ? 'Send ETH on Ethereum mainnet. This address also works on Base, but FloorFeed shows the Ethereum balance here.'
+          : 'Send SOL on the Solana network only. Tokens sent on other networks can be lost.'}
+      </Text>
       <Text style={s.meta}>{received == null ? 'Watching for your deposit…' : 'Balance updated.'}</Text>
 
       <Pressable accessibilityRole="button" onPress={onClose} style={s.secondary}>

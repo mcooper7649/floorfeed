@@ -29,6 +29,9 @@ const OFF: AuthState = {
   login: () => {},
   logout: async () => {},
   fund: null,
+  evmAddress: null,
+  sendEvm: null,
+  fundEth: null,
 };
 
 const Ctx = createContext<AuthState>(OFF);
@@ -92,6 +95,9 @@ function PrivyLoader({ children }: { children: ReactNode }) {
         login: privy.ready ? privy.login : () => { loginWhenReady.current = true; },
         logout: privy.logout,
         fund: privy.fund,
+        evmAddress: privy.evmAddress,
+        sendEvm: privy.sendEvm,
+        fundEth: privy.fundEth,
       }
     : {
         ...OFF,

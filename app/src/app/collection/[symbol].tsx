@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { BuySheet } from '@/components/buy-sheet';
+import { EvmBuySheet } from '@/components/evm-buy-sheet';
 import { ChainBadge } from '@/components/chain-badge';
 import { CollIcon } from '@/components/coll-icon';
 import { DepthChart } from '@/components/depth-chart';
@@ -90,8 +91,8 @@ export default function CollectionScreen() {
   const evm = data.chain !== 'solana';
   // EVM collections have OpenSea sales (in ETH) except the few that trade in other tokens.
   const floorOnly = evm && data.sales.length === 0 && data.historyStartsAt == null;
-  // Paper works in SOL and ETH; real buys are Solana-only for now.
-  const showBuy = !evm || ((cur === 'ETH' || cur === 'SOL') && mode === 'paper');
+  // Paper and real both work on SOL and ETH collections.
+  const showBuy = !evm || cur === 'ETH';
   const within5 = st.floor ? data.listings.filter((l) => l.price <= st.floor! * 1.05).length : 0;
   const rangeStart = data.asOf - data.rangeDays * 86_400;
   const partial = data.historyStartsAt != null && data.historyStartsAt > rangeStart + 86_400;
@@ -228,6 +229,7 @@ export default function CollectionScreen() {
               <Text style={s.ctaAltTxt}>View on {market} ↗</Text>
             </Pressable>
             {!evm && <BuySheet symbol={data.symbol} open={buyOpen} onClose={() => setBuyOpen(false)} onPaper={paperBuy} />}
+            {evm && <EvmBuySheet symbol={data.symbol} open={buyOpen} onClose={() => setBuyOpen(false)} onPaper={paperBuy} />}
           </View>
           </View>
 

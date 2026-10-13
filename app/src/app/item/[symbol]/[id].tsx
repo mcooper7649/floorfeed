@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ChainBadge } from '@/components/chain-badge';
+import { EvmBuySheet } from '@/components/evm-buy-sheet';
 import { Avatar, TierBadge } from '@/components/event-card';
 import { NftImage, Pill } from '@/components/nft-image';
 import { Empty } from '@/components/screen';
@@ -11,6 +12,7 @@ import { C } from '@/constants/brand';
 import { api, type ItemDetail } from '@/lib/api';
 import { shortAddr, signedSol, sol, timeAgo } from '@/lib/format';
 import { useLayout } from '@/lib/layout';
+import { useTradeMode } from '@/lib/mode';
 import { useTitle } from '@/lib/use-title';
 
 // Rarity band from the rank's percentile; the rank itself is always shown too.
@@ -34,6 +36,8 @@ export default function ItemScreen() {
   const data = loaded?.key === key ? loaded.d ?? null : null;
   const error = loaded?.key === key ? loaded.error ?? null : null;
   const { wide, pad, maxWidth } = useLayout();
+  const { mode } = useTradeMode();
+  const [buyOpen, setBuyOpen] = useState(false);
 
   useTitle(data && `${data.name ?? data.collection.name}${data.rarity ? ` · Rank ${data.rarity.rank.toLocaleString()}` : ''}: traits, rarity & sales | FloorFeed`);
 
@@ -103,12 +107,18 @@ export default function ItemScreen() {
       )}
 
       <View style={s.ctaRow}>
-        <Pressable accessibilityRole="link" onPress={() => Linking.openURL(data.listing?.url ?? data.marketUrl)}
-          style={data.listing ? s.primary : s.secondary}>
-          <Text style={data.listing ? s.primaryTxt : s.secondaryTxt}>
-            {data.listing ? `Buy on ${market} · ${sol(data.listing.price, 2, u)} ↗` : `View on ${market} ↗`}
-          </Text>
-        </Pressable>
+        {data.listing && data.chain !== 'solana' && mode === 'real' ? (
+          <Pressable accessibilityRole="button" onPress={() => setBuyOpen(true)} style={s.primary}>
+            <Text style={s.primaryTxt}>Buy now · {sol(data.listing.price, 2, u)}</Text>
+          </Pressable>
+        ) : (
+          <Pressable accessibilityRole="link" onPress={() => Linking.openURL(data.listing?.url ?? data.marketUrl)}
+            style={data.listing ? s.primary : s.secondary}>
+            <Text style={data.listing ? s.primaryTxt : s.secondaryTxt}>
+              {data.listing ? `Buy on ${market} · ${sol(data.listing.price, 2, u)} ↗` : `View on ${market} ↗`}
+            </Text>
+          </Pressable>
+        )}
         <Pressable accessibilityRole="link" onPress={() => Linking.openURL(data.explorerUrl)} style={s.secondary}>
           <Text style={s.secondaryTxt}>Explorer ↗</Text>
         </Pressable>
@@ -172,6 +182,7 @@ export default function ItemScreen() {
     <View style={s.fill}>
       <Stack.Screen options={{ title }} />
       {nav}
+      {data.chain !== 'solana' && <EvmBuySheet symbol={data.symbol} id={data.id} open={buyOpen} onClose={() => setBuyOpen(false)} />}
       <ScrollView contentContainerStyle={{ padding: pad, paddingBottom: 60, width: '100%', maxWidth, alignSelf: 'center', gap: 24 }}>
         {wide ? (
           <View style={{ flexDirection: 'row', gap: 32, alignItems: 'flex-start' }}>

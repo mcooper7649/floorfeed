@@ -3,10 +3,11 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { DepositSheet } from '@/components/deposit-sheet';
 import { MODE_COLOR } from '@/components/mode-toggle';
-import { useBalance, useCapabilities, WalletSheet } from '@/components/wallet-button';
+import { useBalance, useCapabilities, useEvmBalance, WalletSheet } from '@/components/wallet-button';
 import { C } from '@/constants/brand';
 import { useAuth } from '@/lib/auth';
 import { shortAddr } from '@/lib/format';
+import { useEvmWallet } from '@/lib/evm-wallet';
 import { useWallet } from '@/lib/wallet';
 
 // Real-mode wallet: address, balance, Deposit and Manage. Only shown in Real
@@ -24,7 +25,7 @@ export function WalletCard() {
     <View style={[s.card, { borderColor: `${MODE_COLOR.real}55` }]}>
       <View style={s.row}>
         <View style={{ flex: 1, gap: 2 }}>
-          <Text style={s.label}>YOUR WALLET</Text>
+          <Text style={s.label}>SOLANA WALLET</Text>
           {!w.supported ? (
             <Text style={s.meta}>Wallet connection is on the website first; the mobile app is next.</Text>
           ) : w.address ? (
@@ -58,6 +59,38 @@ export function WalletCard() {
       )}
       <WalletSheet open={open} onClose={() => setOpen(false)} />
       <DepositSheet open={deposit} onClose={() => setDeposit(false)} />
+    </View>
+  );
+}
+
+// Real-mode Ethereum wallet: address, ETH balance, Deposit ETH and Manage.
+// Buys go through OpenSea listings; the wallet confirms every transaction.
+export function EvmWalletCard() {
+  const ew = useEvmWallet();
+  const balance = useEvmBalance(ew.address);
+  const [open, setOpen] = useState(false);
+  const [deposit, setDeposit] = useState(false);
+  if (!ew.address) return null;
+  return (
+    <View style={[s.card, { borderColor: `${MODE_COLOR.real}55` }]}>
+      <View style={s.row}>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={s.label}>ETHEREUM WALLET</Text>
+          <Text style={s.val}>
+            {shortAddr(ew.address)}
+            <Text style={s.meta}>  {balance != null ? `${balance.toFixed(4)} ETH` : '…'}</Text>
+          </Text>
+        </View>
+        <Pressable accessibilityRole="button" onPress={() => setDeposit(true)} style={s.primary}>
+          <Text style={s.primaryTxt}>Deposit</Text>
+        </Pressable>
+        <Pressable accessibilityRole="button" onPress={() => setOpen(true)} style={s.secondary}>
+          <Text style={s.secondaryTxt}>Manage</Text>
+        </Pressable>
+      </View>
+      <Text style={s.meta}>Buys fill OpenSea listings on Ethereum and Base. Your wallet shows each one and asks you to confirm.</Text>
+      <WalletSheet open={open} onClose={() => setOpen(false)} />
+      <DepositSheet chain="ethereum" open={deposit} onClose={() => setDeposit(false)} />
     </View>
   );
 }

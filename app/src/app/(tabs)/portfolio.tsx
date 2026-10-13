@@ -6,10 +6,11 @@ import { MODE_COLOR, ModeToggle } from '@/components/mode-toggle';
 import { NftImage } from '@/components/nft-image';
 import { Empty, Screen } from '@/components/screen';
 import { WalletSheet } from '@/components/wallet-button';
-import { WalletCard } from '@/components/wallet-card';
+import { EvmWalletCard, WalletCard } from '@/components/wallet-card';
 import { C } from '@/constants/brand';
-import { api, type Holdings } from '@/lib/api';
+import { api, type EvmHoldings, type Holding, type Holdings } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { useEvmWallet } from '@/lib/evm-wallet';
 import { shortAddr, signedSol, sol } from '@/lib/format';
 import { useTradeMode } from '@/lib/mode';
 import { useSession } from '@/lib/session';
@@ -20,7 +21,10 @@ export default function PortfolioScreen() {
   useTitle('Portfolio | FloorFeed');
   const { mode } = useTradeMode();
   const w = useWallet();
-  return mode === 'real' && w.address ? <RealPortfolio address={w.address} /> : <PaperPortfolio />;
+  const ew = useEvmWallet();
+  return mode === 'real' && (w.address || ew.address)
+    ? <RealPortfolio solAddress={w.address} evmAddress={ew.address} />
+    : <PaperPortfolio />;
 }
 
 // Paper and Real are two separate accounts: the switch sits on top, tinted
@@ -36,7 +40,7 @@ function ModeCard() {
       <Text style={s.meta}>
         {mode === 'paper'
           ? 'Paper account: simulated trades at live prices, tracked separately. Nothing here touches a real wallet.'
-          : 'Real account: the NFTs and SOL in your wallet. Your wallet asks before anything is signed.'}
+          : 'Real account: the NFTs, SOL and ETH in your wallets. Your wallet asks before anything is signed.'}
       </Text>
       {w.supported && !canReal && (
         <Pressable accessibilityRole="button" onPress={() => setOpen(true)} style={s.unlock}>
@@ -48,73 +52,106 @@ function ModeCard() {
   );
 }
 
-// Real mode: what the connected wallet actually holds in tracked collections,
+// Real mode: what the user's wallets actually hold in tracked collections,
 // marked at the estimated bid (floor minus the sell haircut), like paper.
-function RealPortfolio({ address }: { address: string }) {
-  const [data, setData] = useState<{ address: string; h: Holdings } | { address: string; error: string } | null>(null);
+// Solana and Ethereum each get their own wallet card and value (SOL vs ETH).
+type Row = Holding & { unit: 'SOL' | 'ETH'; chain: 'solana' | 'evm' };
+
+function RealPortfolio({ solAddress, evmAddress }: { solAddress: string | null; evmAddress: string | null }) {
+  const [sol_, setSol] = useState<{ address: string; h: Holdings } | { address: string; error: string } | null>(null);
+  const [evm, setEvm] = useState<{ address: string; h: EvmHoldings } | { address: string; error: string } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchData = useCallback(() => {
-    api.holdings(address)
-      .then((h) => setData({ address, h }))
-      .catch((e) => setData({ address, error: (e as Error).message }))
-      .finally(() => setRefreshing(false));
-  }, [address]);
+    const jobs: Promise<unknown>[] = [];
+    if (solAddress) {
+      jobs.push(api.holdings(solAddress).then((h) => setSol({ address: solAddress, h }))
+        .catch((e) => setSol({ address: solAddress, error: (e as Error).message })));
+    }
+    if (evmAddress) {
+      jobs.push(api.evmHoldings(evmAddress).then((h) => setEvm({ address: evmAddress, h }))
+        .catch((e) => setEvm({ address: evmAddress, error: (e as Error).message })));
+    }
+    Promise.all(jobs).finally(() => setRefreshing(false));
+  }, [solAddress, evmAddress]);
   useEffect(fetchData, [fetchData]);
   const refresh = () => { setRefreshing(true); fetchData(); };
 
-  const current = data?.address === address ? data : null;
-  const h = current && 'h' in current ? current.h : null;
-  const pnl = h?.nfts.reduce((t, n) => (n.boughtAt != null && n.estValue != null ? t + n.estValue - n.boughtAt : t), 0) ?? 0;
-  const known = h?.nfts.filter((n) => n.boughtAt != null).length ?? 0;
+  const sh = sol_?.address === solAddress && sol_ && 'h' in sol_ ? sol_.h : null;
+  const eh = evm?.address === evmAddress && evm && 'h' in evm ? evm.h : null;
+  const loading = (solAddress && sol_?.address !== solAddress) || (evmAddress && evm?.address !== evmAddress);
+  const rows: Row[] = [
+    ...(sh?.nfts ?? []).map((n) => ({ ...n, unit: 'SOL' as const, chain: 'solana' as const })),
+    ...(eh?.nfts ?? []).map((n) => ({ ...n, unit: 'ETH' as const, chain: 'evm' as const })),
+  ];
+  const untracked = (sh?.untracked ?? 0) + (eh?.untracked ?? 0);
 
-  return (
-    <Screen title="Portfolio" subtitle={`Real account · ${shortAddr(address)}`}>
-      <ModeCard />
-      <WalletCard />
+  const summary = (label: string, unit: 'SOL' | 'ETH', total: number | null, cash: number | null, nfts: Holding[] | null, nftValue: number | null) => {
+    const known = nfts?.filter((n) => n.boughtAt != null) ?? [];
+    const pnl = known.reduce((t, n) => (n.estValue != null ? t + n.estValue - n.boughtAt! : t), 0);
+    return (
       <View style={s.summary}>
-        <Text style={s.label}>WALLET VALUE</Text>
-        <Text style={[s.big, { color: C.text }]}>{h ? sol(h.totalValue, 3) : '…'}</Text>
-        {h && (
+        <Text style={s.label}>{label}</Text>
+        <Text style={[s.big, { color: C.text }]}>{total != null ? sol(total, 3, unit) : '…'}</Text>
+        {nfts && (
           <Text style={s.meta}>
-            {sol(h.sol, 3)} + {h.nfts.length} NFT{h.nfts.length === 1 ? '' : 's'} at est. bid {sol(h.nftValue, 3)}
-            {known > 0 ? ` · ${signedSol(pnl, 3)} on ${known} we saw you buy` : ''}
+            {sol(cash ?? 0, 3, unit)} + {nfts.length} NFT{nfts.length === 1 ? '' : 's'} at est. bid {sol(nftValue ?? 0, 3, unit)}
+            {known.length > 0 ? ` · ${signedSol(pnl, 3, unit)} on ${known.length} we saw you buy` : ''}
           </Text>
         )}
       </View>
+    );
+  };
+
+  const subtitle = [solAddress && shortAddr(solAddress), evmAddress && shortAddr(evmAddress)].filter(Boolean).join(' · ');
+  return (
+    <Screen title="Portfolio" subtitle={`Real account · ${subtitle}`}>
       <FlatList
-        data={h?.nfts ?? []}
+        data={rows}
         keyExtractor={(n) => n.mint}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 120 }}
+        contentContainerStyle={{ paddingBottom: 120 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={C.accent} />}
-        ListEmptyComponent={
-          <Empty text={
-            !current ? 'Loading your NFTs…'
-              : !h ? `Couldn't load holdings: ${'error' in current ? current.error : ''}`
-              : 'No NFTs from tracked collections in this wallet yet. Tap "Copy · buy floor" on a trade in the feed to buy one.'
-          } />
+        ListHeaderComponent={
+          <View>
+            <ModeCard />
+            {solAddress && <WalletCard />}
+            {solAddress && summary('SOLANA WALLET VALUE', 'SOL', sh?.totalValue ?? null, sh?.sol ?? null, sh?.nfts ?? null, sh?.nftValue ?? null)}
+            {evmAddress && <EvmWalletCard />}
+            {evmAddress && summary('ETHEREUM WALLET VALUE', 'ETH', eh?.totalValue ?? null, eh?.eth ?? null, eh?.nfts ?? null, eh?.nftValue ?? null)}
+          </View>
         }
-        ListFooterComponent={h && h.untracked > 0 ? (
-          <Text style={[s.meta, { paddingVertical: 12 }]}>
-            {h.untracked} other NFT{h.untracked === 1 ? '' : 's'} from collections FloorFeed doesn&apos;t track.
+        ListEmptyComponent={
+          <View style={{ paddingHorizontal: 16 }}>
+            <Empty text={loading ? 'Loading your NFTs…'
+              : sol_ && 'error' in sol_ ? `Couldn't load Solana holdings: ${sol_.error}`
+              : evm && 'error' in evm ? `Couldn't load Ethereum holdings: ${evm.error}`
+              : 'No NFTs from tracked collections in your wallets yet. Tap "Copy · buy floor" on a trade in the feed to buy one.'} />
+          </View>
+        }
+        ListFooterComponent={untracked > 0 ? (
+          <Text style={[s.meta, { paddingVertical: 12, paddingHorizontal: 16 }]}>
+            {untracked} other NFT{untracked === 1 ? '' : 's'} from collections FloorFeed doesn&apos;t track.
           </Text>
         ) : null}
         renderItem={({ item: n }) => {
           const p = n.boughtAt != null && n.estValue != null ? n.estValue - n.boughtAt : null;
+          const sellUrl = n.chain === 'solana'
+            ? `https://magiceden.io/item-details/${n.mint}`
+            : `https://opensea.io/assets/ethereum/${n.mint.replace(':', '/')}`;
           return (
-            <View style={s.row}>
+            <View style={[s.row, { marginHorizontal: 16 }]}>
               <NftImage uri={n.image} name={n.collection.name} radius={10} px={120} style={{ width: 48 }} />
               <Link href={{ pathname: '/item/[symbol]/[id]', params: { symbol: n.collection.symbol, id: n.mint } }} asChild>
                 <Pressable style={{ flex: 1 }}>
                   <Text style={s.name} numberOfLines={1}>{n.name ?? n.collection.name}</Text>
                   <Text style={s.meta}>
-                    {n.collection.name}{n.estValue != null ? ` · est. ${sol(n.estValue, 3)}` : ''}
-                    {n.boughtAt != null ? ` · in ${sol(n.boughtAt, 3)}` : ''}
+                    {n.collection.name}{n.estValue != null ? ` · est. ${sol(n.estValue, 3, n.unit)}` : ''}
+                    {n.boughtAt != null ? ` · in ${sol(n.boughtAt, 3, n.unit)}` : ''}
                   </Text>
                 </Pressable>
               </Link>
-              {p != null && <Text style={[s.pnl, { color: p >= 0 ? C.up : C.down }]}>{signedSol(p, 3)}</Text>}
-              <Pressable accessibilityRole="link" onPress={() => Linking.openURL(`https://magiceden.io/item-details/${n.mint}`)} style={s.sell}>
+              {p != null && <Text style={[s.pnl, { color: p >= 0 ? C.up : C.down }]}>{signedSol(p, 3, n.unit)}</Text>}
+              <Pressable accessibilityRole="link" onPress={() => Linking.openURL(sellUrl)} style={s.sell}>
                 <Text style={s.sellTxt}>Sell ↗</Text>
               </Pressable>
             </View>

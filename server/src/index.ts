@@ -10,6 +10,7 @@ import { COLLECTIONS, collectionName, config, isEvm } from "./config.ts";
 import { db } from "./db.ts";
 import { feedEvents, traders } from "./feed.ts";
 import { itemDetail, warmRarity } from "./items.ts";
+import { EVM_ADDRESS_RE, evmBalances, evmBuyTx, evmHoldings, evmQuote } from "./trade-evm.ts";
 import { startIngest } from "./ingest.ts";
 import { KINDS, generate, nextPost, postedSince, reportResult, startSocial, submitExternal, xLength } from "./social.ts";
 import { walletStats } from "./pnl.ts";
@@ -449,6 +450,43 @@ app.get("/social/preview", async (req, reply) => {
     out.push(d ? { kind, chars: xLength(d.text), text: d.text, image: d.image } : { kind, text: null });
   }
   return out;
+});
+
+// --- Ethereum / Base: balances, holdings, and buys through OpenSea listings ---
+app.get("/chain/evm/balance/:address", async (req, reply) => {
+  const { address } = req.params as { address: string };
+  if (!EVM_ADDRESS_RE.test(address)) return reply.code(400).send({ error: "Not an EVM address" });
+  const b = await evmBalances(address);
+  return { ...b, eth: b.ethereum + b.base };
+});
+
+app.get("/chain/evm/holdings/:address", async (req, reply) => {
+  const { address } = req.params as { address: string };
+  if (!EVM_ADDRESS_RE.test(address)) return reply.code(400).send({ error: "Not an EVM address" });
+  return evmHoldings(address);
+});
+
+app.get("/trade/evm/quote/:symbol", async (req, reply) => {
+  const { symbol } = req.params as { symbol: string };
+  const q = z.object({ buyer: z.string().regex(EVM_ADDRESS_RE).optional(), id: z.string().optional() }).parse(req.query);
+  const quote = await evmQuote(symbol, q.buyer, q.id).catch((err) => { req.log.warn({ err }, "evm quote"); return null; });
+  if (!quote) return reply.code(404).send({ error: "No quote for this collection" });
+  return quote;
+});
+
+// An unsigned, already-simulated transaction for the buyer's wallet to confirm.
+app.post("/trade/evm/buy-tx", async (req, reply) => {
+  const b = z.object({
+    orderHash: z.string().regex(/^0x[0-9a-fA-F]{64}$/),
+    protocolAddress: z.string().regex(EVM_ADDRESS_RE),
+    chain: z.string(),
+    buyer: z.string().regex(EVM_ADDRESS_RE),
+  }).parse(req.body);
+  try {
+    return await evmBuyTx(b);
+  } catch (err) {
+    return reply.code(409).send({ error: (err as Error).message });
+  }
 });
 
 // One NFT: traits with rarity, rank, owner, listing and its sale history.

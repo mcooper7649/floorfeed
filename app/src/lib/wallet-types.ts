@@ -18,3 +18,21 @@ export type WalletState = {
   connect: (name: string) => Promise<void>;
   disconnect: () => Promise<void>;
 };
+
+// Ethereum/Base side: a browser wallet found through EIP-6963 (MetaMask,
+// Rabby, Coinbase Wallet, …) or, when none is connected, the signed-in user's
+// Privy wallet. `send` asks the wallet to confirm a transaction and resolves
+// to its hash.
+export type EvmWalletState = {
+  supported: boolean;
+  available: WalletOption[];
+  address: string | null;
+  kind: 'extension' | 'embedded' | null;
+  walletName: string | null;
+  walletIcon: string | null;
+  connecting: boolean;
+  error: string | null;
+  connect: (name: string) => Promise<void>;
+  disconnect: () => Promise<void>;
+  send: ((tx: import('./auth-types').EvmTx) => Promise<string>) | null;
+};
