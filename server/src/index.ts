@@ -14,6 +14,7 @@ import { itemDetail, warmRarity } from "./items.ts";
 import { EVM_ADDRESS_RE, evmBalances, evmBuyTx, evmHoldings, evmQuote, totalEth } from "./trade-evm.ts";
 import { startIngest } from "./ingest.ts";
 import { KINDS, generate, nextPost, postedSince, reportResult, startSocial, submitExternal, xLength } from "./social.ts";
+import { feeRates } from "./fees.ts";
 import { walletStats } from "./pnl.ts";
 import { card, renderPage, robots, sitemap } from "./seo.ts";
 import { nameFor, startNames } from "./sns.ts";
@@ -297,7 +298,8 @@ app.delete("/follows", async (req, reply) => {
 });
 
 // --- Paper trading: "buy floor" fills at current floor, "sell" at floor minus a
-// haircut that stands in for the top bid. No real SOL moves. ---
+// haircut that stands in for the top bid. No real SOL moves. P&L counts the
+// fees and royalties a real trade would pay. ---
 const floorOf = (symbol: string) =>
   (db.prepare("SELECT floor FROM collections WHERE symbol = ?").get(symbol) as { floor: number | null } | undefined)?.floor ?? null;
 
@@ -360,6 +362,11 @@ app.get("/paper/:userId", async (req, reply) => {
   ).all(userId) as any[];
   const positions = rows.map((p) => {
     const mark = p.exit_price ?? (p.floor ?? p.entry_price) * (1 - config.paperSellHaircut);
+    // Like a real flip: the buy pays the taker fee and royalty on top, the
+    // sale (into the top bid) pays the seller's share (fees.ts).
+    const fee = feeRates(p.collection);
+    const cost = p.entry_price * (1 + fee.buyTaker);
+    const proceeds = mark * (1 - fee.sellTaker);
     return {
       id: p.id,
       collection: { symbol: p.collection, name: collectionName(p.collection), floor: p.floor, image: p.image ?? null },
@@ -367,7 +374,8 @@ app.get("/paper/:userId", async (req, reply) => {
       entryPrice: p.entry_price,
       exitPrice: p.exit_price,
       open: p.closed_at == null,
-      pnlSol: mark - p.entry_price,
+      pnlSol: proceeds - cost,
+      feesSol: cost - p.entry_price + mark - proceeds,
       openedAt: p.opened_at,
       copiedFrom: p.copied_from,
     };

@@ -146,7 +146,7 @@ function PaperPortfolio() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={C.accent} />}
       ListHeaderComponent={
         <View style={{ gap: 16, marginBottom: 4 }}>
-          <Totals label="Paper profit and loss" color={MODE_COLOR.paper} units={units} />
+          <Totals label="Paper profit and loss, after fees" color={MODE_COLOR.paper} units={units} />
           <SectionHeader
             title="Positions"
             count={positions.length || undefined}

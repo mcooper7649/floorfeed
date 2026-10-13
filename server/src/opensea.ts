@@ -78,10 +78,13 @@ export async function getOsStats(slug: string) {
 }
 
 export async function getOsInfo(slug: string) {
-  const c = await get<{ image_url?: string; description?: string; total_supply?: number; opensea_url?: string }>(
-    `/collections/${slug}`,
-  );
+  const c = await get<{
+    image_url?: string; description?: string; total_supply?: number; opensea_url?: string;
+    fees?: { fee: number; required: boolean }[];
+  }>(`/collections/${slug}`);
   return {
+    // Fees a seller can't avoid (OpenSea's own plus enforced creator fees), in basis points.
+    feeBps: c.fees ? Math.round(c.fees.filter((f) => f.required).reduce((a, f) => a + f.fee, 0) * 100) : null,
     image: c.image_url || null,
     description: c.description || null,
     supply: c.total_supply ?? null,

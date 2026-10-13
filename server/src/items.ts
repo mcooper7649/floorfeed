@@ -1,4 +1,5 @@
 import { rpc } from "./chain.ts";
+import { COST_SQL, PROCEEDS_SQL } from "./fees.ts";
 import { COLLECTIONS, EVM_CHAINS, EVM_COLLECTIONS, chainOf, collectionName, isEvm, normalizeUnit } from "./config.ts";
 import { db } from "./db.ts";
 import { unitOf } from "./units.ts";
@@ -149,7 +150,10 @@ async function evmTraits(slug: string) {
 
 const itemRow = db.prepare(`SELECT name, image, attrs, rank FROM nft_items WHERE mint = ?`);
 const salesOf = db.prepare(
-  `SELECT signature, buyer, seller, price, block_time AS t, image FROM trades WHERE mint = ? ORDER BY block_time DESC LIMIT 50`);
+  `SELECT t.signature, t.buyer, t.seller, t.price, t.block_time AS t, t.image,
+          ${COST_SQL("t", "c")} AS cost, ${PROCEEDS_SQL("t", "c")} AS proceeds
+   FROM trades t LEFT JOIN collections c ON c.symbol = t.collection
+   WHERE t.mint = ? ORDER BY t.block_time DESC LIMIT 50`);
 const collRow = db.prepare(`SELECT floor, image FROM collections WHERE symbol = ?`);
 
 // Owners and listings change; short caches keep repeat views off the APIs.
@@ -222,7 +226,7 @@ export async function itemDetail(symbol: string, id: string) {
     return { type: t.type, value: t.value, count, pct: count != null && total ? (count / total) * 100 : null };
   }).sort((a, b) => (a.pct ?? 101) - (b.pct ?? 101));
 
-  const sales = salesOf.all(id) as { signature: string; buyer: string; seller: string; price: number; t: number; image: string | null }[];
+  const sales = salesOf.all(id) as { signature: string; buyer: string; seller: string; price: number; t: number; image: string | null; cost: number; proceeds: number }[];
   const ids = traders([...sales.flatMap((s) => [s.buyer, s.seller]), ...(owner ? [owner] : [])]);
   // A sale whose seller bought this NFT earlier in our history is a flip.
   const asc = [...sales].reverse();
@@ -232,7 +236,7 @@ export async function itemDetail(symbol: string, id: string) {
       signature: s.signature, price: s.price, t: s.t,
       buyer: s.buyer, buyerName: ids.get(s.buyer)?.name ?? null,
       seller: s.seller, sellerName: ids.get(s.seller)?.name ?? null,
-      flipPnl: prev ? s.price - prev.price : null,
+      flipPnl: prev ? s.proceeds - prev.cost : null, // after fees and royalties
     };
   });
   if (!image) image = sales.find((s) => s.image)?.image ?? null;

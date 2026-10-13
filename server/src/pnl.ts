@@ -1,8 +1,9 @@
 import { db } from "./db.ts";
+import { COST_SQL, MARK_SQL, PROCEEDS_SQL } from "./fees.ts";
 import { UNIT_SQL } from "./units.ts";
 
-// P&L is computed from trades we've ingested ("tracked window"), gross of
-// marketplace fees and royalties. A flip = a wallet selling a mint it bought.
+// P&L is computed from trades we've ingested ("tracked window"), net of
+// marketplace fees and royalties (fees.ts). A flip = a wallet selling a mint it bought.
 export type WalletStats = {
   wallet: string;
   flips: number;
@@ -17,7 +18,7 @@ export type WalletStats = {
 
 // All sums are within one currency (a collection's sale unit, units.ts).
 const flipsSql = `
-  SELECT s.seller AS wallet, s.price - b.price AS pnl, ${UNIT_SQL("c")} AS unit
+  SELECT s.seller AS wallet, ${PROCEEDS_SQL("s", "c")} - ${COST_SQL("b", "c")} AS pnl, ${UNIT_SQL("c")} AS unit
   FROM trades s
   JOIN trades b ON b.signature = (
     SELECT signature FROM trades
@@ -27,7 +28,7 @@ const flipsSql = `
 `;
 
 const openSql = `
-  SELECT b.buyer AS wallet, ${UNIT_SQL("c")} AS unit, COUNT(*) AS n, SUM(c.floor - b.price) AS unrealized
+  SELECT b.buyer AS wallet, ${UNIT_SQL("c")} AS unit, COUNT(*) AS n, SUM(${MARK_SQL("c")} - ${COST_SQL("b", "c")}) AS unrealized
   FROM trades b
   JOIN collections c ON c.symbol = b.collection
   WHERE NOT EXISTS (
@@ -71,13 +72,14 @@ export function walletStats(wallet: string, unit?: string): WalletStats & { unit
 // Best flippers of a single collection, scored on that collection's flips only.
 export function collectionFlippers(collection: string, limit = 5) {
   return db
-    .prepare(`SELECT s.seller AS wallet, COUNT(*) AS flips, SUM(s.price > b.price) AS wins,
-                     SUM(s.price - b.price) AS realizedSol
+    .prepare(`SELECT s.seller AS wallet, COUNT(*) AS flips, SUM(${PROCEEDS_SQL("s", "c")} > ${COST_SQL("b", "c")}) AS wins,
+                     SUM(${PROCEEDS_SQL("s", "c")} - ${COST_SQL("b", "c")}) AS realizedSol
               FROM trades s
               JOIN trades b ON b.signature = (
                 SELECT signature FROM trades
                 WHERE mint = s.mint AND buyer = s.seller AND block_time < s.block_time
                 ORDER BY block_time DESC LIMIT 1)
+              LEFT JOIN collections c ON c.symbol = s.collection
               WHERE s.collection = ?
               GROUP BY s.seller ORDER BY realizedSol DESC LIMIT ?`)
     .all(collection, limit) as { wallet: string; flips: number; wins: number; realizedSol: number }[];

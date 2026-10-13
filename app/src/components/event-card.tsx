@@ -270,7 +270,7 @@ function FlipCard({ e, tile }: { e: FlipEvent; tile?: boolean }) {
       <Text style={s.verb}>{win ? 'flipped' : 'sold at a loss'} <Text style={s.coll}>{e.collection.name}</Text></Text>
       <Text style={[s.big, { color }]}>{signedSol(e.pnl, 2, e.collection.currency)}</Text>
       <Text style={s.meta}>
-        <Text style={{ color }}>{pct(e.pnlPct)}</Text> · {e.buy.toFixed(e.collection.currency === 'ETH' ? 3 : 2)} → {sol(e.sell, 2, e.collection.currency)} · held {holdTime(e.holdHours)}
+        <Text style={{ color }}>{pct(e.pnlPct)}</Text> · {e.buy.toFixed(e.collection.currency === 'ETH' ? 3 : 2)} → {sol(e.sell, 2, e.collection.currency)} · held {holdTime(e.holdHours)} · after fees
       </Text>
     </>
   );

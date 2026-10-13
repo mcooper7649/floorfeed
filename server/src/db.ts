@@ -129,6 +129,15 @@ for (const col of [
   "image_source TEXT", "meta_checked_at INTEGER", "meta_failures INTEGER NOT NULL DEFAULT 0",
   // the one currency this collection's sales are kept in (EVM; see units.ts)
   "sale_currency TEXT",
+  // fees.ts: Solana royalty measured from listing buys; EVM required seller fees (OpenSea)
+  "royalty_bps INTEGER", "seller_fee_bps INTEGER",
 ]) {
   try { db.exec(`ALTER TABLE collections ADD COLUMN ${col}`); } catch {}
 }
+
+// What the buyer actually paid and the seller actually received (fees.ts);
+// NULL = not read from chain, the fee model fills in.
+for (const col of ["cost REAL", "proceeds REAL", "fees_checked INTEGER NOT NULL DEFAULT 0"]) {
+  try { db.exec(`ALTER TABLE trades ADD COLUMN ${col}`); } catch {}
+}
+db.exec(`CREATE INDEX IF NOT EXISTS trades_fees_checked ON trades(fees_checked, block_time)`);

@@ -1,4 +1,5 @@
 import { collectionName } from "./config.ts";
+import { COST_SQL, PROCEEDS_SQL } from "./fees.ts";
 import { db } from "./db.ts";
 import { walletStats } from "./pnl.ts";
 import { toUsd } from "./prices.ts";
@@ -6,7 +7,8 @@ import { UNIT_SQL } from "./units.ts";
 
 // Detailed trader profiles for the leaderboard and wallet pages. A flip is a
 // sale matched to the seller's most recent earlier buy of the same mint; the
-// window filters on when the flip closed (the sale). Gross of fees.
+// window filters on when the flip closed (the sale). Buy = what the wallet
+// paid, sell = what it received: net of marketplace fees and royalties (fees.ts).
 const DAY = 86_400;
 
 type Flip = {
@@ -20,7 +22,7 @@ type Flip = {
 
 // Flips in one currency (a collection's sale unit, see units.ts): P&L only adds up within a unit.
 const flipsSince = db.prepare(`
-  SELECT s.seller AS wallet, s.collection, b.price AS buy, s.price AS sell,
+  SELECT s.seller AS wallet, s.collection, ${COST_SQL("b", "c")} AS buy, ${PROCEEDS_SQL("s", "c")} AS sell,
          b.block_time AS boughtAt, s.block_time AS soldAt
   FROM trades s
   JOIN trades b ON b.signature = (
@@ -157,7 +159,7 @@ export function traderLeaderboard(opts: {
 }
 
 const walletFlips = db.prepare(`
-  SELECT s.seller AS wallet, s.collection, b.price AS buy, s.price AS sell,
+  SELECT s.seller AS wallet, s.collection, ${COST_SQL("b", "c")} AS buy, ${PROCEEDS_SQL("s", "c")} AS sell,
          b.block_time AS boughtAt, s.block_time AS soldAt
   FROM trades s
   JOIN trades b ON b.signature = (

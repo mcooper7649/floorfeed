@@ -3,6 +3,7 @@ import { invalidateUnits } from "./units.ts";
 import { db } from "./db.ts";
 import { PRIORITY, getCollectionMeta, getSales, getStats, type MeActivity } from "./magiceden.ts";
 import { discoverEvm } from "./discovery.ts";
+import { enrichFees } from "./fees.ts";
 import { getOsInfo, getOsSales, getOsStats, hasOsKey, type OsSale } from "./opensea.ts";
 import { refreshPrices, usdPrice } from "./prices.ts";
 
@@ -22,7 +23,9 @@ const upsertStats = db.prepare(`
 const insertSnapshot = db.prepare(
   `INSERT OR IGNORE INTO collection_snapshots (symbol, ts, floor, listed) VALUES (?, ?, ?, ?)`,
 );
-const needsMeta = db.prepare(`SELECT image IS NULL AS missing FROM collections WHERE symbol = ?`);
+// EVM: art missing, or fees not read yet (fees.ts)
+const needsInfo = db.prepare(`SELECT image IS NULL AS missing, seller_fee_bps IS NULL AS noFees FROM collections WHERE symbol = ?`);
+const setSellerFee = db.prepare(`UPDATE collections SET seller_fee_bps = ? WHERE symbol = ?`);
 
 // Official metadata (logo, description) for Solana collections. Magic Eden's
 // metadata endpoint rate-limits hard, so each collection is retried on a
@@ -235,9 +238,11 @@ export async function refreshEvmStats() {
       const now = Date.now();
       upsertEvm.run({ symbol: c.slug, chain: c.chain, ...st, now });
       insertSnapshot.run(c.slug, now, st.floor, null);
-      if ((needsMeta.get(c.slug) as { missing: number } | undefined)?.missing) {
+      const need = needsInfo.get(c.slug) as { missing: number; noFees: number } | undefined;
+      if (need?.missing || need?.noFees) {
         const info = await getOsInfo(c.slug);
         setEvmInfo.run(info.image, info.description, info.supply, info.url, c.slug);
+        setSellerFee.run(info.feeBps, c.slug);
       }
     } catch (err) {
       console.warn(`[opensea] ${c.slug}:`, (err as Error).message);
@@ -360,6 +365,8 @@ export function startIngest() {
   // After the first backfill has had time to run.
   setTimeout(() => every(24 * 3_600_000, deepenEvmSales), 3_600_000).unref();
   every(config.statsPollMs, refreshStats);
+  // Exact fees for Solana trades (Helius); the backlog drains 1,000 trades a pass.
+  setTimeout(() => every(5 * 60_000, () => enrichFees(10)), 2 * 60_000).unref();
   // Backfill runs after the first live poll, through the same rate-limited queue.
   every(config.activityPollMs, (() => {
     let first = true;

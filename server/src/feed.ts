@@ -1,4 +1,5 @@
 import { cachedTake } from "./ai.ts";
+import { COST_SQL, PROCEEDS_SQL } from "./fees.ts";
 import { COLLECTIONS, EVM_COLLECTIONS, chainOf, collectionName, type Chain } from "./config.ts";
 import { db } from "./db.ts";
 import { toUsd } from "./prices.ts";
@@ -51,11 +52,13 @@ type Row = {
   signature: string; collection: string; mint: string; buyer: string; seller: string; price: number;
   block_time: number; image: string | null; source: string | null; floor: number | null;
   prev_buy: number | null; prev_at: number | null; // the seller's earlier buy of this mint, if tracked
+  prev_cost: number | null; proceeds: number; // after fees (fees.ts), for flip P&L
 };
 
 const rowSelect = `
   SELECT t.signature, t.collection, t.mint, t.buyer, t.seller, t.price, t.block_time, t.image, t.source, c.floor,
-         b.price AS prev_buy, b.block_time AS prev_at
+         b.price AS prev_buy, b.block_time AS prev_at,
+         ${COST_SQL("b", "c")} AS prev_cost, ${PROCEEDS_SQL("t", "c")} AS proceeds
   FROM trades t
   LEFT JOIN collections c ON c.symbol = t.collection
   LEFT JOIN trades b ON b.signature = (
@@ -78,7 +81,7 @@ function allStats() {
     flips: 0, wins: 0, trades: 0, pool: 0, buys: 0, bids: 0, byUnit: new Map(), unit: w.startsWith("0x") ? "ETH" : "SOL", pnlUsd: 0,
   }).get(w)!;
   for (const r of db.prepare(`
-    SELECT s.seller AS wallet, ${UNIT_SQL("c")} AS unit, COUNT(*) AS flips, SUM(s.price > b.price) AS wins, SUM(s.price - b.price) AS pnl
+    SELECT s.seller AS wallet, ${UNIT_SQL("c")} AS unit, COUNT(*) AS flips, SUM(${PROCEEDS_SQL("s", "c")} > ${COST_SQL("b", "c")}) AS wins, SUM(${PROCEEDS_SQL("s", "c")} - ${COST_SQL("b", "c")}) AS pnl
     FROM trades s
     JOIN trades b ON b.signature = (
       SELECT signature FROM trades
@@ -191,10 +194,12 @@ function build(rows: Row[], withClusters: boolean): FeedEvent[] {
   // A sale the seller bought earlier is a flip; anything else is a buy.
   for (const r of rows) {
     if (r.prev_buy != null && r.prev_at != null) {
-      const pnl = r.price - r.prev_buy;
+      // Shown prices are list prices; P&L is what the wallet kept after fees.
+      const cost = r.prev_cost ?? r.prev_buy;
+      const pnl = r.proceeds - cost;
       events.push({
         kind: "flip", id: `flip:${r.signature}`, t: r.block_time, collection: coll(r), signature: r.signature,
-        mint: r.mint, image: r.image, buy: r.prev_buy, sell: r.price, pnl, pnlPct: (pnl / r.prev_buy) * 100,
+        mint: r.mint, image: r.image, buy: r.prev_buy, sell: r.price, pnl, pnlPct: (pnl / cost) * 100,
         holdHours: (r.block_time - r.prev_at) / HOUR, wallet: who.get(r.seller)!, buyer: who.get(r.buyer)!,
       });
     } else if (!grouped.has(r.signature)) {

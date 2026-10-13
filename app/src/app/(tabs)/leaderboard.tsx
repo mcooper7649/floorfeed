@@ -53,7 +53,7 @@ export default function LeaderboardScreen() {
   const sm = data?.summary;
 
   return (
-    <Screen title="Leaders" subtitle="Wallets ranked by completed flips: buying an NFT and selling it later. Before fees.">
+    <Screen title="Leaders" subtitle="Wallets ranked by completed flips: buying an NFT and selling it later. After marketplace fees and royalties.">
       <ChipRow pad={pad} groups={[
         BOARDS.map((b) => <Chip key={b.key} label={b.label} on={unit === b.key} onPress={() => change(() => setUnit(b.key))} />),
         WINDOWS.map((w) => <Chip key={w.key} label={w.label} on={win === w.key} onPress={() => change(() => setWin(w.key))} />),

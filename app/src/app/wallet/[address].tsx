@@ -69,7 +69,7 @@ export default function WalletScreen() {
               ))]} />
             )}
             <View style={s.grid}>
-              <Stat wide={wide} label="Realized" value={signedSol(st.realizedSol, 2, u)} color={st.realizedSol >= 0 ? C.up : C.down} />
+              <Stat wide={wide} label="Realized, after fees" value={signedSol(st.realizedSol, 2, u)} color={st.realizedSol >= 0 ? C.up : C.down} />
               <Stat wide={wide} label="Win rate" value={st.winRate == null ? '—' : `${Math.round(st.winRate * 100)}%`} />
               <Stat wide={wide} label="Flips" value={String(st.flips)} />
               <Stat wide={wide} label="Holding" value={String(st.openPositions)} />
