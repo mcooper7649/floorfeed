@@ -291,6 +291,13 @@ export type EvmBuyTx = {
   explorerTx?: string;
 };
 
+export type Alert = {
+  id: number; wallet: string; name: string | null; avatar: string | null; side: 'buy' | 'sell';
+  collection: { symbol: string; name: string }; currency: Unit; mint: string;
+  price: number; pnl: number | null; image: string | null; t: number; read: boolean;
+};
+export type PushSubscriptionBody = { endpoint: string; keys: { p256dh: string; auth: string } };
+
 export const api = {
   // Verifies the Privy token and moves this device's follows/paper trades to the account.
   session: (deviceId: string) => send('POST', '/auth/session', { deviceId }) as Promise<{ userId: string }>,
@@ -328,6 +335,12 @@ export const api = {
     req<Leaderboard>(`/leaderboard?limit=50&window=${p.window}&sort=${p.sort}&hideMM=${p.hideMM ? 1 : 0}&unit=${p.unit}`),
   wallet: (address: string, unit?: Unit) => req<WalletDetail>(`/wallets/${address}${unit ? `?unit=${unit}` : ''}`),
   item: (symbol: string, id: string) => req<ItemDetail>(`/items/${encodeURIComponent(symbol)}/${encodeURIComponent(id)}`),
+  alerts: (userId: string) => req<{ unread: number; push: boolean; alerts: Alert[] }>(`/alerts/${encodeURIComponent(userId)}`),
+  unread: (userId: string) => req<{ unread: number; push: boolean }>(`/alerts/${encodeURIComponent(userId)}/unread`),
+  markRead: (userId: string) => send('POST', `/alerts/${encodeURIComponent(userId)}/read`, {}),
+  pushKey: () => req<{ key: string }>('/push/key'),
+  subscribePush: (userId: string, subscription: PushSubscriptionBody) => send('POST', '/push/subscribe', { userId, subscription }),
+  unsubscribePush: (endpoint: string) => send('POST', '/push/unsubscribe', { endpoint }),
   follows: (userId: string) => req<string[]>(`/follows/${userId}`),
   follow: (userId: string, wallet: string) => send('POST', '/follows', { userId, wallet }),
   unfollow: (userId: string, wallet: string) => send('DELETE', '/follows', { userId, wallet }),

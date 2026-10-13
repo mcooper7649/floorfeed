@@ -25,6 +25,12 @@ export const config = {
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN ?? "",
   telegramChatId: process.env.TELEGRAM_CHAT_ID ?? "",
   socialToken: process.env.SOCIAL_TOKEN ?? "", // shared secret for the poster
+  // Web push for wallet alerts (alerts.ts); generate with `npx web-push generate-vapid-keys`.
+  vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? "",
+  vapidPrivateKey: process.env.VAPID_PRIVATE_KEY ?? "",
+  vapidSubject: process.env.VAPID_SUBJECT ?? "https://floorfeed.io",
+  // Public URL Helius posts wallet activity to; the webhook is created/updated by alerts.ts.
+  heliusWebhookUrl: process.env.HELIUS_WEBHOOK_URL ?? "",
   socialAutoApprove: (process.env.SOCIAL_AUTO_APPROVE ?? "").split(",").map((s) => s.trim()).filter(Boolean),
   socialMinGapMs: 90 * 60_000, // at most one post per 90 minutes
   // How often to pull fresh trades / floor prices from Magic Eden.

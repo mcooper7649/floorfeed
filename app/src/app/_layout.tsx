@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { C } from '@/constants/brand';
+import { AlertsProvider } from '@/lib/alerts';
 import { AuthProvider } from '@/lib/auth';
 import { EvmWalletProvider } from '@/lib/evm-wallet';
 import { TradeModeProvider } from '@/lib/mode';
@@ -25,6 +26,7 @@ export default function RootLayout() {
     <ThemeProvider value={theme}>
       <AuthProvider>
       <SessionProvider>
+      <AlertsProvider>
       <WalletProvider>
       <EvmWalletProvider>
       <TradeModeProvider>
@@ -36,10 +38,12 @@ export default function RootLayout() {
           <Stack.Screen name="wallet/[address]" options={{ title: 'Wallet', headerBackTitle: 'Back', headerShown: !web }} />
           <Stack.Screen name="collection/[symbol]" options={{ title: 'Collection', headerBackTitle: 'Back', headerShown: !web }} />
           <Stack.Screen name="item/[symbol]/[id]" options={{ title: 'NFT', headerBackTitle: 'Back', headerShown: !web }} />
+          <Stack.Screen name="alerts" options={{ title: 'Alerts', headerBackTitle: 'Back', headerShown: !web }} />
         </Stack>
       </TradeModeProvider>
       </EvmWalletProvider>
       </WalletProvider>
+      </AlertsProvider>
       </SessionProvider>
       </AuthProvider>
     </ThemeProvider>

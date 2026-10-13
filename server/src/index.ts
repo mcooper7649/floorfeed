@@ -3,8 +3,9 @@ import cors from "@fastify/cors";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import { z } from "zod";
 import { cachedTake, getTake } from "./ai.ts";
+import { checkAlerts, hasPush, inbox, markRead, pushKey, startAlerts, subscribe, syncWebhook, unreadCount, unsubscribe } from "./alerts.ts";
 import { adoptDevice, authorize, privyUser } from "./auth.ts";
-import { ADDRESS_RE, capabilities, hasDas, holdings, solBalance } from "./chain.ts";
+import { ADDRESS_RE, capabilities, collectionOfMint, hasDas, holdings, solBalance } from "./chain.ts";
 import { cheapestListings, collectionDetail, listCollections } from "./collections.ts";
 import { COLLECTIONS, UNITS, collectionName, config, isEvm } from "./config.ts";
 import { db } from "./db.ts";
@@ -14,7 +15,7 @@ import { itemDetail, warmRarity } from "./items.ts";
 import { EVM_ADDRESS_RE, evmBalances, evmBuyTx, evmHoldings, evmQuote, totalEth } from "./trade-evm.ts";
 import { startIngest } from "./ingest.ts";
 import { KINDS, generate, nextPost, postedSince, reportResult, startSocial, submitExternal, xLength } from "./social.ts";
-import { feeRates } from "./fees.ts";
+import { amountsFrom, feeRates } from "./fees.ts";
 import { walletStats } from "./pnl.ts";
 import { card, renderPage, robots, sitemap } from "./seo.ts";
 import { nameFor, startNames } from "./sns.ts";
@@ -288,12 +289,14 @@ app.post("/follows", async (req, reply) => {
   const b = FollowBody.parse(req.body);
   if (!(await authorize(req, reply, b.userId))) return;
   db.prepare("INSERT OR IGNORE INTO follows (user_id, wallet) VALUES (?, ?)").run(b.userId, b.wallet);
+  void syncWebhook();
   return { ok: true };
 });
 app.delete("/follows", async (req, reply) => {
   const b = FollowBody.parse(req.body);
   if (!(await authorize(req, reply, b.userId))) return;
   db.prepare("DELETE FROM follows WHERE user_id = ? AND wallet = ?").run(b.userId, b.wallet);
+  void syncWebhook();
   return { ok: true };
 });
 
@@ -396,27 +399,72 @@ app.get("/paper/:userId", async (req, reply) => {
   };
 });
 
-// --- Phase 2: Helius enhanced-transaction webhook for wallet-level tracking.
-// Ingests NFT_SALE events for mints we can map to a tracked collection. ---
+// --- Helius enhanced-transaction webhook: sales by followed Solana wallets
+// (alerts.ts keeps the webhook's address list in sync with follows). Sales in
+// collections we track are stored like polled ones, with their exact fees. ---
 app.post("/webhooks/helius", async (req, reply) => {
-  if (config.heliusWebhookSecret && req.headers.authorization !== config.heliusWebhookSecret) {
+  const got = Buffer.from(req.headers.authorization ?? "");
+  const want = Buffer.from(config.heliusWebhookSecret);
+  if (!config.heliusWebhookSecret || got.length !== want.length || !timingSafeEqual(got, want)) {
     return reply.code(401).send();
   }
   const txs = z.array(z.any()).parse(req.body);
-  const known = db.prepare("SELECT collection FROM trades WHERE mint = ? LIMIT 1");
   const insert = db.prepare(`INSERT OR IGNORE INTO trades
-    (signature, collection, mint, buyer, seller, price, block_time, image, source)
-    VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?)`);
+    (signature, collection, mint, buyer, seller, price, block_time, image, source, cost, proceeds, fees_checked)
+    VALUES (@signature, @collection, @mint, @buyer, @seller, @price, @blockTime, NULL, @source, @cost, @proceeds, 1)`);
   let added = 0;
   for (const tx of txs) {
     const ev = tx?.events?.nft;
-    if (ev?.type !== "NFT_SALE" || !ev.nfts?.[0]?.mint) continue;
+    if (ev?.type !== "NFT_SALE" || !ev.nfts?.[0]?.mint || !ev.buyer || !ev.seller || !(ev.amount > 0)) continue;
     const mint = ev.nfts[0].mint as string;
-    const col = (known.get(mint) as { collection: string } | undefined)?.collection;
-    if (!col) continue;
-    added += insert.run(ev.signature, col, mint, ev.buyer, ev.seller, ev.amount / 1e9, ev.timestamp, ev.source ?? "helius").changes;
+    const collection = await collectionOfMint(mint).catch(() => null);
+    if (!collection) continue;
+    const price = ev.amount / 1e9;
+    added += insert.run({
+      signature: ev.signature, collection, mint, buyer: ev.buyer, seller: ev.seller, price, blockTime: ev.timestamp,
+      source: `helius:${String(ev.source ?? "unknown").toLowerCase()}`, ...amountsFrom(tx, ev.buyer, ev.seller, price),
+    }).changes;
   }
+  if (added) void checkAlerts();
   return { added };
+});
+
+// --- Wallet alerts: inbox and web push (alerts.ts) ---
+app.get("/alerts/:userId", async (req, reply) => {
+  const { userId } = req.params as { userId: string };
+  const { limit } = z.object({ limit: z.coerce.number().int().min(1).max(100).default(50) }).parse(req.query);
+  if (!(await authorize(req, reply, userId))) return;
+  return inbox(userId, limit);
+});
+app.get("/alerts/:userId/unread", async (req, reply) => {
+  const { userId } = req.params as { userId: string };
+  if (!(await authorize(req, reply, userId))) return;
+  return { unread: unreadCount(userId), push: hasPush(userId) };
+});
+app.post("/alerts/:userId/read", async (req, reply) => {
+  const { userId } = req.params as { userId: string };
+  if (!(await authorize(req, reply, userId))) return;
+  return { marked: markRead(userId) };
+});
+app.get("/push/key", async (_req, reply) => {
+  const key = pushKey();
+  return key ? { key } : reply.code(501).send({ error: "Push isn't configured" });
+});
+app.post("/push/subscribe", async (req, reply) => {
+  const b = z.object({
+    userId: z.string().min(1),
+    subscription: z.object({
+      endpoint: z.string().url().max(1000),
+      keys: z.object({ p256dh: z.string().max(200), auth: z.string().max(100) }),
+    }),
+  }).parse(req.body);
+  if (!(await authorize(req, reply, b.userId))) return;
+  subscribe(b.userId, b.subscription);
+  return { ok: true };
+});
+app.post("/push/unsubscribe", async (req) => {
+  const b = z.object({ endpoint: z.string().url().max(1000) }).parse(req.body);
+  return { removed: unsubscribe(b.endpoint) };
 });
 
 // --- X posting: the browser poster pulls approved drafts (see src/social.ts) ---
@@ -549,4 +597,5 @@ if (process.env.INGEST !== "0") {
 }
 startSocial();
 startNames();
+startAlerts();
 await app.listen({ host: "0.0.0.0", port: config.port });

@@ -7,11 +7,13 @@ import { T, display } from '@/constants/type';
 import { useLayout } from '@/lib/layout';
 
 // Page header: display title, one line of context, and an optional control
-// (beside the title on wide screens, under it on phones).
-export function Screen({ title, subtitle, right, children }: {
+// (beside the title on wide screens, under it on phones). `corner` is a small
+// button that stays on the title's line at every width.
+export function Screen({ title, subtitle, right, corner, children }: {
   title: string;
   subtitle?: string;
   right?: ReactNode;
+  corner?: ReactNode;
   children: ReactNode;
 }) {
   const { wide, maxWidth, pad } = useLayout();
@@ -20,7 +22,10 @@ export function Screen({ title, subtitle, right, children }: {
       <View style={[s.inner, { maxWidth }]}>
         <View style={[s.head, { paddingHorizontal: pad }, wide && s.headWide]}>
           <View style={{ flex: wide ? 1 : undefined, gap: 4 }}>
-            <Text {...display} style={wide ? T.displayL : T.display}>{title}</Text>
+            <View style={s.titleRow}>
+              <Text {...display} style={[wide ? T.displayL : T.display, { flexShrink: 1 }]}>{title}</Text>
+              {corner}
+            </View>
             {subtitle ? <Text style={T.meta}>{subtitle}</Text> : null}
           </View>
           {right ? <View style={wide ? null : s.rightNarrow}>{right}</View> : null}
@@ -39,5 +44,6 @@ const s = StyleSheet.create({
   head: { paddingTop: 8, paddingBottom: 14, gap: 12 },
   headWide: { paddingTop: 28, paddingBottom: 20, flexDirection: 'row', alignItems: 'flex-end', gap: 24 },
   rightNarrow: { alignSelf: 'stretch' },
+  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   empty: { ...T.meta, textAlign: 'center', padding: 32, lineHeight: 20 },
 });

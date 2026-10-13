@@ -5,6 +5,7 @@ import { ActivityIndicator, FlatList, Platform, StyleSheet, Text, View } from 'r
 import { CollIcon } from '@/components/coll-icon';
 import { Empty } from '@/components/screen';
 import { Avatar, TierBadge } from '@/components/event-card';
+import { PushCard } from '@/components/push-card';
 import { TopNav } from '@/components/top-nav';
 import { Button, Chip, ChipRow, ListRow, Stat as UiStat } from '@/components/ui';
 import { C } from '@/constants/brand';
@@ -96,9 +97,10 @@ export default function WalletScreen() {
                 ? "Nearly all of this wallet's buys are filled by accepted bids, the pattern of a bidding bot, so it's likely a market maker rather than a discretionary trader."
                 : "Most of this wallet's trades run through AMM pools, so it's likely a market maker rather than a discretionary trader."}</Text>
             )}
-            <View style={wide ? { alignSelf: 'flex-start' } : null}>
+            <View style={[{ gap: 12 }, wide ? { alignSelf: 'flex-start', maxWidth: 440 } : null]}>
               <Button tone={isFollowing ? 'secondary' : 'primary'} onPress={() => toggleFollow(address)}
                 label={isFollowing ? 'Following this wallet' : 'Follow this wallet'} />
+              {isFollowing && <PushCard compact />}
             </View>
             <Text style={s.section}>Recent activity</Text>
           </View>

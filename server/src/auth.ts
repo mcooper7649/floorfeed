@@ -41,7 +41,7 @@ export async function authorize(req: FastifyRequest, reply: FastifyReply, userId
 }
 
 // First sign-in on a device: move that device's follows and paper positions
-// to the Privy user so nothing is lost.
+// (and alerts and push subscriptions) to the Privy user so nothing is lost.
 export function adoptDevice(userId: string, deviceId: string) {
   if (!deviceId.startsWith("dev-")) return;
   db.transaction(() => {
@@ -49,5 +49,8 @@ export function adoptDevice(userId: string, deviceId: string) {
       .run(userId, deviceId);
     db.prepare("DELETE FROM follows WHERE user_id = ?").run(deviceId);
     db.prepare("UPDATE paper_positions SET user_id = ? WHERE user_id = ?").run(userId, deviceId);
+    db.prepare("UPDATE OR IGNORE alerts SET user_id = ? WHERE user_id = ?").run(userId, deviceId);
+    db.prepare("DELETE FROM alerts WHERE user_id = ?").run(deviceId);
+    db.prepare("UPDATE push_subs SET user_id = ? WHERE user_id = ?").run(userId, deviceId);
   })();
 }

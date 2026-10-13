@@ -132,3 +132,14 @@ async function loadHoldings(owner: string) {
   const nftValue = nfts.reduce((t, n) => t + (n.estValue ?? 0), 0);
   return { address: owner, sol, nftValue, totalValue: sol + nftValue, nfts, untracked: assets.length - nfts.length };
 }
+
+// Which tracked collection a Solana mint belongs to: a sale we've stored, or
+// its on-chain collection address (DAS). null when it isn't one we track.
+const knownMint = db.prepare(`SELECT collection FROM trades WHERE mint = ? LIMIT 1`);
+export async function collectionOfMint(mint: string): Promise<string | null> {
+  const seen = (knownMint.get(mint) as { collection: string } | undefined)?.collection;
+  if (seen || !hasDas()) return seen ?? null;
+  const [asset, byAddress] = await Promise.all([rpc<DasAsset | null>("getAsset", { id: mint }), collectionAddresses()]);
+  const addr = asset && collOf(asset);
+  return (addr && byAddress.get(addr)) || null;
+}

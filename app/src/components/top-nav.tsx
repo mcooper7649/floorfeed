@@ -2,6 +2,7 @@ import { Link, router, usePathname } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { AlertsBell } from '@/components/alerts-bell';
 import { WalletButton } from '@/components/wallet-button';
 import { C } from '@/constants/brand';
 import { T, display } from '@/constants/type';
@@ -68,6 +69,7 @@ export function TopNav({ back }: { back?: boolean }) {
               autoCapitalize="none"
               accessibilityLabel="Search collections"
             />
+            <AlertsBell />
             <WalletButton />
           </>
         )}

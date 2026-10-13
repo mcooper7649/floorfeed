@@ -108,6 +108,35 @@ CREATE TABLE IF NOT EXISTS evm_discovered (
   rank     INTEGER NOT NULL,
   seen_at  INTEGER NOT NULL
 );
+-- Wallet alerts (alerts.ts): one row per follower per trade by a followed
+-- wallet, plus the browsers that asked for push notifications.
+CREATE TABLE IF NOT EXISTS alerts (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    TEXT NOT NULL,
+  wallet     TEXT NOT NULL,
+  signature  TEXT NOT NULL,
+  side       TEXT NOT NULL,            -- buy | sell
+  collection TEXT NOT NULL,
+  mint       TEXT NOT NULL,
+  price      REAL NOT NULL,
+  pnl        REAL,                     -- sells of a tracked buy: after fees
+  image      TEXT,
+  block_time INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,         -- unix ms
+  read_at    INTEGER,
+  UNIQUE (user_id, signature, wallet)
+);
+CREATE INDEX IF NOT EXISTS alerts_user ON alerts(user_id, id DESC);
+CREATE TABLE IF NOT EXISTS push_subs (
+  endpoint   TEXT PRIMARY KEY,
+  user_id    TEXT NOT NULL,
+  p256dh     TEXT NOT NULL,
+  auth       TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS push_subs_user ON push_subs(user_id);
+-- Small bits of server state (cursors, webhook ids).
+CREATE TABLE IF NOT EXISTS app_state (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS collection_traits (
   symbol      TEXT PRIMARY KEY,
   total       INTEGER NOT NULL,

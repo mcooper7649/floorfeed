@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
+import { AlertsBell } from '@/components/alerts-bell';
 import { EventCard } from '@/components/event-card';
 import { Empty, Screen } from '@/components/screen';
 import { Chip, ChipRow } from '@/components/ui';
@@ -63,7 +64,7 @@ export default function FeedScreen() {
   };
 
   return (
-    <Screen title="FloorFeed" subtitle="Live NFT trades from wallets with a track record">
+    <Screen title="FloorFeed" subtitle="Live NFT trades from wallets with a track record" corner={wide ? undefined : <AlertsBell />}>
       <View style={[s.tabs, { paddingHorizontal: pad }]}>
         {VIEWS.map((v) => (
           <Pressable key={v.key} accessibilityRole="tab" accessibilityState={{ selected: view === v.key }}
