@@ -383,6 +383,7 @@ ${urls.map(([p, f, pr]) => `  <url><loc>${SITE}${p}</loc><lastmod>${today}</last
 export const robots = () => `User-agent: *
 Allow: /
 Disallow: /portfolio
+Disallow: /alerts
 Disallow: /api/
 
 Sitemap: ${SITE}/sitemap.xml
