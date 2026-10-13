@@ -112,8 +112,8 @@ export function BuySheet({ symbol, open, onClose, onPaper }: {
 function Row({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
   return (
     <View style={s.row}>
-      <Text style={[s.meta, strong && { color: C.text, fontWeight: '700' }]}>{label}</Text>
-      <Text style={[s.val, strong && { fontWeight: '800' }]}>{value}</Text>
+      <Text style={[s.meta, strong && { color: C.text, fontWeight: '600' }]}>{label}</Text>
+      <Text style={[s.val, strong && { fontWeight: '600' }]}>{value}</Text>
     </View>
   );
 }
@@ -122,19 +122,19 @@ const s = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: '#000000AA', alignItems: 'center', justifyContent: 'center', padding: 16 },
   sheet: { width: '100%', maxWidth: 440, backgroundColor: C.card, borderRadius: 20, padding: 20, gap: 14, borderWidth: 1, borderColor: C.border },
   head: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  title: { color: C.text, fontSize: 20, fontWeight: '800' },
+  title: { color: C.text, fontSize: 21, fontWeight: '600' },
   item: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   loading: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 20, justifyContent: 'center' },
-  name: { color: C.text, fontWeight: '800', fontSize: 16 },
-  price: { color: C.text, fontWeight: '800', fontSize: 22, fontVariant: ['tabular-nums'], marginTop: 2 },
-  meta: { color: C.dim, fontSize: 12.5, lineHeight: 18 },
+  name: { color: C.text, fontWeight: '600', fontSize: 15 },
+  price: { color: C.text, fontWeight: '600', fontSize: 21, fontVariant: ['tabular-nums'], marginTop: 2 },
+  meta: { color: C.dim, fontSize: 13, lineHeight: 18 },
   rows: { gap: 8, padding: 12, borderRadius: 12, backgroundColor: C.cardHi },
   row: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
   val: { color: C.text, fontSize: 13, fontVariant: ['tabular-nums'] },
   err: { color: C.down, fontSize: 13 },
   primary: { backgroundColor: C.accent, borderRadius: 12, paddingVertical: 13, alignItems: 'center' },
-  primaryTxt: { color: C.accentInk, fontWeight: '800', fontSize: 15 },
+  primaryTxt: { color: C.accentInk, fontWeight: '600', fontSize: 15 },
   footer: { flexDirection: 'row', gap: 10 },
   secondary: { borderRadius: 12, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: C.border, backgroundColor: C.cardHi },
-  secondaryTxt: { color: C.text, fontWeight: '800' },
+  secondaryTxt: { color: C.text, fontWeight: '600' },
 });

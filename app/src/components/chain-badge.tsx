@@ -16,5 +16,5 @@ export function ChainBadge({ chain }: { chain: Chain }) {
 
 const s = StyleSheet.create({
   badge: { borderRadius: 5, borderWidth: 1, borderColor: C.border, backgroundColor: C.cardHi, paddingHorizontal: 5, paddingVertical: 1 },
-  txt: { color: C.dim, fontSize: 9.5, fontWeight: '800', letterSpacing: 0.5 },
+  txt: { color: C.dim, fontSize: 11, fontWeight: '600', letterSpacing: 0.3 },
 });

@@ -256,7 +256,7 @@ export function PriceChart({ sales, buckets, bucketSec, floor, rangeDays, asOf, 
 const TipRow = ({ label, value, strong }: { label: string; value: string; strong?: boolean }) => (
   <View style={s.tipRow}>
     <Text style={s.tipLabel}>{label}</Text>
-    <Text style={[s.tipVal, strong && { fontWeight: '800', fontSize: 14 }]}>{value}</Text>
+    <Text style={[s.tipVal, strong && { fontWeight: '600', fontSize: 15 }]}>{value}</Text>
   </View>
 );
 
@@ -277,21 +277,21 @@ function Key({ kind, color, label }: { kind: 'line' | 'dot' | 'ref' | 'bar'; col
 
 const s = StyleSheet.create({
   head: { gap: 2, marginBottom: 8 },
-  headVal: { color: C.text, fontSize: 24, fontWeight: '800', fontVariant: ['tabular-nums'] },
-  headChg: { fontSize: 14, fontWeight: '800' },
-  ctx: { color: C.dim, fontSize: 12.5 },
+  headVal: { color: C.text, fontSize: 28, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  headChg: { fontSize: 15, fontWeight: '600' },
+  ctx: { color: C.dim, fontSize: 13 },
   legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginBottom: 6 },
   key: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   keyTxt: { color: C.dim, fontSize: 12 },
-  hint: { color: C.dim, fontSize: 11.5, marginTop: 4 },
+  hint: { color: C.dim, fontSize: 12, marginTop: 4 },
   tv: { color: C.dim, textDecorationLine: 'underline' },
   tip: {
     position: 'absolute', top: 8, width: TIP_W, backgroundColor: C.cardHi, borderRadius: 10, padding: 10, gap: 3, zIndex: 5,
     borderWidth: 1, borderColor: C.border, shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 12,
   },
-  tipWhen: { color: C.text, fontWeight: '700', fontSize: 12.5, marginBottom: 2 },
+  tipWhen: { color: C.text, fontWeight: '600', fontSize: 13, marginBottom: 2 },
   tipRow: { flexDirection: 'row', justifyContent: 'space-between' },
   tipSep: { height: 1, backgroundColor: C.border, marginVertical: 3 },
   tipLabel: { color: C.dim, fontSize: 12 },
-  tipVal: { color: C.text, fontSize: 12.5, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  tipVal: { color: C.text, fontSize: 13, fontWeight: '600', fontVariant: ['tabular-nums'] },
 });

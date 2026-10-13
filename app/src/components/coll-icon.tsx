@@ -17,5 +17,5 @@ export function CollIcon({ name, uri, size = 40, radius = 10 }: { name: string; 
 
 const s = StyleSheet.create({
   box: { backgroundColor: C.cardHi, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  letter: { color: C.dim, fontWeight: '800' },
+  letter: { color: C.dim, fontWeight: '600' },
 });

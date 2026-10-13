@@ -163,12 +163,12 @@ const walletFlips = db.prepare(`
 
 const walletActivity = db.prepare(`
   SELECT COUNT(*) AS trades, COALESCE(SUM(source IN ('mmm','tensorswap','tcomp')), 0) AS poolTrades,
-         COALESCE(SUM(buyer = ?), 0) AS buys,
-         COALESCE(SUM(buyer = ?2 AND source IN ('os:WETH','os:BETH')), 0) AS bidBuys,
+         COALESCE(SUM(buyer = @w), 0) AS buys,
+         COALESCE(SUM(buyer = @w AND source IN ('os:WETH','os:BETH')), 0) AS bidBuys,
          MAX(block_time) AS lastActive
-  FROM trades WHERE buyer = ?2 OR seller = ?2`);
+  FROM trades WHERE buyer = @w OR seller = @w`);
 
 export function traderProfile(wallet: string) {
-  const act = walletActivity.get(wallet, wallet) as Activity;
+  const act = walletActivity.get({ w: wallet }) as Activity;
   return profileFrom(wallet, walletFlips.all(wallet) as Flip[], act);
 }

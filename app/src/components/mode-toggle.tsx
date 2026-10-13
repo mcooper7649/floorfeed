@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { C } from '@/constants/brand';
+import { T } from '@/constants/type';
 import { useTradeMode, type TradeMode } from '@/lib/mode';
 
 // Paper is tinted with the AI/practice purple, Real with the brand accent, so
@@ -54,9 +55,9 @@ export function ModeChip({ mode }: { mode: TradeMode }) {
 
 const s = StyleSheet.create({
   track: { flexDirection: 'row', backgroundColor: C.bg, borderRadius: 12, padding: 3, borderWidth: 1, borderColor: C.border },
-  seg: { flex: 1, borderRadius: 9, paddingVertical: 9, alignItems: 'center' },
-  segTxt: { color: C.dim, fontWeight: '800', fontSize: 14 },
-  copy: { color: C.dim, fontSize: 12.5, lineHeight: 18 },
+  seg: { flex: 1, borderRadius: 9, paddingVertical: 8, alignItems: 'center' },
+  segTxt: { ...T.button, color: C.dim },
+  copy: T.meta,
   chip: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 5, paddingVertical: 1 },
-  chipTxt: { fontSize: 10, fontWeight: '900', letterSpacing: 0.8 },
+  chipTxt: { fontSize: 11, fontWeight: '700', letterSpacing: 0.3 },
 });

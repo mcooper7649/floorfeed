@@ -38,7 +38,7 @@ export function TraderCard({ t, rank, following, onToggleFollow }: {
         <View style={[s.row, { alignItems: 'flex-end' }]}>
           <View style={{ flex: 1 }}>
             <Text style={s.label}>Realized P&L</Text>
-            <Text style={[s.pnl, { color: up ? C.up : C.down }]}>{signedSol(t.realizedSol, 2, u)}</Text>
+            <Text numberOfLines={1} style={[s.pnl, { color: up ? C.up : C.down }]}>{signedSol(t.realizedSol, 2, u)}</Text>
           </View>
           {t.roiPct != null && (
             <View style={[s.roi, { backgroundColor: (t.roiPct >= 0 ? C.up : C.down) + '22' }]}>
@@ -92,25 +92,25 @@ const Stat = ({ label, value, sub }: { label: string; value: string; sub?: strin
 const s = StyleSheet.create({
   card: { backgroundColor: C.card, borderRadius: 18, padding: 14, gap: 12, borderWidth: 1, borderColor: C.border },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  rank: { color: C.dim, width: 22, fontWeight: '800', fontSize: 17 },
-  addr: { color: C.text, fontWeight: '700', fontSize: 15 },
+  rank: { color: C.dim, width: 22, fontWeight: '600', fontSize: 18 },
+  addr: { color: C.text, fontWeight: '600', fontSize: 15 },
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   badge: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2, borderWidth: 1, borderColor: C.border, backgroundColor: C.cardHi },
-  badgeTxt: { color: C.dim, fontSize: 11, fontWeight: '700' },
+  badgeTxt: { color: C.dim, fontSize: 11, fontWeight: '600' },
   follow: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: C.text },
   following: { backgroundColor: 'transparent', borderWidth: 1, borderColor: C.border },
-  followTxt: { color: C.bg, fontWeight: '700', fontSize: 12.5 },
-  label: { color: C.dim, fontSize: 11.5, fontWeight: '600' },
-  pnl: { fontSize: 26, fontWeight: '800', letterSpacing: -0.5 },
+  followTxt: { color: C.bg, fontWeight: '600', fontSize: 13 },
+  label: { color: C.dim, fontSize: 12, fontWeight: '600' },
+  pnl: { fontSize: 21, lineHeight: 26, fontWeight: '600', letterSpacing: -0.2, fontVariant: ['tabular-nums'], flexShrink: 1 },
   roi: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, marginBottom: 4 },
-  roiTxt: { fontWeight: '800', fontSize: 12.5 },
+  roiTxt: { fontWeight: '600', fontSize: 13 },
   grid: { flexDirection: 'row', gap: 6 },
   stat: { flex: 1, backgroundColor: C.cardHi, borderRadius: 10, padding: 8, gap: 1 },
-  statVal: { color: C.text, fontWeight: '800', fontSize: 14.5 },
+  statVal: { color: C.text, fontWeight: '600', fontSize: 15 },
   statSub: { color: C.dim, fontSize: 11 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, borderWidth: 1, borderColor: C.border, paddingHorizontal: 10, paddingVertical: 4, maxWidth: '100%' },
-  chipTxt: { color: C.text, fontWeight: '600', fontSize: 12.5, flexShrink: 1 },
+  chipTxt: { color: C.text, fontWeight: '600', fontSize: 13, flexShrink: 1 },
   chipMeta: { color: C.dim, fontSize: 12 },
   foot: { color: C.dim, fontSize: 12, lineHeight: 17 },
 });

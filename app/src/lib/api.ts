@@ -60,7 +60,7 @@ export type Ecosystem = 'solana' | 'evm';
 
 export type PaperPosition = {
   id: number;
-  collection: { symbol: string; name: string; floor: number | null };
+  collection: { symbol: string; name: string; floor: number | null; image?: string | null };
   currency: string; // SOL or ETH: each position stays in its collection's unit
   entryPrice: number;
   exitPrice: number | null;

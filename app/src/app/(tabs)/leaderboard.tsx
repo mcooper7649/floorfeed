@@ -113,6 +113,6 @@ const s = StyleSheet.create({
   sep: { width: 1, height: 20, backgroundColor: C.border, marginHorizontal: 2 },
   chip: { paddingHorizontal: 13, paddingVertical: 7, borderRadius: 999, backgroundColor: C.card, borderWidth: 1, borderColor: C.border },
   chipOn: { backgroundColor: C.accent, borderColor: C.accent },
-  chipTxt: { color: C.text, fontWeight: '700', fontSize: 13 },
-  summary: { color: C.dim, fontSize: 12.5, lineHeight: 18, paddingHorizontal: 16, paddingBottom: 10 },
+  chipTxt: { color: C.text, fontWeight: '600', fontSize: 13 },
+  summary: { color: C.dim, fontSize: 13, lineHeight: 18, paddingHorizontal: 16, paddingBottom: 10 },
 });

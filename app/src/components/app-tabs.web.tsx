@@ -51,5 +51,5 @@ const s = StyleSheet.create({
   },
   btn: { paddingHorizontal: 18, paddingVertical: 9, borderRadius: 999 },
   btnOn: { backgroundColor: C.accent },
-  txt: { color: C.dim, fontWeight: '700', fontSize: 14 },
+  txt: { color: C.dim, fontWeight: '600', fontSize: 15 },
 });

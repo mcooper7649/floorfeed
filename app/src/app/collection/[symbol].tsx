@@ -17,6 +17,7 @@ import { PriceChart } from '@/components/price-chart';
 import { Empty } from '@/components/screen';
 import { TopNav } from '@/components/top-nav';
 import { C } from '@/constants/brand';
+import { T, display } from '@/constants/type';
 import { api, type CollectionDetail } from '@/lib/api';
 import { amt, shortAddr, signedSol, sol, timeAgo, usdCompact } from '@/lib/format';
 import { thumb } from '@/lib/img';
@@ -188,7 +189,7 @@ export default function CollectionScreen() {
               <CollIcon name={data.name} uri={data.image} size={avatar} radius={avatar * 0.22} />
             </View>
             <View style={s.titleRow}>
-              <Text style={[s.title, wide && { fontSize: 40 }]}>{data.name}</Text>
+              <Text {...display} style={wide ? T.displayL : T.display}>{data.name}</Text>
               <View style={s.badgeRow}>
                 <ChainBadge chain={data.chain} />
                 <Text style={s.desc}>{CHAIN_NAME[data.chain]} · {data.category} · data from {market}</Text>
@@ -349,44 +350,44 @@ const s = StyleSheet.create({
   hero: { flexDirection: 'row', alignItems: 'flex-end', gap: 18 },
   avatarRing: { borderWidth: 4, borderColor: C.bg, backgroundColor: C.bg },
   titleRow: { flex: 1, gap: 6, paddingBottom: 6 },
-  title: { color: C.text, fontSize: 26, fontWeight: '800', letterSpacing: -0.5 },
+  title: { color: C.text, fontSize: 28, fontWeight: '600', letterSpacing: -0.5 },
   badgeRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   desc: { color: C.dim, fontSize: 13, lineHeight: 19 },
-  about: { fontSize: 14, lineHeight: 21 },
+  about: { fontSize: 15, lineHeight: 21 },
   stats: { flexDirection: 'row', flexWrap: 'wrap', gap: 22, rowGap: 14, paddingVertical: 4 },
   stat: { gap: 2 },
-  statVal: { color: C.text, fontSize: 20, fontWeight: '800', fontVariant: ['tabular-nums'] },
-  statLabel: { color: C.dim, fontSize: 12.5, fontWeight: '600' },
+  statVal: { color: C.text, fontSize: 21, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  statLabel: { color: C.dim, fontSize: 13, fontWeight: '600' },
   statSub: { color: C.dim, fontWeight: '400' },
   actions: { flexDirection: 'row', gap: 10 },
   statsWide: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' },
   cta: { backgroundColor: C.accent, borderRadius: 12, paddingVertical: 13, paddingHorizontal: 28, alignItems: 'center' },
-  ctaTxt: { color: C.accentInk, fontWeight: '800', fontSize: 15 },
+  ctaTxt: { color: C.accentInk, fontWeight: '600', fontSize: 15 },
   ctaAlt: { borderRadius: 12, paddingVertical: 13, paddingHorizontal: 24, alignItems: 'center', borderWidth: 1, borderColor: C.border, backgroundColor: C.card },
-  ctaAltTxt: { color: C.text, fontWeight: '800', fontSize: 15 },
+  ctaAltTxt: { color: C.text, fontWeight: '600', fontSize: 15 },
   filters: { flexDirection: 'row', gap: 8, alignItems: 'center', marginTop: 4 },
   chip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, backgroundColor: C.card, borderWidth: 1, borderColor: C.border },
   chipOn: { backgroundColor: C.accent, borderColor: C.accent },
-  chipTxt: { color: C.text, fontWeight: '700', fontSize: 13 },
+  chipTxt: { color: C.text, fontWeight: '600', fontSize: 13 },
   note: { color: C.dim, fontSize: 12, marginLeft: 4 },
   cols: { flexDirection: 'row', gap: 16, alignItems: 'flex-start' },
   card: { backgroundColor: C.card, borderRadius: 18, padding: 16, gap: 8, borderWidth: 1, borderColor: C.border },
   cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  cardTitle: { color: C.text, fontSize: 16, fontWeight: '800' },
-  sectionTitle: { color: C.text, fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
-  link: { color: C.accent, fontWeight: '700', fontSize: 13 },
+  cardTitle: { color: C.text, fontSize: 15, fontWeight: '600' },
+  sectionTitle: { color: C.text, fontSize: 21, fontWeight: '600', letterSpacing: -0.3 },
+  link: { color: C.accent, fontWeight: '600', fontSize: 13 },
   tRow: { flexDirection: 'row', paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
-  tHead: { color: C.dim, fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
+  tHead: { color: C.dim, fontSize: 11, fontWeight: '600', letterSpacing: 0.3 },
   tCell: { color: C.text, fontSize: 13, fontVariant: ['tabular-nums'] },
   num: { flex: 1, textAlign: 'right' },
   listRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 },
-  rank: { color: C.dim, width: 18, fontWeight: '800' },
-  rowTitle: { color: C.text, fontWeight: '700' },
+  rank: { color: C.dim, width: 18, fontWeight: '600' },
+  rowTitle: { color: C.text, fontWeight: '600' },
   rowMeta: { color: C.dim, fontSize: 12 },
-  rowVal: { color: C.text, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  rowVal: { color: C.text, fontWeight: '600', fontVariant: ['tabular-nums'] },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   item: { backgroundColor: C.card, borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: C.border },
   itemBody: { padding: 10, gap: 2 },
-  itemName: { color: C.dim, fontSize: 12.5, fontWeight: '600' },
-  itemPrice: { color: C.text, fontSize: 16, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  itemName: { color: C.dim, fontSize: 13, fontWeight: '600' },
+  itemPrice: { color: C.text, fontSize: 15, fontWeight: '600', fontVariant: ['tabular-nums'] },
 });

@@ -92,6 +92,6 @@ export function DepthChart({ listings, floor, tall }: { listings: Listing[]; flo
 const s = StyleSheet.create({
   readout: { minHeight: 48, justifyContent: 'center' },
   selRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  readVal: { color: C.text, fontSize: 15, fontWeight: '800' },
-  readCtx: { color: C.dim, fontSize: 12.5 },
+  readVal: { color: C.text, fontSize: 15, fontWeight: '600' },
+  readCtx: { color: C.dim, fontSize: 13 },
 });

@@ -70,8 +70,8 @@ export function FloorLine({ points, currency, tall }: { points: { ts: number; fl
 
 const s = StyleSheet.create({
   head: { gap: 2, marginBottom: 8 },
-  val: { color: C.text, fontSize: 22, fontWeight: '800', fontVariant: ['tabular-nums'] },
-  chg: { fontSize: 13, fontWeight: '800' },
-  ctx: { color: C.dim, fontSize: 12.5 },
-  tv: { color: C.dim, fontSize: 11.5, marginTop: 4, textDecorationLine: 'underline' },
+  val: { color: C.text, fontSize: 21, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  chg: { fontSize: 13, fontWeight: '600' },
+  ctx: { color: C.dim, fontSize: 13 },
+  tv: { color: C.dim, fontSize: 12, marginTop: 4, textDecorationLine: 'underline' },
 });

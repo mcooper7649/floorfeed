@@ -9,6 +9,7 @@ import { NftImage, Pill } from '@/components/nft-image';
 import { Empty } from '@/components/screen';
 import { TopNav } from '@/components/top-nav';
 import { C } from '@/constants/brand';
+import { T, display } from '@/constants/type';
 import { api, type ItemDetail } from '@/lib/api';
 import { shortAddr, signedSol, sol, timeAgo } from '@/lib/format';
 import { useLayout } from '@/lib/layout';
@@ -75,7 +76,7 @@ export default function ItemScreen() {
             <Text style={s.collName}>{data.collection.name} ›</Text>
           </Pressable>
         </Link>
-        <Text style={[s.title, wide && { fontSize: 34 }]}>{title}</Text>
+        <Text {...display} style={wide ? T.displayL : T.display}>{title}</Text>
       </View>
 
       <View style={s.statRow}>
@@ -128,12 +129,12 @@ export default function ItemScreen() {
 
   const traits = (
     <View style={{ gap: 10 }}>
-      <Text style={s.section}>TRAITS · RAREST FIRST</Text>
+      <Text style={s.section}>Traits, rarest first</Text>
       {data.traits.length === 0 ? <Text style={s.note}>This NFT has no trait metadata.</Text> : (
         <View style={s.traitGrid}>
           {data.traits.map((t) => (
             <View key={`${t.type}:${t.value}`} style={[s.trait, wide && { flexBasis: '31%' }]}>
-              <Text style={s.traitType} numberOfLines={1}>{t.type.toUpperCase()}</Text>
+              <Text style={s.traitType} numberOfLines={1}>{t.type}</Text>
               <Text style={s.traitVal} numberOfLines={2}>{t.value}</Text>
               {t.pct != null && (
                 <>
@@ -157,7 +158,7 @@ export default function ItemScreen() {
 
   const history = (
     <View style={{ gap: 4 }}>
-      <Text style={s.section}>SALES OF THIS NFT</Text>
+      <Text style={s.section}>Sales of this NFT</Text>
       {data.history.length === 0 ? <Text style={s.note}>No sales of this NFT in FloorFeed&apos;s history yet.</Text> :
         data.history.map((h) => (
           <View key={h.signature} style={s.saleRow}>
@@ -200,7 +201,7 @@ export default function ItemScreen() {
 
 const Fact = ({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) => (
   <View style={s.fact}>
-    <Text style={s.label}>{label.toUpperCase()}</Text>
+    <Text style={s.label}>{label}</Text>
     <Text style={[s.factVal, color ? { color } : null]} numberOfLines={1}>{value}</Text>
     {sub ? <Text style={s.meta} numberOfLines={1}>{sub}</Text> : null}
   </View>
@@ -209,33 +210,33 @@ const Fact = ({ label, value, sub, color }: { label: string; value: string; sub?
 const s = StyleSheet.create({
   fill: { flex: 1, backgroundColor: C.bg },
   collRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  collName: { color: C.accent, fontWeight: '700', fontSize: 14 },
-  title: { color: C.text, fontSize: 26, fontWeight: '800', letterSpacing: -0.5 },
+  collName: { color: C.accent, fontWeight: '600', fontSize: 15 },
+  title: { color: C.text, fontSize: 28, fontWeight: '600', letterSpacing: -0.5 },
   statRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   fact: { flexGrow: 1, flexBasis: '30%', minWidth: 140, backgroundColor: C.card, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: C.border, gap: 2 },
-  factVal: { color: C.text, fontSize: 20, fontWeight: '800', fontVariant: ['tabular-nums'] },
-  label: { color: C.dim, fontSize: 11, fontWeight: '800', letterSpacing: 0.8 },
-  meta: { color: C.dim, fontSize: 12.5 },
-  note: { color: C.dim, fontSize: 12.5, lineHeight: 18 },
+  factVal: { color: C.text, fontSize: 21, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  label: T.label,
+  meta: { color: C.dim, fontSize: 13 },
+  note: { color: C.dim, fontSize: 13, lineHeight: 18 },
   owner: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.card, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: C.border },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  ownerName: { color: C.text, fontWeight: '700', fontSize: 15, flexShrink: 1 },
-  chev: { color: C.dim, fontSize: 22 },
+  ownerName: { color: C.text, fontWeight: '600', fontSize: 15, flexShrink: 1 },
+  chev: { color: C.dim, fontSize: 21 },
   ctaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   primary: { flexGrow: 1, backgroundColor: C.accent, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center' },
-  primaryTxt: { color: C.accentInk, fontWeight: '800' },
+  primaryTxt: { color: C.accentInk, fontWeight: '600' },
   secondary: { flexGrow: 1, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center', borderWidth: 1, borderColor: C.border, backgroundColor: C.cardHi },
-  secondaryTxt: { color: C.text, fontWeight: '800' },
-  section: { color: C.dim, fontSize: 11, fontWeight: '800', letterSpacing: 1 },
+  secondaryTxt: { color: C.text, fontWeight: '600' },
+  section: T.title,
   traitGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   trait: { flexGrow: 1, flexBasis: '46%', backgroundColor: C.card, borderRadius: 12, padding: 10, borderWidth: 1, borderColor: C.border, gap: 3 },
-  traitType: { color: C.dim, fontSize: 10.5, fontWeight: '800', letterSpacing: 0.6 },
-  traitVal: { color: C.text, fontSize: 14.5, fontWeight: '700' },
+  traitType: T.caption,
+  traitVal: { color: C.text, fontSize: 15, fontWeight: '600' },
   bar: { height: 4, borderRadius: 2, backgroundColor: C.grid, overflow: 'hidden', marginTop: 4 },
   barFill: { height: 4, borderRadius: 2 },
-  traitPct: { color: C.dim, fontSize: 11.5, fontVariant: ['tabular-nums'] },
+  traitPct: { color: C.dim, fontSize: 12, fontVariant: ['tabular-nums'] },
   saleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
-  saleWho: { color: C.text, fontSize: 14 },
-  link: { color: C.text, fontWeight: '700' },
-  salePrice: { color: C.text, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  saleWho: { color: C.text, fontSize: 15 },
+  link: { color: C.text, fontWeight: '600' },
+  salePrice: { color: C.text, fontWeight: '600', fontVariant: ['tabular-nums'] },
 });

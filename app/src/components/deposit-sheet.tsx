@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { C } from '@/constants/brand';
+import { T } from '@/constants/type';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useEvmWallet } from '@/lib/evm-wallet';
@@ -136,7 +137,7 @@ function Body({ onClose, suggest, setFunding, chain }: {
         </View>
       )}
 
-      <Text style={s.label}>BUY WITH CARD OR APPLE PAY</Text>
+      <Text style={s.label}>Buy with card or Apple Pay</Text>
       <View style={s.chips}>
         {amounts.map((a) => (
           <Pressable key={a} accessibilityRole="button" onPress={() => setAmount(a)} style={[s.chip, amount === a && s.chipOn]}>
@@ -152,7 +153,7 @@ function Body({ onClose, suggest, setFunding, chain }: {
       </Text>
       {error && <Text style={s.err}>{error}</Text>}
 
-      <Text style={s.label}>OR SEND FROM AN EXCHANGE OR WALLET</Text>
+      <Text style={s.label}>Or send from an exchange or wallet</Text>
       <View style={s.recv}>
         <View style={s.qrBox}>
           {qr ? <Image source={qr} style={s.qr} contentFit="contain" accessibilityLabel="QR code of your wallet address" /> : null}
@@ -182,25 +183,25 @@ const s = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: '#000000AA', alignItems: 'center', justifyContent: 'center', padding: 16 },
   sheet: { width: '100%', maxWidth: 440, backgroundColor: C.card, borderRadius: 20, padding: 20, gap: 12, borderWidth: 1, borderColor: C.border },
   head: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 },
-  title: { color: C.text, fontSize: 20, fontWeight: '800' },
-  balance: { color: C.text, fontSize: 15, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  title: { color: C.text, fontSize: 21, fontWeight: '600' },
+  balance: { color: C.text, fontSize: 15, fontWeight: '600', fontVariant: ['tabular-nums'] },
   note: { color: C.dim, fontSize: 13, lineHeight: 19 },
-  meta: { color: C.dim, fontSize: 12.5 },
-  fine: { color: C.muted, fontSize: 11.5, lineHeight: 16 },
+  meta: { color: C.dim, fontSize: 13 },
+  fine: { color: C.muted, fontSize: 12, lineHeight: 16 },
   err: { color: C.down, fontSize: 13 },
-  label: { color: C.dim, fontSize: 11, fontWeight: '800', letterSpacing: 1, marginTop: 6 },
+  label: { ...T.label, marginTop: 6 },
   chips: { flexDirection: 'row', gap: 8 },
   chip: { flex: 1, alignItems: 'center', paddingVertical: 9, borderRadius: 10, borderWidth: 1, borderColor: C.border, backgroundColor: C.cardHi },
   chipOn: { backgroundColor: C.accent, borderColor: C.accent },
-  chipTxt: { color: C.text, fontWeight: '700', fontSize: 13, fontVariant: ['tabular-nums'] },
+  chipTxt: { color: C.text, fontWeight: '600', fontSize: 13, fontVariant: ['tabular-nums'] },
   primary: { backgroundColor: C.accent, borderRadius: 12, paddingVertical: 13, alignItems: 'center' },
-  primaryTxt: { color: C.accentInk, fontWeight: '800', fontSize: 15 },
+  primaryTxt: { color: C.accentInk, fontWeight: '600', fontSize: 15 },
   secondary: { borderRadius: 12, paddingVertical: 11, alignItems: 'center', borderWidth: 1, borderColor: C.border, backgroundColor: C.cardHi },
-  secondaryTxt: { color: C.text, fontWeight: '800' },
+  secondaryTxt: { color: C.text, fontWeight: '600' },
   recv: { flexDirection: 'row', gap: 14, alignItems: 'center' },
   qrBox: { width: 116, height: 116, borderRadius: 12, backgroundColor: '#FFFFFF', padding: 6 },
   qr: { width: '100%', height: '100%' },
-  addr: { color: C.text, fontSize: 12.5, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  addr: { color: C.text, fontSize: 13, fontWeight: '600', fontVariant: ['tabular-nums'] },
   received: { padding: 12, borderRadius: 12, backgroundColor: '#3DDC9722', borderWidth: 1, borderColor: C.up, gap: 2 },
-  receivedTxt: { color: C.up, fontWeight: '800', fontSize: 15 },
+  receivedTxt: { color: C.up, fontWeight: '600', fontSize: 15 },
 });

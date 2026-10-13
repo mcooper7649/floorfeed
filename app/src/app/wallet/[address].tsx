@@ -7,6 +7,7 @@ import { Empty } from '@/components/screen';
 import { Avatar, TierBadge } from '@/components/event-card';
 import { TopNav } from '@/components/top-nav';
 import { C } from '@/constants/brand';
+import { T, display } from '@/constants/type';
 import { api, type WalletDetail } from '@/lib/api';
 import { holdTime, isEvmWallet, pct, shortAddr, signedSol, sol, timeAgo, unitFor } from '@/lib/format';
 import { useLayout } from '@/lib/layout';
@@ -51,7 +52,7 @@ export default function WalletScreen() {
               {id && <Avatar t={id} size={wide ? 64 : 52} />}
               <View style={{ flex: 1, gap: 3 }}>
                 <View style={s.nameRow}>
-                  <Text style={[s.title, wide && { fontSize: 32 }]} numberOfLines={1}>{id?.name ?? shortAddr(address)}</Text>
+                  <Text {...display} style={[wide ? T.displayL : T.display, s.title]} numberOfLines={1}>{id?.name ?? shortAddr(address)}</Text>
                   {id && <TierBadge tier={id.tier} />}
                 </View>
                 <Text style={s.addr} selectable numberOfLines={1}>{id?.name || isEvmWallet(address) ? address : 'no .sol name'}</Text>
@@ -90,7 +91,7 @@ export default function WalletScreen() {
                 {isFollowing ? 'Following · get alerts on buys' : 'Follow this wallet'}
               </Text>
             </Pressable>
-            <Text style={s.section}>RECENT ACTIVITY</Text>
+            <Text style={s.section}>Recent activity</Text>
           </View>
         }
         ListEmptyComponent={<Empty text="No tracked trades." />}
@@ -102,7 +103,7 @@ export default function WalletScreen() {
               <Text style={s.name}>{t.collection}</Text>
               <Text style={s.meta}>{timeAgo(t.blockTime)} ago</Text>
             </View>
-            <Text style={[s.side, { color: t.side === 'buy' ? C.up : C.down }]}>{t.side.toUpperCase()}</Text>
+            <Text style={[s.side, { color: t.side === 'buy' ? C.up : C.down }]}>{t.side === 'buy' ? 'Buy' : 'Sell'}</Text>
             <Text style={s.price}>{sol(t.price, 2, u)}</Text>
           </Pressable>
           </Link>
@@ -121,26 +122,26 @@ const Stat = ({ label, value, color, wide }: { label: string; value: string; col
 
 const s = StyleSheet.create({
   fill: { flex: 1, backgroundColor: C.bg },
-  title: { color: C.text, fontSize: 24, fontWeight: '800', fontVariant: ['tabular-nums'], flexShrink: 1 },
+  title: { flexShrink: 1 },
   head: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  addr: { color: C.dim, fontSize: 12.5, fontVariant: ['tabular-nums'] },
+  addr: { color: C.dim, fontSize: 13, fontVariant: ['tabular-nums'] },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   stat: { flexGrow: 1, flexBasis: '45%', backgroundColor: C.card, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: C.border },
-  statLabel: { color: C.dim, fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
-  statVal: { color: C.text, fontSize: 20, fontWeight: '800', marginTop: 2, fontVariant: ['tabular-nums'] },
+  statLabel: { color: C.dim, fontSize: 11, fontWeight: '600', letterSpacing: 0.3 },
+  statVal: { color: C.text, fontSize: 21, fontWeight: '600', marginTop: 2, fontVariant: ['tabular-nums'] },
   follow: { backgroundColor: C.accent, borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
   following: { backgroundColor: C.card, borderWidth: 1, borderColor: C.border },
-  followTxt: { color: C.accentInk, fontWeight: '800' },
+  followTxt: { color: C.accentInk, fontWeight: '600' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, borderWidth: 1, borderColor: C.border, paddingHorizontal: 10, paddingVertical: 4 },
-  chipTxt: { color: C.text, fontWeight: '600', fontSize: 12.5 },
+  chipTxt: { color: C.text, fontWeight: '600', fontSize: 13 },
   chipMeta: { color: C.dim, fontSize: 12 },
-  note: { color: C.dim, fontSize: 12.5, lineHeight: 18 },
-  section: { color: C.dim, fontSize: 11, fontWeight: '800', letterSpacing: 1, marginTop: 8 },
+  note: { color: C.dim, fontSize: 13, lineHeight: 18 },
+  section: { ...T.title, marginTop: 8 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
   name: { color: C.text, fontWeight: '600' },
   meta: { color: C.dim, fontSize: 12 },
-  side: { fontWeight: '800', fontSize: 11, letterSpacing: 0.5 },
-  price: { color: C.text, fontWeight: '700', width: 82, textAlign: 'right', fontVariant: ['tabular-nums'] },
+  side: { fontWeight: '600', fontSize: 11, letterSpacing: 0.3 },
+  price: { color: C.text, fontWeight: '600', width: 82, textAlign: 'right', fontVariant: ['tabular-nums'] },
 });

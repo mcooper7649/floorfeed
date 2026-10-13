@@ -36,7 +36,7 @@ export function Pill({ text, tone = 'dark', style }: { text: string; tone?: 'dar
 
 const s = StyleSheet.create({
   box: { width: '100%', backgroundColor: C.cardHi, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  letter: { color: C.dim, fontWeight: '800', fontSize: 40 },
+  letter: { color: C.dim, fontWeight: '600', fontSize: 36 },
   pill: { position: 'absolute', backgroundColor: '#0B0B10CC', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
-  pillTxt: { color: C.text, fontSize: 12, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  pillTxt: { color: C.text, fontSize: 12, fontWeight: '600', fontVariant: ['tabular-nums'] },
 });

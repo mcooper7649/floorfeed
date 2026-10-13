@@ -341,7 +341,10 @@ app.get("/paper/:userId", async (req, reply) => {
   const { userId } = req.params as { userId: string };
   if (!(await authorize(req, reply, userId))) return;
   const rows = db.prepare(
-    `SELECT p.*, c.floor, c.currency FROM paper_positions p
+    `SELECT p.*, c.floor, c.currency,
+            COALESCE(c.image, (SELECT image FROM trades WHERE collection = p.collection AND image IS NOT NULL
+                               ORDER BY block_time DESC LIMIT 1)) AS image
+     FROM paper_positions p
      LEFT JOIN collections c ON c.symbol = p.collection
      WHERE p.user_id = ? ORDER BY p.opened_at DESC`,
   ).all(userId) as any[];
@@ -349,7 +352,7 @@ app.get("/paper/:userId", async (req, reply) => {
     const mark = p.exit_price ?? (p.floor ?? p.entry_price) * (1 - config.paperSellHaircut);
     return {
       id: p.id,
-      collection: { symbol: p.collection, name: collectionName(p.collection), floor: p.floor },
+      collection: { symbol: p.collection, name: collectionName(p.collection), floor: p.floor, image: p.image ?? null },
       currency: (p.currency as string | null) ?? "SOL",
       entryPrice: p.entry_price,
       exitPrice: p.exit_price,

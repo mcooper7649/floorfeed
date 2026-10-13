@@ -58,7 +58,8 @@ async function collectionAddresses() {
   const rows = db.prepare(`
     SELECT collection, mint FROM (
       SELECT collection, mint, ROW_NUMBER() OVER (PARTITION BY collection ORDER BY block_time DESC) rn FROM trades
-    ) WHERE rn <= 3`).all() as { collection: string; mint: string }[];
+      WHERE collection IN (SELECT symbol FROM collections WHERE chain = 'solana')
+    ) WHERE rn <= 3`).all() as { collection: string; mint: string }[];  // EVM mints aren't Solana keys
   const symbolOf = new Map(rows.map((r) => [r.mint, r.collection]));
   const assets = await rpc<(DasAsset | null)[]>("getAssetBatch", { ids: [...symbolOf.keys()] });
   const map = new Map<string, string>();

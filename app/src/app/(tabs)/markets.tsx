@@ -8,6 +8,7 @@ import { NftImage } from '@/components/nft-image';
 import { Empty, Screen } from '@/components/screen';
 import { Sparkline } from '@/components/sparkline';
 import { C } from '@/constants/brand';
+import { T } from '@/constants/type';
 import { api, type Chain, type CollectionSummary, type MarketCategory } from '@/lib/api';
 import { amt, pct, usdCompact } from '@/lib/format';
 import { columnsFor, useLayout } from '@/lib/layout';
@@ -111,7 +112,7 @@ export default function MarketsScreen() {
 
       {trending.length > 0 && !query && cat === 'all' && chain === 'all' && (
         <View style={{ gap: 8 }}>
-          <Text style={s.section}>TRENDING · 24H VOLUME</Text>
+          <Text style={s.section}>Trending by 24h volume</Text>
           {wide ? (
             <View style={{ flexDirection: 'row', gap: 14 }}>
               {trending.slice(0, trendCols).map((t, i) => <TrendCard key={t.symbol} c={t} rank={i + 1} width={trendW} />)}
@@ -126,7 +127,7 @@ export default function MarketsScreen() {
 
       {cat === 'all' && !query && catStats.length > 0 && (
         <View style={{ gap: 8 }}>
-          <Text style={s.section}>BROWSE BY CATEGORY</Text>
+          <Text style={s.section}>Browse by category</Text>
           <View style={s.catGrid}>
             {catStats.map((c) => (
               <Pressable key={c.key} style={[s.catCard, { width: catW }]} onPress={() => setCat(c.key)}
@@ -325,7 +326,7 @@ function TableRow({ c, rank, watched, onWatch }: { c: CollectionSummary; rank: n
           <View style={[s.nameCell, { flex: 1 }]}>
             <CollIcon name={c.name} uri={c.image} size={56} radius={12} />
             <View style={{ flex: 1, gap: 4 }}>
-              <Text style={[s.name, { fontSize: 15.5 }]} numberOfLines={1}>{c.name}</Text>
+              <Text style={[s.name, { fontSize: 15 }]} numberOfLines={1}>{c.name}</Text>
               <View style={s.nameRow}>
                 <ChainBadge chain={c.chain} />
                 <Text style={s.meta}>{c.category}</Text>
@@ -380,50 +381,50 @@ const s = StyleSheet.create({
   tiles: { flexDirection: 'row', gap: 8 },
   tile: { flex: 1, backgroundColor: C.card, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: C.border },
   tileLabel: { color: C.dim, fontSize: 12, fontWeight: '600' },
-  tileVal: { color: C.text, fontSize: 20, fontWeight: '800', marginTop: 2 },
-  section: { color: C.dim, fontSize: 11, fontWeight: '800', letterSpacing: 1 },
+  tileVal: { color: C.text, fontSize: 21, fontWeight: '600', marginTop: 2 },
+  section: { ...T.title },
   catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   catCard: { backgroundColor: C.card, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: C.border },
   mosaic: { flexDirection: 'row', gap: 2, backgroundColor: C.border },
   catBody: { padding: 12, gap: 4 },
-  catName: { color: C.text, fontWeight: '800', fontSize: 16 },
+  catName: { color: C.text, fontWeight: '600', fontSize: 15 },
   catBlurb: { color: C.dim, fontSize: 12, lineHeight: 16 },
   catHead: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.card, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: C.border },
-  catHeadName: { color: C.text, fontWeight: '800', fontSize: 18 },
-  clear: { color: C.accent, fontWeight: '700' },
+  catHeadName: { color: C.text, fontWeight: '600', fontSize: 18 },
+  clear: { color: C.accent, fontWeight: '600' },
   trend: { backgroundColor: C.card, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: C.border },
   trendRank: { position: 'absolute', top: 8, left: 8, minWidth: 26, height: 26, borderRadius: 8, backgroundColor: '#0B0B10CC', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
-  trendRankTxt: { color: C.text, fontWeight: '800', fontSize: 13 },
+  trendRankTxt: { color: C.text, fontWeight: '600', fontSize: 13 },
   trendBody: { padding: 10, gap: 8 },
   trendStats: { flexDirection: 'row', justifyContent: 'space-between' },
   trendLabel: { color: C.dim, fontSize: 11, fontWeight: '600' },
-  trendVal: { color: C.text, fontWeight: '800', fontSize: 13.5, fontVariant: ['tabular-nums'] },
+  trendVal: { color: C.text, fontWeight: '600', fontSize: 13, fontVariant: ['tabular-nums'] },
   filterWide: { flexDirection: 'row', gap: 16, alignItems: 'flex-start' },
   thRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: C.border, marginTop: 4 },
-  th: { color: C.dim, fontSize: 12, fontWeight: '700', letterSpacing: 0.3 },
+  th: { color: C.dim, fontSize: 12, fontWeight: '600', letterSpacing: 0.3 },
   tr: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
   trMain: { flex: 1, flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
-  rankTxt: { color: C.dim, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  rankTxt: { color: C.dim, fontWeight: '600', fontVariant: ['tabular-nums'] },
   nameCell: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingRight: 12 },
-  td: { color: C.text, fontWeight: '700', fontSize: 14, fontVariant: ['tabular-nums'] },
+  td: { color: C.text, fontWeight: '600', fontSize: 15, fontVariant: ['tabular-nums'] },
   search: {
     backgroundColor: C.card, borderRadius: 12, borderWidth: 1, borderColor: C.border,
     color: C.text, paddingHorizontal: 14, paddingVertical: 11, fontSize: 15,
   },
   chip: { paddingHorizontal: 13, paddingVertical: 7, borderRadius: 999, backgroundColor: C.card, borderWidth: 1, borderColor: C.border },
   chipOn: { backgroundColor: C.accent, borderColor: C.accent },
-  chipTxt: { color: C.text, fontWeight: '700', fontSize: 13 },
+  chipTxt: { color: C.text, fontWeight: '600', fontSize: 13 },
   sortRow: { flexDirection: 'row', gap: 14, alignItems: 'center', paddingTop: 2 },
-  sortTxt: { color: C.dim, fontWeight: '700', fontSize: 13 },
+  sortTxt: { color: C.dim, fontWeight: '600', fontSize: 13 },
   sortOn: { color: C.text, textDecorationLine: 'underline' },
   count: { color: C.dim, fontSize: 12, paddingBottom: 4 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
   rowMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
   star: { color: C.dim, fontSize: 18, width: 20, textAlign: 'center' },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  name: { color: C.text, fontWeight: '700', fontSize: 14.5, flexShrink: 1 },
+  name: { color: C.text, fontWeight: '600', fontSize: 15, flexShrink: 1 },
   meta: { color: C.dim, fontSize: 12 },
   right: { width: 92, alignItems: 'flex-end', gap: 2 },
-  floor: { color: C.text, fontWeight: '800', fontSize: 13.5, fontVariant: ['tabular-nums'] },
-  change: { fontWeight: '800', fontSize: 12 },
+  floor: { color: C.text, fontWeight: '600', fontSize: 13, fontVariant: ['tabular-nums'] },
+  change: { fontWeight: '600', fontSize: 12 },
 });

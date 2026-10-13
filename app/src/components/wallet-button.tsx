@@ -5,6 +5,7 @@ import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'r
 import { DepositSheet } from '@/components/deposit-sheet';
 import { ModeChip, ModeToggle } from '@/components/mode-toggle';
 import { C } from '@/constants/brand';
+import { T } from '@/constants/type';
 import { api, type Capabilities } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { shortAddr } from '@/lib/format';
@@ -107,9 +108,9 @@ export function WalletSheet({ open, onClose }: { open: boolean; onClose: () => v
             <>
               <Text style={s.title}>Your account</Text>
               {auth.label ? <Text style={s.meta}>Signed in as {auth.label}</Text> : null}
-              <Text style={s.label}>TRADING MODE</Text>
+              <Text style={s.label}>Trading mode</Text>
               <ModeToggle />
-              <Text style={s.label}>SOLANA WALLET · USED IN REAL MODE</Text>
+              <Text style={s.label}>Solana wallet, used in Real mode</Text>
               <View style={s.acct}>
                 <View style={[s.iconBig, s.embeddedIcon]}><Text style={s.embeddedGlyph}>F</Text></View>
                 <View style={{ flex: 1 }}>
@@ -128,7 +129,7 @@ export function WalletSheet({ open, onClose }: { open: boolean; onClose: () => v
               <EvmSection onDeposit={openEthDeposit} />
               {w.available.length > 0 && (
                 <>
-                  <Text style={s.label}>OR USE A BROWSER WALLET</Text>
+                  <Text style={s.label}>Or use a browser wallet</Text>
                   {w.available.map((o) => (
                     <Pressable accessibilityRole="button" key={o.name} onPress={() => pick(o.name)} disabled={w.connecting} style={s.option}>
                       <Image source={o.icon} style={s.iconBig} />
@@ -145,9 +146,9 @@ export function WalletSheet({ open, onClose }: { open: boolean; onClose: () => v
           ) : w.address ? (
             <>
               <Text style={s.title}>Your wallet</Text>
-              <Text style={s.label}>TRADING MODE</Text>
+              <Text style={s.label}>Trading mode</Text>
               <ModeToggle />
-              <Text style={s.label}>SOLANA WALLET · USED IN REAL MODE</Text>
+              <Text style={s.label}>Solana wallet, used in Real mode</Text>
               <View style={s.acct}>
                 {w.walletIcon ? <Image source={w.walletIcon} style={s.iconBig} /> : null}
                 <View style={{ flex: 1 }}>
@@ -189,7 +190,7 @@ export function WalletSheet({ open, onClose }: { open: boolean; onClose: () => v
                   <Pressable accessibilityRole="button" onPress={signIn} disabled={!auth.ready} style={s.primary}>
                     <Text style={s.primaryTxt}>{auth.ready ? 'Continue with email or Google' : 'Loading…'}</Text>
                   </Pressable>
-                  <Text style={s.label}>OR CONNECT A WALLET</Text>
+                  <Text style={s.label}>Or connect a wallet</Text>
                 </>
               )}
               {!auth.supported && <Text style={s.title}>Connect a wallet</Text>}
@@ -232,7 +233,7 @@ function EvmSection({ onDeposit }: { onDeposit: () => void }) {
   if (!ew.supported) return null;
   return (
     <View style={{ gap: 8 }}>
-      <Text style={s.label}>ETHEREUM WALLET · USED IN REAL MODE</Text>
+      <Text style={s.label}>Ethereum wallet, used in Real mode</Text>
       {ew.address ? (
         <>
           <View style={s.evmRow}>
@@ -269,7 +270,7 @@ function EvmSection({ onDeposit }: { onDeposit: () => void }) {
 
 const s = StyleSheet.create({
   connect: { backgroundColor: C.accent, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10 },
-  connectTxt: { color: C.accentInk, fontWeight: '800', fontSize: 14 },
+  connectTxt: { color: C.accentInk, fontWeight: '600', fontSize: 15 },
   evmRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   connected: {
     flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.card, borderRadius: 12,
@@ -277,28 +278,28 @@ const s = StyleSheet.create({
   },
   icon: { width: 20, height: 20, borderRadius: 5 },
   iconBig: { width: 36, height: 36, borderRadius: 9 },
-  addr: { color: C.text, fontWeight: '700', fontSize: 14, fontVariant: ['tabular-nums'] },
+  addr: { color: C.text, fontWeight: '600', fontSize: 15, fontVariant: ['tabular-nums'] },
   bal: { color: C.dim, fontWeight: '600', fontSize: 13, fontVariant: ['tabular-nums'] },
   backdrop: { flex: 1, backgroundColor: '#000000AA', alignItems: 'center', justifyContent: 'center', padding: 16 },
   sheet: { width: '100%', maxWidth: 420, maxHeight: '92%', backgroundColor: C.card, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: C.border },
-  title: { color: C.text, fontSize: 20, fontWeight: '800' },
+  title: { color: C.text, fontSize: 21, fontWeight: '600' },
   note: { color: C.dim, fontSize: 13, lineHeight: 19 },
-  meta: { color: C.dim, fontSize: 12.5 },
+  meta: { color: C.dim, fontSize: 13 },
   err: { color: C.down, fontSize: 13 },
   option: {
     flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 14,
     backgroundColor: C.cardHi, borderWidth: 1, borderColor: C.border,
   },
-  optionTxt: { color: C.text, fontWeight: '700', fontSize: 15, flex: 1 },
+  optionTxt: { color: C.text, fontWeight: '600', fontSize: 15, flex: 1 },
   acct: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  addrBig: { color: C.text, fontWeight: '700', fontSize: 13, fontVariant: ['tabular-nums'] },
+  addrBig: { color: C.text, fontWeight: '600', fontSize: 13, fontVariant: ['tabular-nums'] },
   secondary: { borderRadius: 12, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: C.border, backgroundColor: C.cardHi },
-  secondaryTxt: { color: C.text, fontWeight: '800' },
+  secondaryTxt: { color: C.text, fontWeight: '600' },
   primary: { backgroundColor: C.accent, borderRadius: 12, paddingVertical: 13, alignItems: 'center' },
-  primaryTxt: { color: C.accentInk, fontWeight: '800', fontSize: 15 },
-  label: { color: C.dim, fontSize: 11, fontWeight: '800', letterSpacing: 1, marginTop: 4 },
-  link: { color: C.accent, fontWeight: '700', fontSize: 13 },
+  primaryTxt: { color: C.accentInk, fontWeight: '600', fontSize: 15 },
+  label: { ...T.label, marginTop: 4 },
+  link: { color: C.accent, fontWeight: '600', fontSize: 13 },
   signedRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   embeddedIcon: { backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center' },
-  embeddedGlyph: { color: C.accentInk, fontWeight: '900', fontSize: 18 },
+  embeddedGlyph: { color: C.accentInk, fontWeight: '700', fontSize: 18 },
 });
