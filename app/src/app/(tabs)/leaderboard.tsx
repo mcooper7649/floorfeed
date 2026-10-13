@@ -63,7 +63,7 @@ export default function LeaderboardScreen() {
           <Chip key={o.key} label={o.label} on={sort === o.key} onPress={() => change(() => setSort(o.key))} />
         ))}
         <View style={s.sep} />
-        {chain === 'solana' && <Chip label="Hide market makers" on={hideMM} onPress={() => change(() => setHideMM((v) => !v))} />}
+        <Chip label={chain === 'evm' ? 'Hide bid bots' : 'Hide market makers'} on={hideMM} onPress={() => change(() => setHideMM((v) => !v))} />
       </ScrollView>
       </View>
 

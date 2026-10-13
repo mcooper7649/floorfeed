@@ -1,3 +1,5 @@
+import { createPublicClient, http } from "viem";
+import { mainnet } from "viem/chains";
 import { createHash } from "node:crypto";
 import { config } from "./config.ts";
 import { db } from "./db.ts";
@@ -118,6 +120,19 @@ export async function resolveNames(wallets: string[]): Promise<Map<string, strin
   return out;
 }
 
+// --- ENS (Ethereum): primary name via the reverse record, forward-verified
+// by viem. Calls are batched into multicalls on a public RPC (ETH_RPC_URL to override).
+const eth = createPublicClient({
+  chain: mainnet,
+  transport: http(process.env.ETH_RPC_URL || "https://ethereum-rpc.publicnode.com", { timeout: 15_000 }),
+  batch: { multicall: true },
+});
+export async function resolveEns(wallets: string[]): Promise<Map<string, string | null>> {
+  const names = await Promise.all(wallets.map((w) =>
+    eth.getEnsName({ address: w as `0x${string}` }).catch(() => null)));
+  return new Map(wallets.map((w, i) => [w, names[i] && names[i]!.length <= 40 ? names[i]! : null]));
+}
+
 const getNames = (wallets: string[]) => {
   if (!wallets.length) return new Map<string, string>();
   const rows = db.prepare(`SELECT wallet, name FROM wallet_names WHERE name IS NOT NULL AND wallet IN (${wallets.map(() => "?").join(",")})`)
@@ -130,7 +145,6 @@ export { getNames };
 // resolved in the background, so the feed never waits on RPC.
 const queue = new Set<string>();
 export function wantNames(wallets: string[]) {
-  wallets = wallets.filter((w) => !w.startsWith("0x")); // .sol names are Solana-only
   if (!wallets.length) return;
   const now = Math.floor(Date.now() / 1000);
   const fresh = new Set((db.prepare(`SELECT wallet FROM wallet_names WHERE checked_at > ? AND wallet IN (${wallets.map(() => "?").join(",")})`)
@@ -146,7 +160,10 @@ async function drain() {
   busy = true;
   const batch = [...queue].slice(0, 100);
   try {
-    const names = await resolveNames(batch);
+    // .sol names for Solana wallets, ENS for 0x wallets; same table.
+    const evm = batch.filter((w) => w.startsWith("0x"));
+    const sol = batch.filter((w) => !w.startsWith("0x"));
+    const names = new Map([...(sol.length ? await resolveNames(sol) : []), ...(evm.length ? await resolveEns(evm) : [])]);
     const now = Math.floor(Date.now() / 1000);
     db.transaction(() => { for (const [w, n] of names) save.run(w, n, now); })();
     for (const w of batch) queue.delete(w);
@@ -159,13 +176,12 @@ async function drain() {
 // One wallet, resolved now if it hasn't been checked recently (wallet pages
 // can't wait for the background queue). Falls back to whatever is cached.
 export async function nameFor(wallet: string): Promise<string | null> {
-  if (wallet.startsWith("0x")) return null;
   const row = db.prepare("SELECT name, checked_at FROM wallet_names WHERE wallet = ?").get(wallet) as
     { name: string | null; checked_at: number } | undefined;
   const now = Math.floor(Date.now() / 1000);
   if (row && row.checked_at > now - RECHECK_SEC) return row.name;
   try {
-    const name = (await resolveNames([wallet])).get(wallet) ?? null;
+    const name = (await (wallet.startsWith("0x") ? resolveEns([wallet]) : resolveNames([wallet]))).get(wallet) ?? null;
     save.run(wallet, name, now);
     queue.delete(wallet);
     return name;

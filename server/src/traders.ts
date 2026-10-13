@@ -27,16 +27,25 @@ const flipsSince = db.prepare(`
   WHERE s.block_time >= ?
   ORDER BY s.block_time`);
 
+// Market-maker signals. Solana: trades through AMM pools (Magic Eden MMM,
+// Tensor swap). Ethereum: buys filled by an accepted bid (paid in WETH or
+// Blur's BETH); bidding bots fill nearly all their buys that way, then relist.
 const activitySince = db.prepare(`
-  SELECT wallet, COUNT(*) AS trades, SUM(pool) AS poolTrades, MAX(t) AS lastActive FROM (
-    SELECT buyer AS wallet, source IN ('mmm','tensorswap','tcomp') AS pool, block_time AS t FROM trades WHERE block_time >= ?
+  SELECT wallet, COUNT(*) AS trades, SUM(pool) AS poolTrades, SUM(buy) AS buys, SUM(bid) AS bidBuys, MAX(t) AS lastActive FROM (
+    SELECT buyer AS wallet, source IN ('mmm','tensorswap','tcomp') AS pool, 1 AS buy, source IN ('os:WETH','os:BETH') AS bid, block_time AS t FROM trades WHERE block_time >= ?
     UNION ALL
-    SELECT seller, source IN ('mmm','tensorswap','tcomp'), block_time FROM trades WHERE block_time >= ?
+    SELECT seller, source IN ('mmm','tensorswap','tcomp'), 0, 0, block_time FROM trades WHERE block_time >= ?
   ) GROUP BY wallet`);
+
+type Activity = { trades: number; poolTrades: number; buys: number; bidBuys: number; lastActive: number };
+export function marketMakerLike(a: Pick<Activity, "trades" | "poolTrades" | "buys" | "bidBuys"> | undefined) {
+  if (!a || a.trades < 20) return false;
+  return a.poolTrades / a.trades >= 0.6 || (a.buys >= 10 && a.bidBuys / a.buys >= 0.85);
+}
 
 export type TraderProfile = ReturnType<typeof profileFrom>;
 
-function profileFrom(wallet: string, flips: Flip[], act: { trades: number; poolTrades: number; lastActive: number } | undefined) {
+function profileFrom(wallet: string, flips: Flip[], act: Activity | undefined) {
   const pnls = flips.map((f) => f.sell - f.buy);
   const realized = pnls.reduce((a, b) => a + b, 0);
   const cost = flips.reduce((a, f) => a + f.buy, 0);
@@ -82,8 +91,9 @@ function profileFrom(wallet: string, flips: Flip[], act: { trades: number; poolT
       .map(([symbol, c]) => ({ symbol, name: collectionName(symbol), flips: c.flips, pnlSol: c.pnl })),
     trades: act?.trades ?? 0,
     poolShare,
+    bidBuyShare: act && act.buys ? act.bidBuys / act.buys : 0, // EVM: buys filled by accepted bids
     // Heuristic, shown as "likely": most activity runs through AMM pools.
-    likelyMarketMaker: (act?.trades ?? 0) >= 20 && poolShare >= 0.6,
+    likelyMarketMaker: marketMakerLike(act),
     lastActive: act?.lastActive ?? null,
     openPositions: open.openPositions,
     unrealizedSol: open.unrealizedSol,
@@ -116,7 +126,7 @@ export function traderLeaderboard(opts: {
   const byWallet = new Map<string, Flip[]>();
   for (const f of flips) (byWallet.get(f.wallet) ?? byWallet.set(f.wallet, []).get(f.wallet)!).push(f);
   const act = new Map(
-    (activitySince.all(t0, t0) as { wallet: string; trades: number; poolTrades: number; lastActive: number }[])
+    (activitySince.all(t0, t0) as ({ wallet: string } & Activity)[])
       .map((a) => [a.wallet, a]),
   );
 
@@ -153,10 +163,12 @@ const walletFlips = db.prepare(`
 
 const walletActivity = db.prepare(`
   SELECT COUNT(*) AS trades, COALESCE(SUM(source IN ('mmm','tensorswap','tcomp')), 0) AS poolTrades,
+         COALESCE(SUM(buyer = ?), 0) AS buys,
+         COALESCE(SUM(buyer = ?2 AND source IN ('os:WETH','os:BETH')), 0) AS bidBuys,
          MAX(block_time) AS lastActive
-  FROM trades WHERE buyer = ? OR seller = ?`);
+  FROM trades WHERE buyer = ?2 OR seller = ?2`);
 
 export function traderProfile(wallet: string) {
-  const act = walletActivity.get(wallet, wallet) as { trades: number; poolTrades: number; lastActive: number };
+  const act = walletActivity.get(wallet, wallet) as Activity;
   return profileFrom(wallet, walletFlips.all(wallet) as Flip[], act);
 }

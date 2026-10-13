@@ -18,6 +18,7 @@
     "better-sqlite3": "^13.0.3",
     "fastify": "^5.12.5",
     "jose": "6.2.12",
+    "viem": "^2.57.5",
     "zod": "^4.6.5"
   },
   "devDependencies": {

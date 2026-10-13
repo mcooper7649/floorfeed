@@ -69,7 +69,7 @@ export default function CollectionScreen() {
     setBuy('Buying…');
     try {
       const r = await api.buyFloor(userId, data.symbol);
-      setBuy(`Bought floor @ ${sol(r.entryPrice)}`);
+      setBuy(`Bought floor @ ${sol(r.entryPrice, 2, data.currency)}`);
       bumpPortfolio();
     } catch (e) {
       setBuy((e as Error).message);
@@ -90,6 +90,8 @@ export default function CollectionScreen() {
   const evm = data.chain !== 'solana';
   // EVM collections have OpenSea sales (in ETH) except the few that trade in other tokens.
   const floorOnly = evm && data.sales.length === 0 && data.historyStartsAt == null;
+  // Paper works in SOL and ETH; real buys are Solana-only for now.
+  const showBuy = !evm || ((cur === 'ETH' || cur === 'SOL') && mode === 'paper');
   const within5 = st.floor ? data.listings.filter((l) => l.price <= st.floor! * 1.05).length : 0;
   const rangeStart = data.asOf - data.rangeDays * 86_400;
   const partial = data.historyStartsAt != null && data.historyStartsAt > rangeStart + 86_400;
@@ -213,12 +215,12 @@ export default function CollectionScreen() {
           </View>
 
           <View style={[s.actions, !wide && { flexDirection: 'column' }]}>
-            {!evm && (
+            {showBuy && (
               <Pressable onPress={() => (mode === 'real' ? setBuyOpen(true) : paperBuy())}
                 style={({ pressed }) => [s.cta, { backgroundColor: MODE_COLOR[mode] }, pressed && { opacity: 0.85 }]}>
                 <Text style={s.ctaTxt}>
-                  {mode === 'real' ? `Buy floor${st.floor ? ` · ${sol(st.floor)}` : ''}`
-                    : buy ?? `Paper buy floor${st.floor ? ` · ${sol(st.floor)}` : ''}`}
+                  {mode === 'real' ? `Buy floor${st.floor ? ` · ${sol(st.floor, 2, cur)}` : ''}`
+                    : buy ?? `Paper buy floor${st.floor ? ` · ${sol(st.floor, 2, cur)}` : ''}`}
                 </Text>
               </Pressable>
             )}

@@ -67,7 +67,7 @@ export default function WalletScreen() {
               <Stat wide={wide} label="Avg / flip" value={pf.avgPnlSol == null ? '—' : signedSol(pf.avgPnlSol, 2, u)} />
               <Stat wide={wide} label="Avg hold" value={pf.avgHoldHours == null ? '—' : holdTime(pf.avgHoldHours)} />
               {isEvmWallet(address)
-                ? <Stat wide={wide} label="Trades" value={String(pf.trades)} />
+                ? <Stat wide={wide} label="Buys via bids" value={`${Math.round((pf.bidBuyShare ?? 0) * 100)}%`} />
                 : <Stat wide={wide} label="Via AMM pools" value={`${Math.round(pf.poolShare * 100)}%`} />}
             </View>
             {pf.collections.length > 0 && (
@@ -81,7 +81,9 @@ export default function WalletScreen() {
               </View>
             )}
             {pf.likelyMarketMaker && (
-              <Text style={s.note}>{"Most of this wallet's trades run through AMM pools, so it's likely a market maker rather than a discretionary trader."}</Text>
+              <Text style={s.note}>{isEvmWallet(address)
+                ? "Nearly all of this wallet's buys are filled by accepted bids, the pattern of a bidding bot, so it's likely a market maker rather than a discretionary trader."
+                : "Most of this wallet's trades run through AMM pools, so it's likely a market maker rather than a discretionary trader."}</Text>
             )}
             <Pressable onPress={() => toggleFollow(address)} style={[s.follow, isFollowing && s.following, wide && { alignSelf: 'flex-start', paddingHorizontal: 32 }]}>
               <Text style={[s.followTxt, isFollowing && { color: C.text }]}>

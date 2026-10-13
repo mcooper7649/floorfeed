@@ -121,15 +121,15 @@ function CopyCta({ coll, copiedFrom }: { coll: FeedEvent['collection']; copiedFr
     setState('busy');
     try {
       const r = await api.buyFloor(userId, symbol, copiedFrom);
-      setState(`Bought floor @ ${sol(r.entryPrice)}`);
+      setState(`Bought floor @ ${sol(r.entryPrice, 2, coll.currency)}`);
       bumpPortfolio();
     } catch (err) {
       setState((err as Error).message);
     }
   };
-  const f = floor ? ` · ${sol(floor)}` : '';
-  // Paper and real trading are Solana-only for now.
-  if (coll.chain !== 'solana') {
+  const f = floor ? ` · ${sol(floor, 2, coll.currency)}` : '';
+  // Paper works on every SOL/ETH collection; real buys are Solana-only for now.
+  if (coll.chain !== 'solana' && mode === 'real') {
     return (
       <Link href={collHref(symbol)} asChild>
         <Pressable style={s.ghost}><Text style={s.ghostTxt}>See {coll.name} ›</Text></Pressable>

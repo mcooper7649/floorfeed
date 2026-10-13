@@ -166,3 +166,18 @@ export async function getOsBestListing(slug: string, id: string) {
     return null; // 404 = not listed
   }
 }
+
+// Cheapest active listings for a collection, in ETH, ascending.
+export async function getOsBestListings(slug: string, limit = 20) {
+  const r = await get<{ listings: {
+    order_hash: string;
+    price?: { current?: { value: string; decimals: number; currency: string } };
+    protocol_data?: { parameters?: { offer?: { token: string; identifierOrCriteria: string }[] } };
+  }[] }>(`/listings/collection/${slug}/best?limit=${limit}`);
+  return r.listings.flatMap((l) => {
+    const p = l.price?.current;
+    const o = l.protocol_data?.parameters?.offer?.[0];
+    if (!p || !o || !["ETH", "WETH"].includes(p.currency)) return [];
+    return [{ mint: `${o.token.toLowerCase()}:${o.identifierOrCriteria}`, price: Number(p.value) / 10 ** p.decimals, orderHash: l.order_hash }];
+  }).sort((a, b) => a.price - b.price);
+}

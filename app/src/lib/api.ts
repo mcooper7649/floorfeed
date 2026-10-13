@@ -61,6 +61,7 @@ export type Ecosystem = 'solana' | 'evm';
 export type PaperPosition = {
   id: number;
   collection: { symbol: string; name: string; floor: number | null };
+  currency: string; // SOL or ETH: each position stays in its collection's unit
   entryPrice: number;
   exitPrice: number | null;
   open: boolean;
@@ -102,6 +103,7 @@ export type TraderProfile = {
   collections: { symbol: string; name: string; flips: number; pnlSol: number }[];
   trades: number;
   poolShare: number;
+  bidBuyShare?: number; // EVM: share of buys filled by accepted bids
   likelyMarketMaker: boolean;
   lastActive: number | null;
   openPositions: number;
@@ -281,7 +283,12 @@ export const api = {
   follow: (userId: string, wallet: string) => send('POST', '/follows', { userId, wallet }),
   unfollow: (userId: string, wallet: string) => send('DELETE', '/follows', { userId, wallet }),
   paper: (userId: string) =>
-    req<{ positions: PaperPosition[]; realizedSol: number; unrealizedSol: number }>(`/paper/${userId}`),
+    req<{
+      positions: PaperPosition[];
+      totals?: Record<string, { realized: number; unrealized: number }>;
+      realizedSol: number;
+      unrealizedSol: number;
+    }>(`/paper/${userId}`),
   buyFloor: (userId: string, collection: string, copiedFrom?: string) =>
     send('POST', '/paper/buy', { userId, collection, copiedFrom }) as Promise<{ entryPrice: number }>,
   resetPaper: (userId: string) => send('POST', '/paper/reset', { userId }) as Promise<{ deleted: number }>,

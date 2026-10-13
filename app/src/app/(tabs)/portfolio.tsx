@@ -8,7 +8,7 @@ import { Empty, Screen } from '@/components/screen';
 import { WalletSheet } from '@/components/wallet-button';
 import { WalletCard } from '@/components/wallet-card';
 import { C } from '@/constants/brand';
-import { api, type Holdings, type PaperPosition } from '@/lib/api';
+import { api, type Holdings } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { shortAddr, signedSol, sol } from '@/lib/format';
 import { useTradeMode } from '@/lib/mode';
@@ -127,7 +127,7 @@ function RealPortfolio({ address }: { address: string }) {
 
 function PaperPortfolio() {
   const { userId, portfolioVersion, bumpPortfolio } = useSession();
-  const [data, setData] = useState<{ positions: PaperPosition[]; realizedSol: number; unrealizedSol: number } | null>(null);
+  const [data, setData] = useState<Awaited<ReturnType<typeof api.paper>> | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchData = useCallback(() => {
@@ -158,7 +158,9 @@ function PaperPortfolio() {
     bumpPortfolio();
   };
 
-  const total = (data?.realizedSol ?? 0) + (data?.unrealizedSol ?? 0);
+  // One P&L per unit (SOL and ETH can't be added); SOL shows even when empty.
+  const totals = data?.totals ?? { SOL: { realized: data?.realizedSol ?? 0, unrealized: data?.unrealizedSol ?? 0 } };
+  const units = Object.keys(totals).length ? Object.keys(totals).sort((a, b) => (a === 'SOL' ? -1 : b === 'SOL' ? 1 : a.localeCompare(b))) : ['SOL'];
 
   return (
     <Screen title="Portfolio" subtitle="Paper account · practice trades, no real SOL">
@@ -172,10 +174,18 @@ function PaperPortfolio() {
             </Pressable>
           )}
         </View>
-        <Text style={[s.big, { color: total >= 0 ? C.up : C.down }]}>{signedSol(total, 3)}</Text>
-        <Text style={s.meta}>
-          {signedSol(data?.realizedSol ?? 0, 3)} realized · {signedSol(data?.unrealizedSol ?? 0, 3)} open (marked at est. bid)
-        </Text>
+        {units.map((u) => {
+          const t = totals[u] ?? { realized: 0, unrealized: 0 };
+          const total = t.realized + t.unrealized;
+          return (
+            <View key={u} style={{ gap: 2 }}>
+              <Text style={[s.big, units.length > 1 && { fontSize: 26 }, { color: total >= 0 ? C.up : C.down }]}>{signedSol(total, 3, u)}</Text>
+              <Text style={s.meta}>
+                {signedSol(t.realized, 3, u)} realized · {signedSol(t.unrealized, 3, u)} open (marked at est. bid)
+              </Text>
+            </View>
+          );
+        })}
       </View>
       <FlatList
         data={data?.positions ?? []}
@@ -189,12 +199,12 @@ function PaperPortfolio() {
             <Pressable style={{ flex: 1 }}>
               <Text style={s.name}>{p.collection.name}</Text>
               <Text style={s.meta}>
-                in {sol(p.entryPrice)}{p.exitPrice != null ? ` · out ${sol(p.exitPrice)}` : ''}
+                in {sol(p.entryPrice, 2, p.currency)}{p.exitPrice != null ? ` · out ${sol(p.exitPrice, 2, p.currency)}` : ''}
                 {p.copiedFrom ? ' · copied' : ''}
               </Text>
             </Pressable>
             </Link>
-            <Text style={[s.pnl, { color: p.pnlSol >= 0 ? C.up : C.down }]}>{signedSol(p.pnlSol, 3)}</Text>
+            <Text style={[s.pnl, { color: p.pnlSol >= 0 ? C.up : C.down }]}>{signedSol(p.pnlSol, 3, p.currency ?? 'SOL')}</Text>
             {p.open ? (
               <Pressable onPress={() => sell(p.id)} style={s.sell}><Text style={s.sellTxt}>Sell</Text></Pressable>
             ) : (

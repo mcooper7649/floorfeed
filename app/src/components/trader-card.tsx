@@ -69,7 +69,7 @@ export function TraderCard({ t, rank, following, onToggleFollow }: {
         <Text style={s.foot}>
           {t.bestFlip ? <>Best flip <Text style={{ color: C.up }}>{signedSol(t.bestFlip.pnlSol, 2, u)}</Text> on {t.bestFlip.collection}</> : null}
           {t.worstFlipSol != null && t.worstFlipSol < 0 ? <> · worst <Text style={{ color: C.down }}>{signedSol(t.worstFlipSol, 2, u)}</Text></> : null}
-          {u === 'SOL' ? ` · ${Math.round(t.poolShare * 100)}% of trades via AMM pools` : ''}
+          {u === 'SOL' ? ` · ${Math.round(t.poolShare * 100)}% of trades via AMM pools` : ` · ${Math.round((t.bidBuyShare ?? 0) * 100)}% of buys via accepted bids`}
         </Text>
     </Pressable>
   );

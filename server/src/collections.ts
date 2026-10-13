@@ -3,6 +3,7 @@ import { toUsd } from "./prices.ts";
 import { ensureSales, liveSymbols } from "./ingest.ts";
 import { db } from "./db.ts";
 import { getListings, type Listing } from "./magiceden.ts";
+import { getOsBestListings, hasOsKey } from "./opensea.ts";
 import { collectionFlippers } from "./pnl.ts";
 
 type CollectionRow = {
@@ -162,7 +163,7 @@ function floorSpark(symbol: string) {
 
 // EVM collection page: OpenSea stats, plus sales history, chart and top
 // flippers from stored OpenSea sales (all in ETH). No listings yet.
-function evmDetail(slug: string, rangeDays: number) {
+async function evmDetail(slug: string, rangeDays: number) {
   const meta = EVM_COLLECTIONS.find((c) => c.slug === slug)!;
   const c = (statsRow.get(slug) as CollectionRow | undefined) ?? ({ symbol: slug } as CollectionRow);
   const now = Math.floor(Date.now() / 1000);
@@ -201,10 +202,31 @@ function evmDetail(slug: string, rangeDays: number) {
     sales: sales.map(({ signature, price, t }) => ({ signature, price, t })),
     daily: daily(sales, bucketFor(rangeDays)),
     floorHistory: snapshotsSince.all(slug, (now - rangeDays * DAY) * 1000),
-    listings: [],
+    listings: await evmListings(slug),
     topFlippers: collectionFlippers(slug, 5),
     recentSales: sales.slice(-24).reverse(),
   };
+}
+
+// EVM listings from OpenSea, with art from our own sales of each NFT (the
+// listings endpoint carries no metadata). Cached like Solana listings.
+const imageOf = db.prepare(`SELECT image FROM trades WHERE mint = ? AND image IS NOT NULL ORDER BY block_time DESC LIMIT 1`);
+async function evmListings(slug: string): Promise<Listing[]> {
+  if (!hasOsKey()) return [];
+  const hit = listingCache.get(slug);
+  if (hit && Date.now() - hit.at < 120_000) return hit.data;
+  try {
+    const name = EVM_COLLECTIONS.find((c) => c.slug === slug)?.name ?? slug;
+    const data = (await getOsBestListings(slug, 20)).map((l) => ({
+      mint: l.mint, price: l.price, rank: null,
+      name: `${name} #${l.mint.split(":")[1]}`,
+      image: (imageOf.get(l.mint) as { image: string } | undefined)?.image ?? null,
+    }));
+    listingCache.set(slug, { at: Date.now(), data });
+    return data;
+  } catch {
+    return hit?.data ?? [];
+  }
 }
 
 // Listings change constantly but the API is rate-limited: cache per collection.

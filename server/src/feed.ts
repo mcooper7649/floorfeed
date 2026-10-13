@@ -2,6 +2,7 @@ import { cachedTake } from "./ai.ts";
 import { chainOf, collectionName, currencyOf, type Chain } from "./config.ts";
 import { db } from "./db.ts";
 import { getNames, wantNames } from "./sns.ts";
+import { marketMakerLike } from "./traders.ts";
 
 // The feed as events rather than raw buys:
 //  - buy:     one wallet bought one NFT
@@ -59,12 +60,12 @@ const rowSelect = `
     ORDER BY block_time DESC LIMIT 1)`;
 
 // --- trader stats, cached briefly: the flip join scans every sale ---
-type Stat = { flips: number; wins: number; pnl: number; trades: number; pool: number };
+type Stat = { flips: number; wins: number; pnl: number; trades: number; pool: number; buys: number; bids: number };
 let statCache: { at: number; map: Map<string, Stat> } | null = null;
 function allStats() {
   if (statCache && Date.now() - statCache.at < 60_000) return statCache.map;
   const map = new Map<string, Stat>();
-  const get = (w: string) => map.get(w) ?? map.set(w, { flips: 0, wins: 0, pnl: 0, trades: 0, pool: 0 }).get(w)!;
+  const get = (w: string) => map.get(w) ?? map.set(w, { flips: 0, wins: 0, pnl: 0, trades: 0, pool: 0, buys: 0, bids: 0 }).get(w)!;
   for (const r of db.prepare(`
     SELECT s.seller AS wallet, COUNT(*) AS flips, SUM(s.price > b.price) AS wins, SUM(s.price - b.price) AS pnl
     FROM trades s
@@ -76,11 +77,11 @@ function allStats() {
     Object.assign(get(r.wallet), { flips: r.flips, wins: r.wins, pnl: r.pnl });
   }
   for (const r of db.prepare(`
-    SELECT wallet, COUNT(*) AS trades, SUM(pool) AS pool FROM (
-      SELECT buyer AS wallet, source IN ('mmm','tensorswap','tcomp') AS pool FROM trades
-      UNION ALL SELECT seller, source IN ('mmm','tensorswap','tcomp') FROM trades
-    ) GROUP BY wallet`).all() as { wallet: string; trades: number; pool: number }[]) {
-    Object.assign(get(r.wallet), { trades: r.trades, pool: r.pool });
+    SELECT wallet, COUNT(*) AS trades, SUM(pool) AS pool, SUM(buy) AS buys, SUM(bid) AS bids FROM (
+      SELECT buyer AS wallet, source IN ('mmm','tensorswap','tcomp') AS pool, 1 AS buy, source IN ('os:WETH','os:BETH') AS bid FROM trades
+      UNION ALL SELECT seller, source IN ('mmm','tensorswap','tcomp'), 0, 0 FROM trades
+    ) GROUP BY wallet`).all() as { wallet: string; trades: number; pool: number; buys: number; bids: number }[]) {
+    Object.assign(get(r.wallet), { trades: r.trades, pool: r.pool, buys: r.buys, bids: r.bids });
   }
   statCache = { at: Date.now(), map };
   return map;
@@ -88,8 +89,8 @@ function allStats() {
 
 function tierOf(s: Stat | undefined, quality: number): Tier {
   if (!s) return "new";
-  // Same heuristic as the leaderboard: most activity through AMM pools.
-  if (s.trades >= 20 && s.pool / s.trades >= 0.6) return "mm";
+  // Same heuristic as the leaderboard: AMM pools (Solana) or bid-filled buys (Ethereum).
+  if (marketMakerLike({ trades: s.trades, poolTrades: s.pool, buys: s.buys, bidBuys: s.bids })) return "mm";
   if (s.flips >= 15 && quality >= 0.68 && s.pnl > 0) return "elite";
   if (s.flips >= 5 && quality >= 0.6 && s.pnl > 0) return "pro";
   if (s.flips < 2) return "new";

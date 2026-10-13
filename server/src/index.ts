@@ -288,6 +288,10 @@ app.delete("/follows", async (req, reply) => {
 const floorOf = (symbol: string) =>
   (db.prepare("SELECT floor FROM collections WHERE symbol = ?").get(symbol) as { floor: number | null } | undefined)?.floor ?? null;
 
+const unitRow = db.prepare("SELECT currency FROM collections WHERE symbol = ?");
+const paperUnit = (symbol: string) =>
+  (unitRow.get(symbol) as { currency: string } | undefined)?.currency ?? (isEvm(symbol) ? "ETH" : "SOL");
+
 app.post("/paper/buy", async (req, reply) => {
   const b = z.object({
     userId: z.string().min(1),
@@ -295,8 +299,11 @@ app.post("/paper/buy", async (req, reply) => {
     copiedFrom: z.string().optional(),
   }).parse(req.body);
   if (!(await authorize(req, reply, b.userId))) return;
-  // The paper portfolio is denominated in SOL; EVM collections are browse-only for now.
-  if (isEvm(b.collection)) return reply.code(422).send({ error: "Paper trading is Solana-only for now" });
+  // Paper positions are kept in the collection's own unit (SOL or ETH) and
+  // totalled per unit; collections priced in anything else are browse-only.
+  if (!["SOL", "ETH"].includes(paperUnit(b.collection))) {
+    return reply.code(422).send({ error: "Paper trading supports SOL and ETH collections" });
+  }
   const floor = floorOf(b.collection);
   if (!floor) return reply.code(409).send({ error: "no floor price yet" });
   const r = db.prepare(
@@ -333,7 +340,7 @@ app.get("/paper/:userId", async (req, reply) => {
   const { userId } = req.params as { userId: string };
   if (!(await authorize(req, reply, userId))) return;
   const rows = db.prepare(
-    `SELECT p.*, c.floor FROM paper_positions p
+    `SELECT p.*, c.floor, c.currency FROM paper_positions p
      LEFT JOIN collections c ON c.symbol = p.collection
      WHERE p.user_id = ? ORDER BY p.opened_at DESC`,
   ).all(userId) as any[];
@@ -342,6 +349,7 @@ app.get("/paper/:userId", async (req, reply) => {
     return {
       id: p.id,
       collection: { symbol: p.collection, name: collectionName(p.collection), floor: p.floor },
+      currency: (p.currency as string | null) ?? "SOL",
       entryPrice: p.entry_price,
       exitPrice: p.exit_price,
       open: p.closed_at == null,
@@ -351,10 +359,18 @@ app.get("/paper/:userId", async (req, reply) => {
     };
   });
   const sum = (xs: typeof positions) => xs.reduce((a, p) => a + p.pnlSol, 0);
+  // SOL and ETH can't be added together: one total per unit.
+  const totals: Record<string, { realized: number; unrealized: number }> = {};
+  for (const unit of new Set(positions.map((p) => p.currency))) {
+    const mine = positions.filter((p) => p.currency === unit);
+    totals[unit] = { realized: sum(mine.filter((p) => !p.open)), unrealized: sum(mine.filter((p) => p.open)) };
+  }
   return {
     positions,
-    realizedSol: sum(positions.filter((p) => !p.open)),
-    unrealizedSol: sum(positions.filter((p) => p.open)),
+    totals,
+    // SOL only, for older app builds.
+    realizedSol: totals.SOL?.realized ?? 0,
+    unrealizedSol: totals.SOL?.unrealized ?? 0,
   };
 });
 
