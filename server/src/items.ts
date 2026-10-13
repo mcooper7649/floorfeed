@@ -1,6 +1,7 @@
 import { rpc } from "./chain.ts";
-import { COLLECTIONS, EVM_CHAINS, EVM_COLLECTIONS, chainOf, collectionName, currencyOf, isEvm } from "./config.ts";
+import { COLLECTIONS, EVM_CHAINS, EVM_COLLECTIONS, chainOf, collectionName, isEvm, normalizeUnit } from "./config.ts";
 import { db } from "./db.ts";
+import { unitOf } from "./units.ts";
 import { traders } from "./feed.ts";
 import { getTokenListing } from "./magiceden.ts";
 import { getOsBestListing, getOsNft, getOsTraits, hasOsKey } from "./opensea.ts";
@@ -169,7 +170,7 @@ export async function itemDetail(symbol: string, id: string) {
   const evm = isEvm(symbol);
   if (!evm && !COLLECTIONS.some((c) => c.symbol === symbol)) return null;
   const chain = chainOf(symbol);
-  const currency = currencyOf(symbol);
+  const currency = unitOf(symbol);
   const coll = (collRow.get(symbol) as { floor: number | null; image: string | null } | undefined) ?? { floor: null, image: null };
 
   let name: string | null = null;
@@ -196,7 +197,7 @@ export async function itemDetail(symbol: string, id: string) {
     attrs = nft.traits;
     if (traits) ({ total, counts } = traits);
     marketUrl = nft.url ?? `https://opensea.io/assets/${chain}/${contract}/${tokenId}`;
-    if (best) listing = { price: best.price, url: marketUrl };
+    if (best && normalizeUnit(best.currency) === currency) listing = { price: best.price, url: marketUrl };
   } else {
     // Rank from our table; kick off (and briefly wait for) the weekly compute.
     const ready = await withTimeout(ensureSolanaRarity(symbol), 8000, false);

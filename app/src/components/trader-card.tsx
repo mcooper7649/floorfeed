@@ -16,7 +16,7 @@ export function TraderCard({ t, rank, following, onToggleFollow }: {
   onToggleFollow: () => void;
 }) {
   const up = t.realizedSol >= 0;
-  const u = unitFor(t.wallet);
+  const u = t.unit ?? unitFor(t.wallet);
   const notes = [
     t.bestFlip && `Best flip ${signedSol(t.bestFlip.pnlSol, 2, u)} on ${t.bestFlip.collection}.`,
     t.worstFlipSol != null && t.worstFlipSol < 0 && `Worst ${signedSol(t.worstFlipSol, 2, u)}.`,

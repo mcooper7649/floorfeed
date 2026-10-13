@@ -1,6 +1,8 @@
 import { cachedTake } from "./ai.ts";
-import { chainOf, collectionName, currencyOf, type Chain } from "./config.ts";
+import { COLLECTIONS, EVM_COLLECTIONS, chainOf, collectionName, type Chain } from "./config.ts";
 import { db } from "./db.ts";
+import { toUsd } from "./prices.ts";
+import { UNIT_SQL, unitOf } from "./units.ts";
 import { getNames, wantNames } from "./sns.ts";
 import { marketMakerLike } from "./traders.ts";
 
@@ -28,7 +30,9 @@ export type Trader = {
   flips: number;
   wins: number;
   winRate: number | null;
-  realizedSol: number;
+  realizedSol: number;   // in `unit`
+  unit: string;          // the currency this wallet flips most in
+  realizedUsd: number | null;
   quality: number;       // 0..1, win rate shrunk toward 50% for small samples
 };
 type Coll = { symbol: string; name: string; floor: number | null; chain: Chain; currency: string };
@@ -60,21 +64,37 @@ const rowSelect = `
     ORDER BY block_time DESC LIMIT 1)`;
 
 // --- trader stats, cached briefly: the flip join scans every sale ---
-type Stat = { flips: number; wins: number; pnl: number; trades: number; pool: number; buys: number; bids: number };
+// A wallet's flips can span currencies (SOL, ETH, HYPE...): P&L is kept per
+// unit, the primary unit is the one it flips most in, and tiers use the USD sum.
+type Stat = {
+  flips: number; wins: number; trades: number; pool: number; buys: number; bids: number;
+  byUnit: Map<string, { flips: number; pnl: number }>; unit: string; pnlUsd: number | null;
+};
 let statCache: { at: number; map: Map<string, Stat> } | null = null;
 function allStats() {
   if (statCache && Date.now() - statCache.at < 60_000) return statCache.map;
   const map = new Map<string, Stat>();
-  const get = (w: string) => map.get(w) ?? map.set(w, { flips: 0, wins: 0, pnl: 0, trades: 0, pool: 0, buys: 0, bids: 0 }).get(w)!;
+  const get = (w: string) => map.get(w) ?? map.set(w, {
+    flips: 0, wins: 0, trades: 0, pool: 0, buys: 0, bids: 0, byUnit: new Map(), unit: w.startsWith("0x") ? "ETH" : "SOL", pnlUsd: 0,
+  }).get(w)!;
   for (const r of db.prepare(`
-    SELECT s.seller AS wallet, COUNT(*) AS flips, SUM(s.price > b.price) AS wins, SUM(s.price - b.price) AS pnl
+    SELECT s.seller AS wallet, ${UNIT_SQL("c")} AS unit, COUNT(*) AS flips, SUM(s.price > b.price) AS wins, SUM(s.price - b.price) AS pnl
     FROM trades s
     JOIN trades b ON b.signature = (
       SELECT signature FROM trades
       WHERE mint = s.mint AND buyer = s.seller AND block_time < s.block_time
       ORDER BY block_time DESC LIMIT 1)
-    GROUP BY s.seller`).all() as { wallet: string; flips: number; wins: number; pnl: number }[]) {
-    Object.assign(get(r.wallet), { flips: r.flips, wins: r.wins, pnl: r.pnl });
+    LEFT JOIN collections c ON c.symbol = s.collection
+    GROUP BY s.seller, unit`).all() as { wallet: string; unit: string; flips: number; wins: number; pnl: number }[]) {
+    const st = get(r.wallet);
+    st.flips += r.flips;
+    st.wins += r.wins;
+    st.byUnit.set(r.unit, { flips: r.flips, pnl: r.pnl });
+    const usd = toUsd(r.pnl, r.unit);
+    st.pnlUsd = st.pnlUsd == null || usd == null ? null : st.pnlUsd + usd;
+  }
+  for (const st of map.values()) {
+    st.unit = [...st.byUnit.entries()].sort((a, b) => b[1].flips - a[1].flips)[0]?.[0] ?? st.unit;
   }
   for (const r of db.prepare(`
     SELECT wallet, COUNT(*) AS trades, SUM(pool) AS pool, SUM(buy) AS buys, SUM(bid) AS bids FROM (
@@ -91,8 +111,10 @@ function tierOf(s: Stat | undefined, quality: number): Tier {
   if (!s) return "new";
   // Same heuristic as the leaderboard: AMM pools (Solana) or bid-filled buys (Ethereum).
   if (marketMakerLike({ trades: s.trades, poolTrades: s.pool, buys: s.buys, bidBuys: s.bids })) return "mm";
-  if (s.flips >= 15 && quality >= 0.68 && s.pnl > 0) return "elite";
-  if (s.flips >= 5 && quality >= 0.6 && s.pnl > 0) return "pro";
+  // In profit = USD sum across currencies (or the main currency if a price is missing).
+  const up = (s.pnlUsd ?? s.byUnit.get(s.unit)?.pnl ?? 0) > 0;
+  if (s.flips >= 15 && quality >= 0.68 && up) return "elite";
+  if (s.flips >= 5 && quality >= 0.6 && up) return "pro";
   if (s.flips < 2) return "new";
   return null;
 }
@@ -124,14 +146,16 @@ export function traders(wallets: string[]) {
     const quality = (wins + 2) / (flips + 4);
     return [w, {
       wallet: w, name: names.get(w) ?? null, avatar: pics.get(w) ?? null, tier: tierOf(s, quality),
-      flips, wins, winRate: flips ? wins / flips : null, realizedSol: s?.pnl ?? 0, quality,
+      flips, wins, winRate: flips ? wins / flips : null, quality,
+      // P&L in the wallet's main currency (`unit`), plus the all-currency USD total.
+      realizedSol: s?.byUnit.get(s.unit)?.pnl ?? 0, unit: s?.unit ?? (w.startsWith("0x") ? "ETH" : "SOL"), realizedUsd: s?.pnlUsd ?? null,
     }];
   }));
 }
 
 const coll = (r: Row): Coll => ({
   symbol: r.collection, name: collectionName(r.collection), floor: r.floor,
-  chain: chainOf(r.collection), currency: currencyOf(r.collection),
+  chain: chainOf(r.collection), currency: unitOf(r.collection),
 });
 const vsFloor = (price: number, floor: number | null) => (floor ? ((price - floor) / floor) * 100 : null);
 
@@ -267,8 +291,12 @@ export function feedEvents(opts: { view: View; before?: number; limit: number; f
   const now = Math.floor(Date.now() / 1000);
   const f = opts.followed;
   const chain = opts.chain === "solana" ? "AND c.chain = 'solana'" : opts.chain === "evm" ? "AND c.chain != 'solana'" : "";
-  const who = chain + (f ? ` AND (t.buyer IN (${[...f].map(() => "?").join(",") || "''"}) OR t.seller IN (${[...f].map(() => "?").join(",") || "''"}))` : "");
-  const fargs = f ? [...f, ...f] : [];
+  // Only collections FloorFeed currently tracks (discovery can drop some);
+  // filtered in SQL so pages stay full.
+  const tracked = [...COLLECTIONS.map((c) => c.symbol), ...EVM_COLLECTIONS.map((c) => c.slug)];
+  const scope = `AND t.collection IN (${tracked.map(() => "?").join(",")}) `;
+  const who = scope + chain + (f ? ` AND (t.buyer IN (${[...f].map(() => "?").join(",") || "''"}) OR t.seller IN (${[...f].map(() => "?").join(",") || "''"}))` : "");
+  const fargs = [...tracked, ...(f ? [...f, ...f] : [])];
 
   if (opts.view === "top") {
     // Solana and EVM together run a few thousand sales per 72h.

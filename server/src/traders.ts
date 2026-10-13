@@ -1,6 +1,8 @@
-import { collectionName, isEvmWallet } from "./config.ts";
+import { collectionName } from "./config.ts";
 import { db } from "./db.ts";
 import { walletStats } from "./pnl.ts";
+import { toUsd } from "./prices.ts";
+import { UNIT_SQL } from "./units.ts";
 
 // Detailed trader profiles for the leaderboard and wallet pages. A flip is a
 // sale matched to the seller's most recent earlier buy of the same mint; the
@@ -16,6 +18,7 @@ type Flip = {
   soldAt: number;
 };
 
+// Flips in one currency (a collection's sale unit, see units.ts): P&L only adds up within a unit.
 const flipsSince = db.prepare(`
   SELECT s.seller AS wallet, s.collection, b.price AS buy, s.price AS sell,
          b.block_time AS boughtAt, s.block_time AS soldAt
@@ -24,7 +27,8 @@ const flipsSince = db.prepare(`
     SELECT signature FROM trades
     WHERE mint = s.mint AND buyer = s.seller AND block_time < s.block_time
     ORDER BY block_time DESC LIMIT 1)
-  WHERE s.block_time >= ?
+  LEFT JOIN collections c ON c.symbol = s.collection
+  WHERE s.block_time >= ? AND ${UNIT_SQL("c")} = ?
   ORDER BY s.block_time`);
 
 // Market-maker signals. Solana: trades through AMM pools (Magic Eden MMM,
@@ -45,7 +49,7 @@ export function marketMakerLike(a: Pick<Activity, "trades" | "poolTrades" | "buy
 
 export type TraderProfile = ReturnType<typeof profileFrom>;
 
-function profileFrom(wallet: string, flips: Flip[], act: Activity | undefined) {
+function profileFrom(wallet: string, flips: Flip[], act: Activity | undefined, unit: string) {
   const pnls = flips.map((f) => f.sell - f.buy);
   const realized = pnls.reduce((a, b) => a + b, 0);
   const cost = flips.reduce((a, f) => a + f.buy, 0);
@@ -70,9 +74,10 @@ function profileFrom(wallet: string, flips: Flip[], act: Activity | undefined) {
   const series = cum.filter((_, i) => i % step === 0 || i === cum.length - 1);
 
   const poolShare = act && act.trades ? act.poolTrades / act.trades : 0;
-  const open = walletStats(wallet);
+  const open = walletStats(wallet, unit);
   return {
     wallet,
+    unit, // every amount in this profile is in this currency
     flips: flips.length,
     wins,
     winRate: flips.length ? wins / flips.length : null,
@@ -119,10 +124,11 @@ export function traderLeaderboard(opts: {
   minFlips: number;
   hideMarketMakers: boolean;
   limit: number;
-  chain?: "solana" | "evm"; // P&L is per unit (SOL or ETH), so boards are per ecosystem
+  unit?: string; // the currency the board ranks in (SOL, ETH, HYPE, RON, APE, MON)
 }) {
   const t0 = since(opts.windowDays);
-  const flips = flipsSince.all(t0) as Flip[];
+  const unit = opts.unit ?? "SOL";
+  const flips = flipsSince.all(t0, unit) as Flip[];
   const byWallet = new Map<string, Flip[]>();
   for (const f of flips) (byWallet.get(f.wallet) ?? byWallet.set(f.wallet, []).get(f.wallet)!).push(f);
   const act = new Map(
@@ -130,15 +136,15 @@ export function traderLeaderboard(opts: {
       .map((a) => [a.wallet, a]),
   );
 
-  const evm = (opts.chain ?? "solana") === "evm";
-  const candidates = [...byWallet.entries()].filter(([w, fs]) => fs.length >= opts.minFlips && isEvmWallet(w) === evm);
-  let rows = candidates.map(([w, fs]) => profileFrom(w, fs, act.get(w)));
+  const candidates = [...byWallet.entries()].filter(([, fs]) => fs.length >= opts.minFlips);
+  let rows = candidates.map(([w, fs]) => profileFrom(w, fs, act.get(w), unit));
   const marketMakers = rows.filter((r) => r.likelyMarketMaker).length;
   if (opts.hideMarketMakers) rows = rows.filter((r) => !r.likelyMarketMaker);
   rows.sort((a, b) => SORTS[opts.sort](b) - SORTS[opts.sort](a));
 
   return {
     windowDays: opts.windowDays,
+    unit,
     summary: {
       wallets: rows.length,
       flips: rows.reduce((a, r) => a + r.flips, 0),
@@ -158,7 +164,8 @@ const walletFlips = db.prepare(`
     SELECT signature FROM trades
     WHERE mint = s.mint AND buyer = s.seller AND block_time < s.block_time
     ORDER BY block_time DESC LIMIT 1)
-  WHERE s.seller = ?
+  LEFT JOIN collections c ON c.symbol = s.collection
+  WHERE s.seller = ? AND ${UNIT_SQL("c")} = ?
   ORDER BY s.block_time`);
 
 const walletActivity = db.prepare(`
@@ -168,7 +175,22 @@ const walletActivity = db.prepare(`
          MAX(block_time) AS lastActive
   FROM trades WHERE buyer = @w OR seller = @w`);
 
-export function traderProfile(wallet: string) {
+// Every currency a wallet has traded in, with its flips and realized P&L,
+// most-traded first. The first one is the wallet's default view.
+const unitsOf = db.prepare(`
+  SELECT ${UNIT_SQL("c")} AS unit, COUNT(*) AS trades FROM trades t
+  LEFT JOIN collections c ON c.symbol = t.collection
+  WHERE t.buyer = @w OR t.seller = @w GROUP BY unit ORDER BY trades DESC`);
+export function walletUnits(wallet: string) {
+  return (unitsOf.all({ w: wallet }) as { unit: string; trades: number }[]).map((u) => {
+    const fs = walletFlips.all(wallet, u.unit) as Flip[];
+    const realized = fs.reduce((a, f) => a + f.sell - f.buy, 0);
+    return { unit: u.unit, trades: u.trades, flips: fs.length, realized, realizedUsd: toUsd(realized, u.unit) };
+  });
+}
+
+export function traderProfile(wallet: string, unit?: string) {
   const act = walletActivity.get({ w: wallet }) as Activity;
-  return profileFrom(wallet, walletFlips.all(wallet) as Flip[], act);
+  const u = unit ?? (unitsOf.get({ w: wallet }) as { unit: string } | undefined)?.unit ?? (wallet.startsWith("0x") ? "ETH" : "SOL");
+  return profileFrom(wallet, walletFlips.all(wallet, u) as Flip[], act, u);
 }

@@ -1,4 +1,5 @@
 import { db } from "./db.ts";
+import { UNIT_SQL } from "./units.ts";
 
 // P&L is computed from trades we've ingested ("tracked window"), gross of
 // marketplace fees and royalties. A flip = a wallet selling a mint it bought.
@@ -14,38 +15,48 @@ export type WalletStats = {
   unrealizedSol: number; // open positions marked at current floor
 };
 
+// All sums are within one currency (a collection's sale unit, units.ts).
 const flipsSql = `
-  SELECT s.seller AS wallet, s.price - b.price AS pnl
+  SELECT s.seller AS wallet, s.price - b.price AS pnl, ${UNIT_SQL("c")} AS unit
   FROM trades s
   JOIN trades b ON b.signature = (
     SELECT signature FROM trades
     WHERE mint = s.mint AND buyer = s.seller AND block_time < s.block_time
     ORDER BY block_time DESC LIMIT 1)
+  LEFT JOIN collections c ON c.symbol = s.collection
 `;
 
 const openSql = `
-  SELECT b.buyer AS wallet, COUNT(*) AS n, SUM(c.floor - b.price) AS unrealized
+  SELECT b.buyer AS wallet, ${UNIT_SQL("c")} AS unit, COUNT(*) AS n, SUM(c.floor - b.price) AS unrealized
   FROM trades b
   JOIN collections c ON c.symbol = b.collection
   WHERE NOT EXISTS (
     SELECT 1 FROM trades s
     WHERE s.mint = b.mint AND s.seller = b.buyer AND s.block_time > b.block_time)
-  GROUP BY b.buyer
+  GROUP BY b.buyer, unit
 `;
 
-export function walletStats(wallet: string): WalletStats {
+const mainUnit = db.prepare(`
+  SELECT ${UNIT_SQL("c")} AS unit FROM trades t LEFT JOIN collections c ON c.symbol = t.collection
+  WHERE t.buyer = @w OR t.seller = @w GROUP BY unit ORDER BY COUNT(*) DESC LIMIT 1`);
+
+// A wallet's stats in one currency; without `unit`, the one it trades most in.
+export function walletStats(wallet: string, unit?: string): WalletStats & { unit: string } {
+  const u = unit ?? (mainUnit.get({ w: wallet }) as { unit: string } | undefined)?.unit ?? (wallet.startsWith("0x") ? "ETH" : "SOL");
   const flips = db
     .prepare(`SELECT COUNT(*) n, COALESCE(SUM(pnl),0) pnl, COALESCE(SUM(pnl>0),0) wins
-              FROM (${flipsSql}) WHERE wallet = ?`)
-    .get(wallet) as { n: number; pnl: number; wins: number };
+              FROM (${flipsSql}) WHERE wallet = ? AND unit = ?`)
+    .get(wallet, u) as { n: number; pnl: number; wins: number };
   const buys = db
-    .prepare(`SELECT COUNT(*) n, COALESCE(SUM(price),0) vol FROM trades WHERE buyer = ?`)
-    .get(wallet) as { n: number; vol: number };
+    .prepare(`SELECT COUNT(*) n, COALESCE(SUM(t.price),0) vol FROM trades t LEFT JOIN collections c ON c.symbol = t.collection
+              WHERE t.buyer = ? AND ${UNIT_SQL("c")} = ?`)
+    .get(wallet, u) as { n: number; vol: number };
   const open = db
-    .prepare(`SELECT n, unrealized FROM (${openSql}) WHERE wallet = ?`)
-    .get(wallet) as { n: number; unrealized: number } | undefined;
+    .prepare(`SELECT n, unrealized FROM (${openSql}) WHERE wallet = ? AND unit = ?`)
+    .get(wallet, u) as { n: number; unrealized: number } | undefined;
   return {
     wallet,
+    unit: u,
     flips: flips.n,
     wins: flips.wins,
     winRate: flips.n ? flips.wins / flips.n : null,

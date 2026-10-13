@@ -12,7 +12,7 @@ import { useAuth } from '@/lib/auth';
 import { useEvmWallet } from '@/lib/evm-wallet';
 import { sol } from '@/lib/format';
 
-// Real-mode buy on Ethereum and its L2s (Base, Abstract, Ink, Arbitrum): the cheapest OpenSea listing (or one NFT's
+// Real-mode buy on an EVM chain (Ethereum, its L2s, HyperEVM, Ronin, ApeChain, Monad): the cheapest OpenSea listing (or one NFT's
 // listing when `id` is given). FloorFeed builds the Seaport transaction and
 // simulates it; the user's wallet shows it and asks them to confirm. Nothing
 // is sent without that confirmation.
@@ -47,7 +47,11 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
   const current = quote?.key === key ? quote : null;
   const q = current && 'q' in current ? current.q : null;
   const price = q?.listing?.price ?? null;
-  const short = price != null && q?.balanceEth != null ? price - q.balanceEth : null;
+  // A buy is paid in the chain's gas token (ETH, HYPE, RON, APE, MON).
+  const unit = q?.native ?? q?.currency ?? 'ETH';
+  const priceUnit = q?.currency ?? unit; // listings show in the collection's currency (Axie: ETH on Ronin)
+  const balance = q?.balance ?? q?.balanceEth ?? null;
+  const short = price != null && balance != null && q?.executable ? price - balance : null;
   const close = () => { setStep({ kind: 'idle' }); onClose(); };
 
   const buy = async () => {
@@ -115,14 +119,14 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
                 <View style={{ flex: 1, gap: 2 }}>
                   <Text style={s.name}>{q.listing?.name ?? q.collection.name}</Text>
                   <Text style={s.meta}>{q.collection.name} · {chainName(q.chain)} · OpenSea listing</Text>
-                  <Text style={s.price}>{price != null ? sol(price, 3, 'ETH') : '—'}</Text>
+                  <Text style={s.price}>{price != null ? sol(price, 3, priceUnit) : '—'}</Text>
                 </View>
               </View>
 
               <View style={s.rows}>
-                <Row label="Listing price" value={price != null ? sol(price, 3, 'ETH') : '—'} />
+                <Row label="Listing price" value={price != null ? sol(price, 3, priceUnit) : '—'} />
                 <Row label="Network fee" value="shown in your wallet" />
-                <Row label="Your wallet" value={q.balanceEth != null ? sol(q.balanceEth, 3, 'ETH') : '—'} />
+                <Row label="Your wallet" value={balance != null ? sol(balance, 3, unit) : '—'} />
                 <Row label="Wallet" value={w.walletName ?? '—'} />
               </View>
 
@@ -131,10 +135,14 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
 
               {short != null && short > 0 ? (
                 <>
-                  <Text style={s.err}>Not enough ETH: you need about {sol(short, 3, 'ETH')} more, plus gas.</Text>
-                  <Pressable accessibilityRole="button" onPress={() => setDeposit(true)} style={s.primary}>
-                    <Text style={s.primaryTxt}>Deposit ETH</Text>
-                  </Pressable>
+                  <Text style={s.err}>Not enough {unit}: you need about {sol(short, 3, unit)} more, plus gas.</Text>
+                  {unit === 'ETH' ? (
+                    <Pressable accessibilityRole="button" onPress={() => setDeposit(true)} style={s.primary}>
+                      <Text style={s.primaryTxt}>Deposit ETH</Text>
+                    </Pressable>
+                  ) : (
+                    <Text style={s.meta}>Send {unit} on {chainName(q.chain)} to {w.address}, then try again.</Text>
+                  )}
                 </>
               ) : q.executable && w.send ? (
                 <Pressable accessibilityRole="button" onPress={buy} disabled={step.kind === 'preparing' || step.kind === 'confirm'}
@@ -142,7 +150,7 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
                   <Text style={s.primaryTxt}>
                     {step.kind === 'preparing' ? 'Checking the listing…'
                       : step.kind === 'confirm' ? 'Confirm in your wallet…'
-                      : `Buy for ${price != null ? sol(price, 3, 'ETH') : ''}`}
+                      : `Buy for ${price != null ? sol(price, 3, unit) : ''}`}
                   </Text>
                 </Pressable>
               ) : null}

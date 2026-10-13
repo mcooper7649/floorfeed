@@ -4,7 +4,7 @@ import {
 import { useFundWallet } from '@privy-io/react-auth/solana';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
-import { abstract, arbitrum, base, ink, mainnet } from 'viem/chains';
+import { abstract, apeChain, arbitrum, base, hyperEvm, ink, mainnet, monad, ronin } from 'viem/chains';
 
 import type { EvmTx, PrivyMountOptions, PrivyState } from '../src/lib/auth-types';
 
@@ -26,7 +26,7 @@ export function mount({ appId, theme, accent, onState }: PrivyMountOptions) {
           ethereum: { createOnLogin: 'users-without-wallets' },
         },
         defaultChain: mainnet,
-        supportedChains: [mainnet, base, abstract, ink, arbitrum],
+        supportedChains: [mainnet, base, abstract, ink, arbitrum, hyperEvm, ronin, apeChain, monad],
       }}>
       <Bridge onState={onState} />
     </PrivyProvider>,

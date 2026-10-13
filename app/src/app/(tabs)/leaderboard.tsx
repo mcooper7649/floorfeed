@@ -6,14 +6,17 @@ import { Chip, ChipRow } from '@/components/ui';
 import { TraderCard } from '@/components/trader-card';
 import { C } from '@/constants/brand';
 import { T } from '@/constants/type';
-import { api, type Ecosystem, type Leaderboard, type LeaderSort, type LeaderWindow } from '@/lib/api';
+import { api, type Leaderboard, type LeaderSort, type LeaderWindow, type Unit } from '@/lib/api';
 import { signedSol } from '@/lib/format';
 import { useLayout } from '@/lib/layout';
 import { useSession } from '@/lib/session';
 import { useTitle } from '@/lib/use-title';
 
-// P&L is in each chain's unit (SOL vs ETH), so the boards are separate.
-const CHAINS: { key: Ecosystem; label: string }[] = [{ key: 'solana', label: 'Solana' }, { key: 'evm', label: 'Ethereum & L2s' }];
+// One board per currency: profits in SOL, ETH, HYPE... can't be added up.
+const BOARDS: { key: Unit; label: string }[] = [
+  { key: 'SOL', label: 'Solana' }, { key: 'ETH', label: 'Ethereum & L2s' }, { key: 'HYPE', label: 'HyperEVM' },
+  { key: 'RON', label: 'Ronin' }, { key: 'APE', label: 'ApeChain' }, { key: 'MON', label: 'Monad' },
+];
 const WINDOWS: { key: LeaderWindow; label: string }[] = [
   { key: '7', label: '7D' }, { key: '30', label: '30D' }, { key: 'all', label: 'All' },
 ];
@@ -22,8 +25,9 @@ const SORTS: { key: LeaderSort; label: string }[] = [
 ];
 
 export default function LeaderboardScreen() {
-  const [chain, setChain] = useState<Ecosystem>('solana');
-  useTitle(chain === 'evm' ? 'Top Ethereum NFT flippers: P&L leaderboard | FloorFeed' : 'Top Solana NFT flippers: 30-day P&L leaderboard | FloorFeed');
+  const [unit, setUnit] = useState<Unit>('SOL');
+  const board = BOARDS.find((b) => b.key === unit)!;
+  useTitle(`Top ${board.label} NFT flippers: P&L leaderboard | FloorFeed`);
   const { following, toggleFollow } = useSession();
   const [win, setWin] = useState<LeaderWindow>('30');
   const [sort, setSort] = useState<LeaderSort>('pnl');
@@ -36,11 +40,11 @@ export default function LeaderboardScreen() {
   const cols = wide ? 2 : 1;
 
   const fetchRows = useCallback(() => {
-    api.leaderboard({ window: win, sort, hideMM, chain })
+    api.leaderboard({ window: win, sort, hideMM, unit })
       .then((d) => { setData(d); setError(null); })
       .catch((e) => setError(e.message))
       .finally(() => { setLoading(false); setRefreshing(false); });
-  }, [win, sort, hideMM, chain]);
+  }, [win, sort, hideMM, unit]);
   useEffect(fetchRows, [fetchRows]);
 
   // Filters keep the previous list on screen (dimmed) while refetching.
@@ -51,17 +55,17 @@ export default function LeaderboardScreen() {
   return (
     <Screen title="Leaders" subtitle="Wallets ranked by completed flips: buying an NFT and selling it later. Before fees.">
       <ChipRow pad={pad} groups={[
-        CHAINS.map((c) => <Chip key={c.key} label={c.label} on={chain === c.key} onPress={() => change(() => setChain(c.key))} />),
+        BOARDS.map((b) => <Chip key={b.key} label={b.label} on={unit === b.key} onPress={() => change(() => setUnit(b.key))} />),
         WINDOWS.map((w) => <Chip key={w.key} label={w.label} on={win === w.key} onPress={() => change(() => setWin(w.key))} />),
         SORTS.map((o) => <Chip key={o.key} label={o.label} on={sort === o.key} onPress={() => change(() => setSort(o.key))} />),
-        <Chip key="mm" label={chain === 'evm' ? 'Hide bid bots' : 'Hide market makers'} on={hideMM} onPress={() => change(() => setHideMM((v) => !v))} />,
+        <Chip key="mm" label={unit === 'SOL' ? 'Hide market makers' : 'Hide bid bots'} on={hideMM} onPress={() => change(() => setHideMM((v) => !v))} />,
       ]} />
 
       {sm && (
         <Text style={[T.metaNum, s.summary, { paddingHorizontal: pad }]}>
-          {sm.wallets} wallets with 3+ flips made {sm.flips.toLocaleString()} flips; {sm.profitableWallets} are in profit,{' '}
-          <Text style={{ color: sm.realizedSol >= 0 ? C.up : C.down }}>{signedSol(sm.realizedSol, 1, chain === 'evm' ? 'ETH' : 'SOL')}</Text> combined.
-          {sm.hiddenMarketMakers ? ` ${sm.hiddenMarketMakers} likely ${chain === 'evm' ? 'bid bots' : 'market makers'} hidden.` : ''}
+          Ranked in {unit}. {sm.wallets} wallets with 3+ flips made {sm.flips.toLocaleString()} flips; {sm.profitableWallets} are in profit,{' '}
+          <Text style={{ color: sm.realizedSol >= 0 ? C.up : C.down }}>{signedSol(sm.realizedSol, 1, unit)}</Text> combined.
+          {sm.hiddenMarketMakers ? ` ${sm.hiddenMarketMakers} likely ${unit === 'SOL' ? 'market makers' : 'bid bots'} hidden.` : ''}
         </Text>
       )}
 

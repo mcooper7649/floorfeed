@@ -89,19 +89,42 @@ export const COLLECTIONS: { symbol: string; name: string; category: Category }[]
 
 export const LIVE_TIER_SIZE = 20;
 
-export type Chain = "solana" | "ethereum" | "base" | "polygon" | "abstract" | "ink" | "arbitrum";
+export type Chain = "solana" | "ethereum" | "base" | "polygon" | "abstract" | "ink" | "arbitrum" | "hyperevm" | "ronin" | "apechain" | "monad";
 
-// EVM chains FloorFeed tracks. All price NFTs in ETH except Polygon, where
-// the one tracked collection (Courtyard) trades in USDC and is stats-only.
-// `discover` = how many top collections by 7-day volume to add automatically.
-export const EVM_CHAINS: Record<Exclude<Chain, "solana">, { name: string; id: number; explorer: string; discover: number }> = {
-  ethereum: { name: "Ethereum", id: 1, explorer: "https://etherscan.io", discover: 15 },
-  base: { name: "Base", id: 8453, explorer: "https://basescan.org", discover: 15 },
-  abstract: { name: "Abstract", id: 2741, explorer: "https://abscan.org", discover: 15 },
-  ink: { name: "Ink", id: 57073, explorer: "https://explorer.inkonchain.com", discover: 10 },
-  arbitrum: { name: "Arbitrum", id: 42161, explorer: "https://arbiscan.io", discover: 10 },
-  polygon: { name: "Polygon", id: 137, explorer: "https://polygonscan.com", discover: 0 },
+// EVM chains FloorFeed tracks.
+// - native: the chain's gas token (what a wallet's balance is in).
+// - units: currencies its NFTs may be priced in. Each collection uses one,
+//   picked from what its sales are actually paid in (Axie on Ronin trades in
+//   WETH even though its floor is quoted in RON).
+// - discover: how many top collections by 7-day volume to add automatically.
+// Polygon's one collection (Courtyard) trades in USDC and is stats-only.
+type EvmChainInfo = { name: string; id: number; explorer: string; native: string; units: string[]; discover: number; os?: string };
+export const EVM_CHAINS: Record<Exclude<Chain, "solana">, EvmChainInfo> = {
+  ethereum: { name: "Ethereum", id: 1, explorer: "https://etherscan.io", native: "ETH", units: ["ETH"], discover: 15 },
+  base: { name: "Base", id: 8453, explorer: "https://basescan.org", native: "ETH", units: ["ETH"], discover: 15 },
+  abstract: { name: "Abstract", id: 2741, explorer: "https://abscan.org", native: "ETH", units: ["ETH"], discover: 15 },
+  ink: { name: "Ink", id: 57073, explorer: "https://explorer.inkonchain.com", native: "ETH", units: ["ETH"], discover: 10 },
+  arbitrum: { name: "Arbitrum", id: 42161, explorer: "https://arbiscan.io", native: "ETH", units: ["ETH"], discover: 10 },
+  hyperevm: { name: "HyperEVM", id: 999, explorer: "https://hyperevmscan.io", native: "HYPE", units: ["HYPE"], discover: 10 },
+  ronin: { name: "Ronin", id: 2020, explorer: "https://app.roninchain.com", native: "RON", units: ["RON", "ETH"], discover: 10 },
+  apechain: { name: "ApeChain", id: 33139, explorer: "https://apescan.io", native: "APE", units: ["APE"], discover: 10, os: "ape_chain" },
+  monad: { name: "Monad", id: 143, explorer: "https://monadscan.com", native: "MON", units: ["MON"], discover: 10 },
+  polygon: { name: "Polygon", id: 137, explorer: "https://polygonscan.com", native: "POL", units: [], discover: 0, os: "matic" },
 };
+
+// Currencies FloorFeed keeps profit and loss in. Wrapped tokens count as the
+// token (WETH and Blur's BETH as ETH, WHYPE as HYPE...).
+export const UNITS = ["SOL", "ETH", "HYPE", "RON", "APE", "MON"] as const;
+export type Unit = (typeof UNITS)[number];
+// The ecosystem a currency stands for, for labels ("a HyperEVM NFT trader").
+export const unitEcosystem = (u: string) =>
+  ({ SOL: "Solana", ETH: "Ethereum", HYPE: "HyperEVM", RON: "Ronin", APE: "ApeChain", MON: "Monad" } as Record<string, string>)[u] ?? u;
+export function normalizeUnit(symbol: string | null | undefined): Unit | null {
+  const s = (symbol ?? "").toUpperCase();
+  if (s === "BETH") return "ETH";
+  const bare = s.startsWith("W") && (UNITS as readonly string[]).includes(s.slice(1)) ? s.slice(1) : s;
+  return (UNITS as readonly string[]).includes(bare) ? (bare as Unit) : null;
+}
 export const chainName = (c: string) => (c === "solana" ? "Solana" : EVM_CHAINS[c as keyof typeof EVM_CHAINS]?.name ?? c);
 
 // EVM collections via OpenSea: stats for all, plus sales (with OPENSEA_API_KEY)
@@ -163,8 +186,12 @@ export function syncEvmLists(discovered: EvmCollection[]) {
 }
 syncEvmLists([]);
 
+// Names of collections discovery has seen, including ones it later dropped,
+// so their old trades still show a proper name (filled by discovery.ts).
+export const knownNames = new Map<string, string>();
 export const collectionName = (symbol: string) =>
-  COLLECTIONS.find((c) => c.symbol === symbol)?.name ?? EVM_COLLECTIONS.find((c) => c.slug === symbol)?.name ?? symbol;
+  COLLECTIONS.find((c) => c.symbol === symbol)?.name ?? EVM_COLLECTIONS.find((c) => c.slug === symbol)?.name
+    ?? knownNames.get(symbol) ?? symbol;
 export const chainOf = (symbol: string): Chain => EVM_COLLECTIONS.find((c) => c.slug === symbol)?.chain ?? "solana";
 export const currencyOf = (symbol: string) => (isEvm(symbol) ? "ETH" : "SOL");
 // Wallets are one ecosystem each: 0x addresses are EVM (ETH), the rest Solana.

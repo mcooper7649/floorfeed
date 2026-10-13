@@ -127,6 +127,8 @@ for (const col of [
   // from a recent sale, used until official metadata arrives), plus a
   // retry backoff so failed lookups aren't repeated every cycle
   "image_source TEXT", "meta_checked_at INTEGER", "meta_failures INTEGER NOT NULL DEFAULT 0",
+  // the one currency this collection's sales are kept in (EVM; see units.ts)
+  "sale_currency TEXT",
 ]) {
   try { db.exec(`ALTER TABLE collections ADD COLUMN ${col}`); } catch {}
 }

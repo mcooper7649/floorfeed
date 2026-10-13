@@ -1,9 +1,10 @@
-import { COLLECTIONS, EVM_COLLECTIONS, EVM_SALES, LIVE_TIER_SIZE, config } from "./config.ts";
+import { COLLECTIONS, EVM_CHAINS, EVM_COLLECTIONS, EVM_SALES, LIVE_TIER_SIZE, config, normalizeUnit } from "./config.ts";
+import { invalidateUnits } from "./units.ts";
 import { db } from "./db.ts";
 import { PRIORITY, getCollectionMeta, getSales, getStats, type MeActivity } from "./magiceden.ts";
 import { discoverEvm } from "./discovery.ts";
 import { getOsInfo, getOsSales, getOsStats, hasOsKey, type OsSale } from "./opensea.ts";
-import { refreshPrices } from "./prices.ts";
+import { refreshPrices, usdPrice } from "./prices.ts";
 
 const insertTrade = db.prepare(`
   INSERT OR IGNORE INTO trades
@@ -205,10 +206,32 @@ const setEvmInfo = db.prepare(
   `UPDATE collections SET image = ?, description = ?, supply = ?, external_url = ?, image_source = 'official' WHERE symbol = ?`,
 );
 
+// OpenSea quotes a collection's floor in its floor currency but its volumes
+// in ETH on every chain (Hypurr's weekly "574" is ETH, not HYPE). Put both in
+// the collection's sale unit at current USD prices, so charts, flips and
+// "vs floor" compare like with like (Axie: floor in RON, sales in WETH).
+function inSaleUnit(slug: string, st: Awaited<ReturnType<typeof getOsStats>>) {
+  const quoted = normalizeUnit(st.currency) ?? st.currency;
+  const unit = (unitRow.get(slug) as { sale_currency: string | null } | undefined)?.sale_currency ?? quoted;
+  const rate = (from: string) => {
+    if (from === unit) return 1;
+    const a = usdPrice(from), b = usdPrice(unit);
+    return a && b ? a / b : null;
+  };
+  const fk = rate(quoted), vk = rate("ETH");
+  const conv = (v: number | null, k: number | null) => (v == null || k == null ? null : v * k);
+  return {
+    ...st, currency: unit,
+    floor: fk == null ? st.floor : conv(st.floor, fk),
+    volume24h: conv(st.volume24h, vk), volume7d: conv(st.volume7d, vk), volume30d: conv(st.volume30d, vk),
+  };
+}
+
 export async function refreshEvmStats() {
   for (const c of [...EVM_COLLECTIONS]) { // copy: discovery may update the list mid-loop
     try {
-      const st = await getOsStats(c.slug);
+      const raw = await getOsStats(c.slug);
+      const st = inSaleUnit(c.slug, raw);
       const now = Date.now();
       upsertEvm.run({ symbol: c.slug, chain: c.chain, ...st, now });
       insertSnapshot.run(c.slug, now, st.floor, null);
@@ -229,7 +252,33 @@ const EVM_BACKFILL_DAYS = 30;
 const latestFor = db.prepare(`SELECT MAX(block_time) t FROM trades WHERE collection = ?`);
 const oldestFor = db.prepare(`SELECT MIN(block_time) t FROM trades WHERE collection = ?`);
 
-function saveOsSales(slug: string, rows: OsSale[]) {
+// Each EVM collection keeps its P&L in one currency: whatever most of its
+// first page of sales was paid in (among the chain's allowed units). Sales in
+// any other currency are skipped, so a flip's buy and sell always share a unit.
+const unitRow = db.prepare(`SELECT sale_currency FROM collections WHERE symbol = ?`);
+// Creates the collection row if stats haven't yet (a newly discovered
+// collection can get sales first), so the choice sticks for later pages.
+const setUnit = db.prepare(`
+  INSERT INTO collections (symbol, chain, currency, sale_currency, updated_at) VALUES (@slug, @chain, @unit, @unit, @now)
+  ON CONFLICT(symbol) DO UPDATE SET sale_currency = excluded.sale_currency`);
+function collectionUnit(slug: string, sample: OsSale[]) {
+  const known = (unitRow.get(slug) as { sale_currency: string | null } | undefined)?.sale_currency;
+  if (known) return known;
+  const chain = EVM_COLLECTIONS.find((c) => c.slug === slug)?.chain;
+  const allowed = chain && chain !== "solana" ? EVM_CHAINS[chain].units : ["ETH"];
+  const counts = new Map<string, number>();
+  for (const s of sample) if (allowed.includes(s.unit)) counts.set(s.unit, (counts.get(s.unit) ?? 0) + 1);
+  const pick = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  if (!pick) return null;
+  setUnit.run({ slug, chain: chain ?? "ethereum", unit: pick, now: Date.now() });
+  invalidateUnits();
+  return pick;
+}
+
+function saveOsSales(slug: string, all: OsSale[]) {
+  const unit = collectionUnit(slug, all);
+  if (!unit) return 0;
+  const rows = all.filter((a) => a.unit === unit);
   let added = 0;
   db.transaction(() => {
     for (const a of rows) {

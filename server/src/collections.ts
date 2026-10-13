@@ -1,4 +1,5 @@
-import { COLLECTIONS, EVM_COLLECTIONS, collectionName, isEvm } from "./config.ts";
+import { COLLECTIONS, EVM_COLLECTIONS, collectionName, isEvm, normalizeUnit } from "./config.ts";
+import { unitOf } from "./units.ts";
 import { toUsd } from "./prices.ts";
 import { ensureSales, liveSymbols } from "./ingest.ts";
 import { db } from "./db.ts";
@@ -217,7 +218,8 @@ async function evmListings(slug: string): Promise<Listing[]> {
   if (hit && Date.now() - hit.at < 120_000) return hit.data;
   try {
     const name = EVM_COLLECTIONS.find((c) => c.slug === slug)?.name ?? slug;
-    const data = (await getOsBestListings(slug, 20)).map((l) => ({
+    const unit = unitOf(slug);
+    const data = (await getOsBestListings(slug, 20)).filter((l) => normalizeUnit(l.currency) === unit).map((l) => ({
       mint: l.mint, price: l.price, rank: null,
       name: `${name} #${l.mint.split(":")[1]}`,
       image: (imageOf.get(l.mint) as { image: string } | undefined)?.image ?? null,

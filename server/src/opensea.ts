@@ -1,3 +1,4 @@
+import { normalizeUnit, type Unit } from "./config.ts";
 // OpenSea API v2: collection stats + info (work keyless) and sale events
 // (need OPENSEA_API_KEY, sent when present). The limit is 120 req/min; a
 // 700ms gap stays under it.
@@ -88,9 +89,9 @@ export async function getOsInfo(slug: string) {
   };
 }
 
-// Sales are kept only when paid in ETH or an ETH wrapper (WETH, Blur's BETH),
-// so every EVM price and P&L is in ETH. Bundles/ERC-1155 lots are priced per unit.
-const ETH_LIKE = new Set(["ETH", "WETH", "BETH"]);
+// Sales are kept when paid in a currency FloorFeed tracks (ETH and its
+// wrappers, HYPE, RON, APE, MON); ingest then keeps each collection to one of
+// them. Bundles/ERC-1155 lots are priced per unit.
 
 export type OsSale = {
   signature: string; // tx:contract:tokenId (one tx can sell several NFTs)
@@ -101,6 +102,7 @@ export type OsSale = {
   blockTime: number;
   image: string | null;
   source: string;    // os:<payment symbol>; WETH sales are usually accepted bids
+  unit: Unit;        // payment currency, wrappers folded in (WETH → ETH)
 };
 
 type OsEvent = {
@@ -124,7 +126,8 @@ export async function getOsSales(slug: string, opts: { after?: number; next?: st
   const r = await get<{ asset_events: OsEvent[]; next?: string | null }>(`/events/collection/${slug}?${q}`);
   const sales: OsSale[] = [];
   for (const e of r.asset_events) {
-    if (e.event_type !== "sale" || !e.nft || !e.payment || !ETH_LIKE.has(e.payment.symbol)) continue;
+    const unit = normalizeUnit(e.payment?.symbol);
+    if (e.event_type !== "sale" || !e.nft || !e.payment || !unit) continue;
     const qty = Math.max(1, e.quantity || 1);
     const price = Number(e.payment.quantity) / 10 ** e.payment.decimals / qty;
     if (!(price > 0)) continue;
@@ -138,13 +141,16 @@ export async function getOsSales(slug: string, opts: { after?: number; next?: st
       blockTime: e.event_timestamp,
       image: e.nft.display_image_url || e.nft.image_url || null,
       source: `os:${e.payment.symbol}`,
+      unit,
     });
   }
   return { sales, next: r.next || null, oldest: r.asset_events.at(-1)?.event_timestamp ?? null };
 }
 
 // OpenSea's chain names; Polygon is "matic" in the API.
-export const osChain = (chain: string) => (chain === "polygon" ? "matic" : chain);
+export const osChain = (chain: string) => (chain === "polygon" ? "matic" : chain === "apechain" ? "ape_chain" : chain);
+// And back: OpenSea's names in responses to ours.
+export const fromOsChain = (chain: string) => (chain === "matic" ? "polygon" : chain === "ape_chain" ? "apechain" : chain);
 
 type OsNft = {
   identifier: string; name: string | null; image_url?: string | null; display_image_url?: string | null;
@@ -180,10 +186,10 @@ export async function getOsBestListing(slug: string, id: string) {
       order_hash?: string; protocol_address?: string; chain?: string;
     }>(`/listings/collection/${slug}/nfts/${id}/best`);
     const p = r.price?.current;
-    if (!p || !["ETH", "WETH"].includes(p.currency)) return null;
+    if (!p || !normalizeUnit(p.currency)) return null;
     return {
-      price: Number(p.value) / 10 ** p.decimals, orderHash: r.order_hash ?? null,
-      protocolAddress: r.protocol_address ?? null, chain: r.chain ?? "ethereum",
+      price: Number(p.value) / 10 ** p.decimals, currency: p.currency, orderHash: r.order_hash ?? null,
+      protocolAddress: r.protocol_address ?? null, chain: fromOsChain(r.chain ?? "ethereum"),
     };
   } catch {
     return null; // 404 = not listed
@@ -202,10 +208,11 @@ export async function getOsBestListings(slug: string, limit = 20) {
   return r.listings.flatMap((l) => {
     const p = l.price?.current;
     const o = l.protocol_data?.parameters?.offer?.[0];
-    if (!p || !o || !["ETH", "WETH"].includes(p.currency)) return [];
+    if (!p || !o || !normalizeUnit(p.currency)) return [];
     return [{
       mint: `${o.token.toLowerCase()}:${o.identifierOrCriteria}`, price: Number(p.value) / 10 ** p.decimals,
-      orderHash: l.order_hash, protocolAddress: l.protocol_address ?? null, chain: l.chain ?? "ethereum",
+      currency: p.currency, // as listed: ETH vs WETH matters for buying (wrapped tokens need an approval)
+      orderHash: l.order_hash, protocolAddress: l.protocol_address ?? null, chain: fromOsChain(l.chain ?? "ethereum"),
     }];
   }).sort((a, b) => a.price - b.price);
 }

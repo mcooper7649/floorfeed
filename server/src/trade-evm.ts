@@ -1,6 +1,7 @@
 import { createPublicClient, encodeFunctionData, formatEther, http, parseAbiItem, type Hex, type PublicClient } from "viem";
-import { abstract, arbitrum, base, ink, mainnet } from "viem/chains";
-import { EVM_CHAINS, EVM_SALES, config } from "./config.ts";
+import { abstract, apeChain, arbitrum, base, hyperEvm, ink, mainnet, monad, ronin } from "viem/chains";
+import { EVM_CHAINS, EVM_SALES, config, normalizeUnit } from "./config.ts";
+import { unitOf } from "./units.ts";
 import { db } from "./db.ts";
 import { getOsAccountNfts, getOsBestListing, getOsBestListings, getOsFulfillment } from "./opensea.ts";
 
@@ -10,13 +11,14 @@ import { getOsAccountNfts, getOsBestListing, getOsBestListings, getOsFulfillment
 // balance fails here, not in the wallet), and hands it to the user's wallet,
 // which shows it and asks them to confirm.
 
-// OpenSea's asset URLs use the API chain names (Polygon is "matic").
-const osAssetChain = (c: string) => (c === "polygon" ? "matic" : c);
+// OpenSea's asset URLs use the API chain names (Polygon is "matic", ApeChain "ape_chain").
+const osAssetChain = (c: string) => (c === "polygon" ? "matic" : c === "apechain" ? "ape_chain" : c);
 
 export const EVM_ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/;
 
-// Chains where FloorFeed reads balances and builds buys. All use ETH for gas
-// and prices. RPCs default to public endpoints; override per chain in .env.
+// Chains where FloorFeed reads balances and builds buys. Gas and buys are in
+// each chain's native token (EVM_CHAINS.native). RPCs default to public
+// endpoints; override per chain in .env.
 const rpc = (url: string) => http(url, { timeout: 15_000 });
 const clients = {
   ethereum: createPublicClient({ chain: mainnet, transport: rpc(process.env.ETH_RPC_URL || "https://ethereum-rpc.publicnode.com") }),
@@ -24,6 +26,10 @@ const clients = {
   abstract: createPublicClient({ chain: abstract, transport: rpc(process.env.ABSTRACT_RPC_URL || "https://api.mainnet.abs.xyz") }),
   ink: createPublicClient({ chain: ink, transport: rpc(process.env.INK_RPC_URL || "https://rpc-gel.inkonchain.com") }),
   arbitrum: createPublicClient({ chain: arbitrum, transport: rpc(process.env.ARBITRUM_RPC_URL || "https://arbitrum-one-rpc.publicnode.com") }),
+  hyperevm: createPublicClient({ chain: hyperEvm, transport: rpc(process.env.HYPEREVM_RPC_URL || "https://rpc.hyperliquid.xyz/evm") }),
+  ronin: createPublicClient({ chain: ronin, transport: rpc(process.env.RONIN_RPC_URL || "https://api.roninchain.com/rpc") }),
+  apechain: createPublicClient({ chain: apeChain, transport: rpc(process.env.APECHAIN_RPC_URL || "https://rpc.apechain.com/http") }),
+  monad: createPublicClient({ chain: monad, transport: rpc(process.env.MONAD_RPC_URL || "https://rpc.monad.xyz") }),
 };
 type EvmChain = keyof typeof clients;
 const TRADABLE = Object.keys(clients) as EvmChain[];
@@ -41,7 +47,16 @@ export async function evmBalances(address: string) {
   balanceCache.set(key, { at: Date.now(), v });
   return v;
 }
-export const totalEth = (b: Record<string, number>) => Object.values(b).reduce((a, x) => a + x, 0);
+// Balances summed per native token: { ETH: across ETH chains, HYPE: ..., ... }.
+export function nativeTotals(b: Record<string, number>) {
+  const out: Record<string, number> = {};
+  for (const [chain, v] of Object.entries(b)) {
+    const unit = EVM_CHAINS[chain as EvmChain].native;
+    out[unit] = (out[unit] ?? 0) + v;
+  }
+  return out;
+}
+export const totalEth = (b: Record<string, number>) => nativeTotals(b).ETH ?? 0;
 
 const holdingsCache = new Map<string, { at: number; data: Awaited<ReturnType<typeof loadEvmHoldings>> }>();
 export async function evmHoldings(address: string) {
@@ -70,6 +85,7 @@ async function loadEvmHoldings(address: string) {
     return {
       mint,
       chain: tracked.get(n.collection)!.chain,
+      unit: unitOf(n.collection),
       name: n.name,
       image: n.image,
       collection: { symbol: n.collection, name: tracked.get(n.collection)!.name, floor },
@@ -77,9 +93,19 @@ async function loadEvmHoldings(address: string) {
       boughtAt: (lastBuy.get(address, mint) as { price: number } | undefined)?.price ?? null,
     };
   }).sort((x, y) => (y.estValue ?? 0) - (x.estValue ?? 0));
-  const eth = totalEth(balances);
-  const nftValue = nfts.reduce((t, n) => t + (n.estValue ?? 0), 0);
-  return { address, eth, balances, nftValue, totalValue: eth + nftValue, nfts, untracked: all.length - nfts.length };
+  // One value per currency: native balances plus NFTs marked in their collection's unit.
+  const cash = nativeTotals(balances);
+  const values: Record<string, { cash: number; nfts: number; nftValue: number; total: number }> = {};
+  for (const [u, v] of Object.entries(cash)) if (v > 0 || u === "ETH") values[u] = { cash: v, nfts: 0, nftValue: 0, total: v };
+  for (const n of nfts) {
+    const v = (values[n.unit] ??= { cash: 0, nfts: 0, nftValue: 0, total: 0 });
+    v.nfts++;
+    v.nftValue += n.estValue ?? 0;
+    v.total += n.estValue ?? 0;
+  }
+  const eth = cash.ETH ?? 0;
+  const ethNfts = values.ETH?.nftValue ?? 0;
+  return { address, eth, balances, values, nftValue: ethNfts, totalValue: eth + ethNfts, nfts, untracked: all.length - nfts.length };
 }
 
 // --- quote and buy ---
@@ -91,28 +117,41 @@ const imageOf = db.prepare(`SELECT image FROM trades WHERE mint = ? AND image IS
 export async function evmQuote(symbol: string, buyer: string | undefined, id: string | undefined) {
   const meta = EVM_SALES.find((c) => c.slug === symbol);
   if (!meta) return null;
-  let listing: { mint: string; price: number; orderHash: string | null; protocolAddress: string | null; chain: string } | null = null;
+  const unit = unitOf(symbol);
+  type L = { mint: string; price: number; currency: string; orderHash: string | null; protocolAddress: string | null; chain: string };
+  let listing: L | null = null;
   if (id) {
     const l = await getOsBestListing(symbol, id.split(":")[1] ?? "");
     if (l) listing = { mint: id, ...l };
   } else {
-    listing = (await getOsBestListings(symbol, 5).catch(() => []))[0] ?? null;
+    listing = (await getOsBestListings(symbol, 10).catch(() => [])).find((l) => normalizeUnit(l.currency) === unit) ?? null;
   }
   const chain = (listing?.chain ?? meta.chain) as string;
-  const tradable = isTradable(chain) && !!listing?.orderHash && !!listing?.protocolAddress;
+  const native = isTradable(chain) ? EVM_CHAINS[chain].native : null;
+  // Only listings priced in the chain's native token are bought here: wrapped
+  // tokens (WETH, WRON...) need a separate approval transaction first.
+  const nativePriced = !!listing && listing.currency === native;
+  const tradable = isTradable(chain) && nativePriced && !!listing?.orderHash && !!listing?.protocolAddress;
   const balances = buyer ? await evmBalances(buyer).catch(() => null) : null;
   const floor = (floorOf.get(symbol) as { floor: number | null } | undefined)?.floor ?? null;
+  const balance = balances && isTradable(chain) ? balances[chain] : null;
   return {
     collection: { symbol, name: meta.name, floor },
     chain,
+    currency: unit,
+    native,
     listing: listing && {
       ...listing,
       name: `${meta.name} #${listing.mint.split(":")[1]}`,
       image: (imageOf.get(listing.mint) as { image: string } | undefined)?.image ?? null,
     },
-    balanceEth: balances && isTradable(chain) ? balances[chain] : null,
+    balance,
+    balanceEth: balance, // older app builds
     executable: tradable,
-    reason: !listing ? "No ETH listing is live right now." : !tradable ? `Buying on ${chain} isn't supported yet.` : null,
+    reason: !listing ? `No ${unit} listing is live right now.`
+      : !isTradable(chain) ? `Buying on ${chain} isn't supported yet.`
+      : !nativePriced ? `This listing is priced in ${listing.currency}, which needs an extra approval. Finish it on OpenSea.`
+      : null,
     marketUrl: listing ? `https://opensea.io/assets/${osAssetChain(chain)}/${listing.mint.replace(":", "/")}` : `https://opensea.io/collection/${symbol}`,
   };
 }
@@ -138,7 +177,7 @@ export async function evmBuyTx(p: { orderHash: string; protocolAddress: string; 
   } catch (err) {
     const msg = (err as Error).message;
     throw new Error(/insufficient funds/i.test(msg)
-      ? "Not enough ETH in this wallet for the price plus gas."
+      ? `Not enough ${EVM_CHAINS[p.chain].native} in this wallet for the price plus gas.`
       : "This listing can't be filled right now (it may have just sold). Try again for the next cheapest.");
   }
   const fees = await client.estimateFeesPerGas().catch(() => null);

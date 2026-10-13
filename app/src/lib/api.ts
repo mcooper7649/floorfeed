@@ -40,7 +40,9 @@ export type Trader = {
   flips: number;
   wins: number;
   winRate: number | null;
-  realizedSol: number;
+  realizedSol: number; // in `unit`
+  unit?: Unit;         // the currency this wallet flips most in
+  realizedUsd?: number | null;
   quality: number;
 };
 type EventColl = { symbol: string; name: string; floor: number | null; chain: Chain; currency: string };
@@ -72,11 +74,14 @@ export type PaperPosition = {
 
 export type WalletDetail = {
   identity?: Trader; // absent from older API builds
+  unit?: Unit; // the currency stats/profile are in
+  units?: { unit: Unit; trades: number; flips: number; realized: number; realizedUsd: number | null }[];
   stats: WalletStats;
   profile: TraderProfile;
   trades: {
     signature: string;
     mint: string;
+    currency?: string;
     side: 'buy' | 'sell';
     collection: string;
     symbol: string;
@@ -90,6 +95,7 @@ export type TraderProfile = {
   name?: string | null; // .sol name (leaderboard rows)
   avatar?: string | null;
   wallet: string;
+  unit?: Unit; // every amount in this profile is in this currency
   flips: number;
   wins: number;
   winRate: number | null;
@@ -116,11 +122,15 @@ export type LeaderSort = 'pnl' | 'winrate' | 'roi' | 'flips';
 
 export type Leaderboard = {
   windowDays: number | null;
+  unit?: Unit;
   summary: { wallets: number; flips: number; realizedSol: number; profitableWallets: number; hiddenMarketMakers: number };
   rows: TraderProfile[];
 };
 
-export type Chain = 'solana' | 'ethereum' | 'base' | 'polygon' | 'abstract' | 'ink' | 'arbitrum';
+export type Chain = 'solana' | 'ethereum' | 'base' | 'polygon' | 'abstract' | 'ink' | 'arbitrum'
+  | 'hyperevm' | 'ronin' | 'apechain' | 'monad';
+// Currencies P&L is kept in. A wallet's numbers are always in one of these.
+export type Unit = 'SOL' | 'ETH' | 'HYPE' | 'RON' | 'APE' | 'MON';
 
 // One NFT (GET /items/:symbol/:id). id = Solana mint or EVM contract:tokenId.
 export type ItemDetail = {
@@ -235,6 +245,7 @@ export type Capabilities = { buy: { enabled: boolean; magiceden: boolean; tensor
 export type Holding = {
   mint: string;
   chain?: string; // EVM holdings: which chain
+  unit?: Unit;    // EVM holdings: the collection's currency
   name: string | null;
   image: string | null;
   collection: { symbol: string; name: string; floor: number | null };
@@ -255,14 +266,19 @@ export type BuyQuote = {
 
 // Ethereum / Base (amounts in ETH).
 export type EvmHoldings = {
-  address: string; eth: number; balances: { ethereum: number; base: number };
+  address: string; eth: number; balances: Record<string, number>;
+  // One value per currency: native balance plus NFTs marked in that unit.
+  values?: Record<string, { cash: number; nfts: number; nftValue: number; total: number }>;
   nftValue: number; totalValue: number; nfts: Holding[]; untracked: number;
 };
 export type EvmQuote = {
   collection: { symbol: string; name: string; floor: number | null };
   chain: string;
+  currency?: Unit;         // the collection's unit
+  native?: string | null;  // the chain's gas token, what a buy is paid in
+  balance?: number | null; // buyer's balance in `native`
   listing: {
-    mint: string; price: number; orderHash: string | null; protocolAddress: string | null; chain: string;
+    mint: string; price: number; currency?: string; orderHash: string | null; protocolAddress: string | null; chain: string;
     name: string | null; image: string | null;
   } | null;
   balanceEth: number | null;
@@ -308,9 +324,9 @@ export const api = {
   take: (signature: string) => req<Take | null>(`/takes/${encodeURIComponent(signature)}`),
   collections: () => req<CollectionSummary[]>('/collections'),
   collection: (symbol: string, range: number) => req<CollectionDetail>(`/collections/${symbol}?range=${range}`),
-  leaderboard: (p: { window: LeaderWindow; sort: LeaderSort; hideMM: boolean; chain: Ecosystem }) =>
-    req<Leaderboard>(`/leaderboard?limit=50&window=${p.window}&sort=${p.sort}&hideMM=${p.hideMM ? 1 : 0}&chain=${p.chain}`),
-  wallet: (address: string) => req<WalletDetail>(`/wallets/${address}`),
+  leaderboard: (p: { window: LeaderWindow; sort: LeaderSort; hideMM: boolean; unit: Unit }) =>
+    req<Leaderboard>(`/leaderboard?limit=50&window=${p.window}&sort=${p.sort}&hideMM=${p.hideMM ? 1 : 0}&unit=${p.unit}`),
+  wallet: (address: string, unit?: Unit) => req<WalletDetail>(`/wallets/${address}${unit ? `?unit=${unit}` : ''}`),
   item: (symbol: string, id: string) => req<ItemDetail>(`/items/${encodeURIComponent(symbol)}/${encodeURIComponent(id)}`),
   follows: (userId: string) => req<string[]>(`/follows/${userId}`),
   follow: (userId: string, wallet: string) => send('POST', '/follows', { userId, wallet }),

@@ -6,30 +6,34 @@ import { CollIcon } from '@/components/coll-icon';
 import { Empty } from '@/components/screen';
 import { Avatar, TierBadge } from '@/components/event-card';
 import { TopNav } from '@/components/top-nav';
-import { Button, ListRow, Stat as UiStat } from '@/components/ui';
+import { Button, Chip, ChipRow, ListRow, Stat as UiStat } from '@/components/ui';
 import { C } from '@/constants/brand';
 import { T, display } from '@/constants/type';
-import { api, type WalletDetail } from '@/lib/api';
+import { api, type Unit, type WalletDetail } from '@/lib/api';
 import { holdTime, isEvmWallet, pct, shortAddr, signedSol, sol, timeAgo, unitFor } from '@/lib/format';
 import { useLayout } from '@/lib/layout';
 import { useSession } from '@/lib/session';
 import { useTitle } from '@/lib/use-title';
+
+const ECOSYSTEM: Record<string, string> = { SOL: 'Solana', ETH: 'Ethereum', HYPE: 'HyperEVM', RON: 'Ronin', APE: 'ApeChain', MON: 'Monad' };
 
 export default function WalletScreen() {
   const { address } = useLocalSearchParams<{ address: string }>();
   const { following, toggleFollow } = useSession();
   const [data, setData] = useState<WalletDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // A wallet that trades in several currencies shows one at a time.
+  const [unit, setUnit] = useState<Unit | undefined>(undefined);
   const { wide, pad, maxWidth } = useLayout();
 
   const who = data ? data.identity?.name ?? shortAddr(address) : null;
-  const u = unitFor(address);
-  const eco = isEvmWallet(address) ? 'Ethereum' : 'Solana';
+  const u = data?.unit ?? unitFor(address);
+  const eco = ECOSYSTEM[u] ?? (isEvmWallet(address) ? 'Ethereum' : 'Solana');
   useTitle(data && (data.profile.flips
     ? `${who}: ${eco} NFT trader, ${signedSol(data.profile.realizedSol, 2, u)} P&L | FloorFeed`
     : `${who}: ${eco} NFT wallet | FloorFeed`));
 
-  useEffect(() => { api.wallet(address).then(setData).catch((e) => setError(e.message)); }, [address]);
+  useEffect(() => { api.wallet(address, unit).then(setData).catch((e) => setError(e.message)); }, [address, unit]);
 
   const nav = Platform.OS === 'web' && <TopNav back />;
   if (error) return <View style={s.fill}>{nav}<Empty text={error} /></View>;
@@ -59,6 +63,11 @@ export default function WalletScreen() {
                 <Text style={s.addr} selectable numberOfLines={1}>{id?.name || isEvmWallet(address) ? address : 'no .sol name'}</Text>
               </View>
             </View>
+            {(data.units?.length ?? 0) > 1 && (
+              <ChipRow groups={[data.units!.map((x) => (
+                <Chip key={x.unit} label={`${ECOSYSTEM[x.unit] ?? x.unit} · ${x.flips} flips`} on={x.unit === u} onPress={() => setUnit(x.unit)} />
+              ))]} />
+            )}
             <View style={s.grid}>
               <Stat wide={wide} label="Realized" value={signedSol(st.realizedSol, 2, u)} color={st.realizedSol >= 0 ? C.up : C.down} />
               <Stat wide={wide} label="Win rate" value={st.winRate == null ? '—' : `${Math.round(st.winRate * 100)}%`} />
@@ -101,7 +110,7 @@ export default function WalletScreen() {
             art={<CollIcon name={t.collection} uri={t.image} size={44} radius={10} />}
             title={t.collection}
             meta={`${timeAgo(t.blockTime)} ago`}
-            value={sol(t.price, 2, u)}
+            value={sol(t.price, 2, t.currency ?? u)}
             sub={t.side === 'buy' ? 'Bought' : 'Sold'}
             subColor={t.side === 'buy' ? C.up : C.down}
           />

@@ -93,7 +93,7 @@ function TraderRow({ t }: { t: Trader }) {
             </View>
             <Text style={s.meta} numberOfLines={1}>
               {statLine(t)}
-              {t.flips > 0 && <Text style={{ color: t.realizedSol >= 0 ? C.up : C.down }}> · {signedSol(t.realizedSol, Math.abs(t.realizedSol) >= 10 ? 0 : 1, unitFor(t.wallet))}</Text>}
+              {t.flips > 0 && <Text style={{ color: t.realizedSol >= 0 ? C.up : C.down }}> · {signedSol(t.realizedSol, Math.abs(t.realizedSol) >= 10 ? 0 : 1, t.unit ?? unitFor(t.wallet))}</Text>}
             </Text>
           </View>
         </Pressable>

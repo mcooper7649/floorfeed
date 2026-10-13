@@ -22,7 +22,7 @@ type CatFilter = 'all' | MarketCategory | 'watch';
 type Sort = 'volume' | 'change' | 'floor' | 'sales';
 
 // Chain chips in this order, shown only for chains that have collections.
-const CHAIN_ORDER: Chain[] = ['solana', 'ethereum', 'base', 'abstract', 'ink', 'arbitrum', 'polygon'];
+const CHAIN_ORDER: Chain[] = ['solana', 'ethereum', 'base', 'abstract', 'ink', 'arbitrum', 'hyperevm', 'ronin', 'apechain', 'monad', 'polygon'];
 const CATEGORIES: { key: MarketCategory; blurb: string }[] = [
   { key: 'PFP', blurb: 'Profile-picture collections and their communities' },
   { key: 'Art', blurb: 'Generative and 1/1 art' },
@@ -194,7 +194,7 @@ export default function MarketsScreen() {
   );
 
   return (
-    <Screen title="Markets" subtitle="NFT collections on Solana, Ethereum and its L2s, ranked by volume in USD">
+    <Screen title="Markets" subtitle="NFT collections across 11 chains, ranked by volume in USD">
       <FlatList
         data={visible}
         keyExtractor={(r) => r.symbol}

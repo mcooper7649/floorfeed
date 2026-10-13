@@ -146,7 +146,7 @@ async function smartBuy(key: string): Promise<Draft | null> {
 }
 
 function flipper(key: string): Draft | null {
-  const top = traderLeaderboard({ windowDays: 7, sort: "pnl", minFlips: 3, hideMarketMakers: true, limit: 1, chain: "solana" }).rows[0];
+  const top = traderLeaderboard({ windowDays: 7, sort: "pnl", minFlips: 3, hideMarketMakers: true, limit: 1, unit: "SOL" }).rows[0];
   if (!top || top.realizedSol <= 0) return null;
   const head = pick(key, [
     "Top flipper of the week on FloorFeed:",

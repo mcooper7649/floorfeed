@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { collectionName, config, currencyOf } from "./config.ts";
+import { collectionName, config } from "./config.ts";
 import { db } from "./db.ts";
+import { unitOf } from "./units.ts";
 import type { WalletStats } from "./pnl.ts";
 
 // One-line "AI take" on a trade. Claude when an API key is configured,
@@ -27,7 +28,7 @@ function prompt(t: TakeInput) {
   const b = t.buyer;
   return JSON.stringify({
     collection: collectionName(t.collection),
-    currency: currencyOf(t.collection), // every amount below is in this unit
+    currency: unitOf(t.collection), // every amount below is in this unit
     price: t.price,
     floor: t.floor,
     avg_sale_24h: t.avg24h,

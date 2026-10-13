@@ -88,12 +88,12 @@ export function EvmWalletProvider({ children }: { children: ReactNode }) {
       try {
         await p.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: want }] });
       } catch (e) {
-        // 4902: the wallet doesn't know this network yet (common for Abstract, Ink). Add it, which also switches.
+        // 4902: the wallet doesn't know this network yet (common for Abstract, Ink, HyperEVM...). Add it, which also switches.
         const info = chainById(tx.chainId)?.[1];
         if ((e as { code?: number }).code !== 4902 || !info?.rpc) throw e;
         await p.request({ method: 'wallet_addEthereumChain', params: [{
           chainId: want, chainName: info.name, rpcUrls: [info.rpc],
-          nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+          nativeCurrency: { name: info.symbol ?? 'Ether', symbol: info.symbol ?? 'ETH', decimals: 18 },
           blockExplorerUrls: info.explorer ? [info.explorer] : undefined,
         }] });
       }

@@ -191,7 +191,7 @@ function PositionRow({ p, onSell }: { p: PaperPosition; onSell: () => void }) {
 
 // --- Real -------------------------------------------------------------------
 
-type Row = Holding & { unit: 'SOL' | 'ETH'; chain: 'solana' | 'evm'; evmChain?: string };
+type Row = Omit<Holding, 'unit' | 'chain'> & { unit: string; chain: 'solana' | 'evm'; evmChain?: string };
 
 function RealPortfolio({ solAddress, evmAddress }: { solAddress: string | null; evmAddress: string | null }) {
   const { pad } = useLayout();
@@ -220,13 +220,20 @@ function RealPortfolio({ solAddress, evmAddress }: { solAddress: string | null; 
   const error = (solData && 'error' in solData && solData.error) || (evm && 'error' in evm && evm.error) || null;
   const rows: Row[] = [
     ...(sh?.nfts ?? []).map((n) => ({ ...n, unit: 'SOL' as const, chain: 'solana' as const })),
-    ...(eh?.nfts ?? []).map((n) => ({ ...n, unit: 'ETH' as const, chain: 'evm' as const, evmChain: n.chain })),
+    ...(eh?.nfts ?? []).map((n) => ({ ...n, unit: n.unit ?? 'ETH', chain: 'evm' as const, evmChain: n.chain })),
   ];
   const untracked = (sh?.untracked ?? 0) + (eh?.untracked ?? 0);
 
   const units = [
     ...(solAddress ? [{ unit: 'SOL', total: sh?.totalValue ?? null, line: sh ? `${sol(sh.sol, 3)} plus ${sh.nfts.length} NFT${sh.nfts.length === 1 ? '' : 's'}` : solData && 'error' in solData ? "Couldn't load" : 'Loading…', colored: false }] : []),
-    ...(evmAddress ? [{ unit: 'ETH', total: eh?.totalValue ?? null, line: eh ? `${sol(eh.eth, 3, 'ETH')} plus ${eh.nfts.length} NFT${eh.nfts.length === 1 ? '' : 's'}` : evm && 'error' in evm ? "Couldn't load" : 'Loading…', colored: false }] : []),
+    // EVM: one value per currency (ETH across Ethereum and L2s, HYPE, RON...).
+    ...(evmAddress ? (eh?.values
+      ? Object.entries(eh.values).map(([unit, v]) => ({
+          unit, total: v.total, colored: false,
+          line: `${sol(v.cash, 3, unit)} plus ${v.nfts} NFT${v.nfts === 1 ? '' : 's'}`,
+        }))
+      : [{ unit: 'ETH', total: eh?.totalValue ?? null, colored: false,
+          line: eh ? `${sol(eh.eth, 3, 'ETH')} plus ${eh.nfts.length} NFT${eh.nfts.length === 1 ? '' : 's'}` : evm && 'error' in evm ? "Couldn't load" : 'Loading…' }]) : []),
   ];
 
   return (

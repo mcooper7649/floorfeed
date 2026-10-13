@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import http from "node:http";
 import { Resvg } from "@resvg/resvg-js";
 import { listCollections } from "./collections.ts";
-import { COLLECTIONS, EVM_COLLECTIONS, chainName, config, isEvmWallet, walletUnit } from "./config.ts";
+import { COLLECTIONS, EVM_COLLECTIONS, chainName, config, unitEcosystem } from "./config.ts";
 import { db } from "./db.ts";
 import { traders } from "./feed.ts";
 import { collectionFlippers } from "./pnl.ts";
@@ -51,7 +51,7 @@ const markets = cached(5 * MIN, () => listCollections());
 const leaders = cached(10 * MIN, () =>
   traderLeaderboard({ windowDays: 30, sort: "pnl", minFlips: 3, hideMarketMakers: true, limit: 100 }));
 const evmLeaders = cached(10 * MIN, () =>
-  traderLeaderboard({ windowDays: 30, sort: "pnl", minFlips: 3, hideMarketMakers: true, limit: 50, chain: "evm" }));
+  traderLeaderboard({ windowDays: 30, sort: "pnl", minFlips: 3, hideMarketMakers: true, limit: 50, unit: "ETH" }));
 
 
 // --- the HTML shell --------------------------------------------------------
@@ -293,8 +293,8 @@ function collectionPage(symbol: string): Page | null {
 
 function walletPage(address: string): Page {
   const p = traderProfile(address);
-  const unit = walletUnit(address);
-  const eco = isEvmWallet(address) ? "Ethereum" : "Solana";
+  const unit = p.unit;
+  const eco = unitEcosystem(unit);
   const id = traders([address]).get(address)!;
   const name = id.name ?? short(address);
   const tier = { elite: "Top Flipper", pro: "Proven", mm: "Market Maker", new: "New" }[id.tier ?? "new"] ?? "New";
@@ -459,7 +459,7 @@ async function collectionCard(symbol: string) {
 
 async function walletCard(address: string) {
   const p = traderProfile(address);
-  const unit = walletUnit(address);
+  const unit = p.unit;
   if (!p.flips) return null;
   const id = traders([address]).get(address)!;
   const name = id.name ?? short(address);
@@ -472,7 +472,7 @@ async function walletCard(address: string) {
     ${wordmark}
     <rect x="884" y="64" width="252" height="252" rx="126" fill="${CARD}" stroke="${BORDER}" stroke-width="2"/>
     ${art ? `<clipPath id="a"><circle cx="1010" cy="190" r="124"/></clipPath><image x="886" y="66" width="248" height="248" preserveAspectRatio="xMidYMid slice" clip-path="url(#a)" xlink:href="${art}"/>` : ""}
-    <text x="64" y="170" font-size="24" font-weight="600" fill="${ACCENT}" letter-spacing="2">${tier} · ${isEvmWallet(address) ? "ETHEREUM" : "SOLANA"} NFT TRADER</text>
+    <text x="64" y="170" font-size="24" font-weight="600" fill="${ACCENT}" letter-spacing="2">${tier} · ${unitEcosystem(unit).toUpperCase()} NFT TRADER</text>
     <text x="64" y="${170 + size + 14}" font-size="${size}" font-weight="800" fill="${TEXT}">${esc(clip(name, 24))}</text>
     ${spark(series, 64, 290, 760, 70, pnlColor)}
     ${stat(64, "Realized P&L", signed(p.realizedSol, unit), pnlColor)}

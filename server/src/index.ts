@@ -6,7 +6,7 @@ import { cachedTake, getTake } from "./ai.ts";
 import { adoptDevice, authorize, privyUser } from "./auth.ts";
 import { ADDRESS_RE, capabilities, hasDas, holdings, solBalance } from "./chain.ts";
 import { cheapestListings, collectionDetail, listCollections } from "./collections.ts";
-import { COLLECTIONS, collectionName, config, isEvm } from "./config.ts";
+import { COLLECTIONS, UNITS, collectionName, config, isEvm } from "./config.ts";
 import { db } from "./db.ts";
 import { feedEvents, traders } from "./feed.ts";
 import { loadDiscovered } from "./discovery.ts";
@@ -17,7 +17,8 @@ import { KINDS, generate, nextPost, postedSince, reportResult, startSocial, subm
 import { walletStats } from "./pnl.ts";
 import { card, renderPage, robots, sitemap } from "./seo.ts";
 import { nameFor, startNames } from "./sns.ts";
-import { traderLeaderboard, traderProfile } from "./traders.ts";
+import { traderLeaderboard, traderProfile, walletUnits } from "./traders.ts";
+import { unitOf } from "./units.ts";
 
 type TradeRow = {
   signature: string;
@@ -198,7 +199,7 @@ app.get("/takes/:signature", async (req, reply) => {
       floor: t.floor,
       avg24h: t.avg_24h,
       volume7d: t.volume_7d,
-      buyer: walletStats(t.buyer),
+      buyer: walletStats(t.buyer, unitOf(t.collection)),
     });
     return take ?? reply.code(204).send();
   } catch (err) {
@@ -214,6 +215,8 @@ app.get("/leaderboard", async (req) => {
     sort: z.enum(["pnl", "winrate", "roi", "flips"]).default("pnl"),
     minFlips: z.coerce.number().int().min(1).max(50).default(3),
     hideMM: z.enum(["0", "1"]).default("1"),
+    // `unit` ranks in one currency; `chain` is the older solana/evm form.
+    unit: z.enum(UNITS).optional(),
     chain: z.enum(["solana", "evm"]).default("solana"),
   }).parse(req.query);
   const board = traderLeaderboard({
@@ -222,7 +225,7 @@ app.get("/leaderboard", async (req) => {
     minFlips: q.minFlips,
     hideMarketMakers: q.hideMM === "1",
     limit: q.limit,
-    chain: q.chain,
+    unit: q.unit ?? (q.chain === "evm" ? "ETH" : "SOL"),
   });
   const ids = traders(board.rows.map((r) => r.wallet));
   return {
@@ -231,19 +234,27 @@ app.get("/leaderboard", async (req) => {
   };
 });
 
+// One wallet's record in one currency (?unit=, default: the one it trades
+// most in), plus every currency it trades in.
 app.get("/wallets/:address", async (req) => {
   const { address } = req.params as { address: string };
+  const { unit } = z.object({ unit: z.enum(UNITS).optional() }).parse(req.query);
+  const units = walletUnits(address);
+  const u = unit ?? units[0]?.unit;
   const trades = db.prepare(
     `${tradeSelect} WHERE t.buyer = ? OR t.seller = ? ORDER BY t.block_time DESC LIMIT 50`,
   ).all(address, address) as TradeRow[];
   await nameFor(address);
   return {
     identity: traders([address]).get(address)!,
-    stats: walletStats(address),
-    profile: traderProfile(address),
+    unit: u ?? (address.startsWith("0x") ? "ETH" : "SOL"),
+    units,
+    stats: walletStats(address, u),
+    profile: traderProfile(address, u),
     trades: trades.map((t) => ({
       signature: t.signature,
       mint: t.mint,
+      currency: unitOf(t.collection), // a wallet's trades can span currencies
       side: t.buyer === address ? "buy" : "sell",
       collection: collectionName(t.collection),
       symbol: t.collection,
@@ -290,9 +301,7 @@ app.delete("/follows", async (req, reply) => {
 const floorOf = (symbol: string) =>
   (db.prepare("SELECT floor FROM collections WHERE symbol = ?").get(symbol) as { floor: number | null } | undefined)?.floor ?? null;
 
-const unitRow = db.prepare("SELECT currency FROM collections WHERE symbol = ?");
-const paperUnit = (symbol: string) =>
-  (unitRow.get(symbol) as { currency: string } | undefined)?.currency ?? (isEvm(symbol) ? "ETH" : "SOL");
+const paperUnit = (symbol: string) => unitOf(symbol);
 
 app.post("/paper/buy", async (req, reply) => {
   const b = z.object({
@@ -303,8 +312,8 @@ app.post("/paper/buy", async (req, reply) => {
   if (!(await authorize(req, reply, b.userId))) return;
   // Paper positions are kept in the collection's own unit (SOL or ETH) and
   // totalled per unit; collections priced in anything else are browse-only.
-  if (!["SOL", "ETH"].includes(paperUnit(b.collection))) {
-    return reply.code(422).send({ error: "Paper trading supports SOL and ETH collections" });
+  if (!(UNITS as readonly string[]).includes(paperUnit(b.collection))) {
+    return reply.code(422).send({ error: "Paper trading isn't available for this collection's currency" });
   }
   const floor = floorOf(b.collection);
   if (!floor) return reply.code(409).send({ error: "no floor price yet" });
@@ -342,7 +351,7 @@ app.get("/paper/:userId", async (req, reply) => {
   const { userId } = req.params as { userId: string };
   if (!(await authorize(req, reply, userId))) return;
   const rows = db.prepare(
-    `SELECT p.*, c.floor, c.currency,
+    `SELECT p.*, c.floor, COALESCE(c.sale_currency, c.currency) AS currency,
             COALESCE(c.image, (SELECT image FROM trades WHERE collection = p.collection AND image IS NOT NULL
                                ORDER BY block_time DESC LIMIT 1)) AS image
      FROM paper_positions p
