@@ -3,6 +3,8 @@ import cors from "@fastify/cors";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import { z } from "zod";
 import { cachedTake, getTake } from "./ai.ts";
+import { followingHoldings, smartMoney } from "./discover.ts";
+import { refreshPrices, tickerPrices } from "./prices.ts";
 import { dashboard, record, startAnalytics, summary, type Hit } from "./analytics.ts";
 import { checkAlerts, hasPush, inbox, markRead, pushKey, startAlerts, subscribe, syncWebhook, unreadCount, unsubscribe } from "./alerts.ts";
 import { adoptDevice, authorize, privyUser } from "./auth.ts";
@@ -460,6 +462,17 @@ app.get("/admin/stats.json", async (req, reply) => {
   return summary(q.days);
 });
 
+// --- Discovery panel (discover.ts): who holds what, and native coin prices ---
+app.get("/discover/holders", async (req, reply) => {
+  const { userId } = z.object({ userId: z.string().optional() }).parse(req.query);
+  if (userId && !(await authorize(req, reply, userId))) return;
+  const followed = userId
+    ? new Set((db.prepare("SELECT wallet FROM follows WHERE user_id = ?").all(userId) as { wallet: string }[]).map((r) => r.wallet))
+    : new Set<string>();
+  return { smart: smartMoney(), following: followingHoldings(followed) };
+});
+app.get("/prices", async (_req, reply) => reply.header("cache-control", "public, max-age=60").send(tickerPrices()));
+
 // --- Wallet alerts: inbox and web push (alerts.ts) ---
 app.get("/alerts/:userId", async (req, reply) => {
   const { userId } = req.params as { userId: string };
@@ -619,6 +632,7 @@ app.get("/seo/*", async (req, reply) => {
 // and so Magic Eden's rate limit.
 loadDiscovered(); // last run's discovered EVM collections, before anything reads the lists
 if (process.env.INGEST !== "0") startIngest();
+else { void refreshPrices(); setInterval(() => void refreshPrices(), 10 * 60_000).unref(); } // USD values for local dev
 // Rank every Solana collection's items in the background (weekly refresh),
 // starting after boot so it doesn't compete with the first polls.
 if (process.env.INGEST !== "0") {
@@ -630,4 +644,7 @@ startSocial();
 startNames();
 startAlerts();
 startAnalytics();
+// Smart-money holdings take a few seconds to compute: keep them warm.
+setTimeout(() => smartMoney(), 60_000).unref();
+setInterval(() => smartMoney(), 4 * 60_000).unref();
 await app.listen({ host: "0.0.0.0", port: config.port });

@@ -1,19 +1,17 @@
 import { Tabs, TabList, TabTrigger, TabSlot, type TabTriggerSlotProps, type TabListProps } from 'expo-router/ui';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { TopNav } from '@/components/top-nav';
 import { C } from '@/constants/brand';
 import { MaxContentWidth } from '@/constants/theme';
 import { useLayout } from '@/lib/layout';
 
 // Narrow web gets a floating pill tab bar at the bottom, like the native bar.
-// Wide web gets a top header instead; the tab list stays mounted (it
-// registers the routes) but hidden.
+// Wide web gets the header from the root layout instead; the tab list stays
+// mounted (it registers the routes) but hidden.
 export default function AppTabs() {
   const { wide } = useLayout();
   return (
     <Tabs style={{ flex: 1 }}>
-      {wide && <TopNav />}
       <TabSlot style={{ flex: 1 }} />
       <TabList asChild>
         <PillBar hidden={wide}>

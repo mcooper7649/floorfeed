@@ -1,15 +1,20 @@
 import { DarkTheme, Stack, ThemeProvider, usePathname } from 'expo-router';
 import { useEffect } from 'react';
 import * as SplashScreen from 'expo-splash-screen';
-import { Platform } from 'react-native';
+import { Platform, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
+import { DiscoveryPanel } from '@/components/discovery-panel';
+import { PriceTicker } from '@/components/price-ticker';
+import { TopNav } from '@/components/top-nav';
 import { C } from '@/constants/brand';
 import { AlertsProvider } from '@/lib/alerts';
 import { pageview } from '@/lib/analytics';
 import { AuthProvider } from '@/lib/auth';
 import { EvmWalletProvider } from '@/lib/evm-wallet';
+import { useLayout } from '@/lib/layout';
+import { PanelProvider, usePanel } from '@/lib/panel';
 import { TradeModeProvider } from '@/lib/mode';
 import { SessionProvider } from '@/lib/session';
 import { WalletProvider } from '@/lib/wallet';
@@ -32,17 +37,21 @@ export default function RootLayout() {
       <WalletProvider>
       <EvmWalletProvider>
       <TradeModeProvider>
+      <PanelProvider>
         <StatusBar style="light" />
         <Pageviews />
         <AnimatedSplashOverlay />
-        <Stack screenOptions={{ contentStyle: { backgroundColor: C.bg } }}>
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          {/* Web draws its own header (TopNav) on these pages */}
-          <Stack.Screen name="wallet/[address]" options={{ title: 'Wallet', headerBackTitle: 'Back', headerShown: !web }} />
-          <Stack.Screen name="collection/[symbol]" options={{ title: 'Collection', headerBackTitle: 'Back', headerShown: !web }} />
-          <Stack.Screen name="item/[symbol]/[id]" options={{ title: 'NFT', headerBackTitle: 'Back', headerShown: !web }} />
-          <Stack.Screen name="alerts" options={{ title: 'Alerts', headerBackTitle: 'Back', headerShown: !web }} />
-        </Stack>
+        <Shell>
+          <Stack screenOptions={{ contentStyle: { backgroundColor: C.bg } }}>
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            {/* Web draws its own header (TopNav) on these pages */}
+            <Stack.Screen name="wallet/[address]" options={{ title: 'Wallet', headerBackTitle: 'Back', headerShown: !web }} />
+            <Stack.Screen name="collection/[symbol]" options={{ title: 'Collection', headerBackTitle: 'Back', headerShown: !web }} />
+            <Stack.Screen name="item/[symbol]/[id]" options={{ title: 'NFT', headerBackTitle: 'Back', headerShown: !web }} />
+            <Stack.Screen name="alerts" options={{ title: 'Alerts', headerBackTitle: 'Back', headerShown: !web }} />
+          </Stack>
+        </Shell>
+      </PanelProvider>
       </TradeModeProvider>
       </EvmWalletProvider>
       </WalletProvider>
@@ -58,4 +67,23 @@ function Pageviews() {
   const path = usePathname();
   useEffect(() => pageview(path), [path]);
   return null;
+}
+
+// Wide web: one header across the top, the discovery panel on the left, the
+// page beside it, and the price ticker along the bottom. Elsewhere the page
+// draws its own chrome (pages render TopNav as a back bar on narrow web).
+function Shell({ children }: { children: React.ReactNode }) {
+  const { wide } = useLayout();
+  const panel = usePanel();
+  if (!web || !wide) return <>{children}</>;
+  return (
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
+      <TopNav />
+      <View style={{ flex: 1, flexDirection: 'row', minHeight: 0 }}>
+        {panel.available && <DiscoveryPanel />}
+        <View style={{ flex: 1, minWidth: 0 }}>{children}</View>
+      </View>
+      <PriceTicker />
+    </View>
+  );
 }

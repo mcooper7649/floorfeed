@@ -22,6 +22,9 @@ export function TopNav({ back }: { back?: boolean }) {
   const path = usePathname();
   const [q, setQ] = useState('');
 
+  // On wide web the root layout draws the one header; pages' own back bars step aside.
+  if (back && wide) return null;
+
   const search = () => {
     const query = q.trim();
     router.push({ pathname: '/markets', params: query ? { q: query } : {} });
@@ -29,7 +32,8 @@ export function TopNav({ back }: { back?: boolean }) {
 
   return (
     <View style={s.bar}>
-      <View style={[s.inner, { maxWidth, paddingHorizontal: pad }]}>
+      {/* Wide: edge to edge, the logo lined up with the discovery panel. */}
+      <View style={[s.inner, wide ? { maxWidth: '100%', paddingHorizontal: 20 } : { maxWidth, paddingHorizontal: pad }]}>
         {back && !wide && (
           <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} hitSlop={10} style={s.back}
             accessibilityLabel="Back">

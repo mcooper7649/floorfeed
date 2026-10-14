@@ -136,6 +136,16 @@ function avatars(wallets: string[]) {
   return out;
 }
 
+// Wallets the feed tags Top Flipper ("elite") or Proven ("pro").
+export function provenWallets() {
+  const out = new Map<string, "elite" | "pro">();
+  for (const [w, s] of allStats()) {
+    const t = tierOf(s, (s.wins + 2) / (s.flips + 4));
+    if (t === "elite" || t === "pro") out.set(w, t);
+  }
+  return out;
+}
+
 export function traders(wallets: string[]) {
   const uniq = [...new Set(wallets)];
   const stats = allStats();

@@ -298,6 +298,13 @@ export type Alert = {
 };
 export type PushSubscriptionBody = { endpoint: string; keys: { p256dh: string; auth: string } };
 
+// Discovery panel: collections held by proven wallets / by the wallets a user follows.
+export type HolderRow = {
+  symbol: string; holders: number; items: number;
+  wallets: { wallet: string; name: string | null; avatar: string | null; tier: Tier }[];
+};
+export type TickerPrice = { symbol: string; usd: number; change24hPct: number | null };
+
 export const api = {
   // Verifies the Privy token and moves this device's follows/paper trades to the account.
   session: (deviceId: string) => send('POST', '/auth/session', { deviceId }) as Promise<{ userId: string }>,
@@ -341,6 +348,9 @@ export const api = {
   pushKey: () => req<{ key: string }>('/push/key'),
   subscribePush: (userId: string, subscription: PushSubscriptionBody) => send('POST', '/push/subscribe', { userId, subscription }),
   unsubscribePush: (endpoint: string) => send('POST', '/push/unsubscribe', { endpoint }),
+  holders: (userId?: string | null) =>
+    req<{ smart: HolderRow[]; following: HolderRow[] }>(`/discover/holders${userId ? `?userId=${encodeURIComponent(userId)}` : ''}`),
+  prices: () => req<TickerPrice[]>('/prices'),
   follows: (userId: string) => req<string[]>(`/follows/${userId}`),
   follow: (userId: string, wallet: string) => send('POST', '/follows', { userId, wallet }),
   unfollow: (userId: string, wallet: string) => send('DELETE', '/follows', { userId, wallet }),
