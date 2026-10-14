@@ -4,7 +4,9 @@ import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Tex
 import { AlertsBell } from '@/components/alerts-bell';
 import { EventCard } from '@/components/event-card';
 import { Empty, Screen } from '@/components/screen';
-import { Chip, ChipRow } from '@/components/ui';
+import { SuggestedFollows } from '@/components/suggested-follows';
+import { Card, Chip, ChipRow } from '@/components/ui';
+import { WelcomeCard } from '@/components/welcome-card';
 import { C } from '@/constants/brand';
 import { T } from '@/constants/type';
 import { api, type FeedChain, type FeedEvent, type FeedView } from '@/lib/api';
@@ -101,11 +103,20 @@ export default function FeedScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={C.accent} />}
           onEndReached={more}
           onEndReachedThreshold={0.5}
+          ListHeaderComponent={scope === 'all' ? <WelcomeCard /> : null}
           ListEmptyComponent={
-            <Empty text={error ? `Can't reach the server: ${error}`
-              : scope === 'following' ? 'Follow wallets from the feed or the leaderboard to see their trades here.'
-              : view === 'wins' ? 'No profitable flips in this window yet.'
-              : 'No trades yet. The server is still ingesting.'} />
+            scope === 'following' && !error && following.size === 0 ? (
+              <Card>
+                <Text style={T.bodyStrong}>Your own feed of traders you trust</Text>
+                <Text style={T.meta}>Follow a few wallets and only their buys, flips and sweeps show up here. These are the best flippers of the last 30 days:</Text>
+                <SuggestedFollows count={5} from="following-empty" />
+              </Card>
+            ) : (
+              <Empty text={error ? `Can't reach the server: ${error}`
+                : scope === 'following' ? 'No recent trades from the wallets you follow. They show up here as they happen.'
+                : view === 'wins' ? 'No profitable flips in this window yet.'
+                : 'No trades yet. The server is still ingesting.'} />
+            )
           }
         />
       )}

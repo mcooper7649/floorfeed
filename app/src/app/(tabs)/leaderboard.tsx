@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
@@ -65,7 +66,8 @@ export default function LeaderboardScreen() {
         <Text style={[T.metaNum, s.summary, { paddingHorizontal: pad }]}>
           Ranked in {unit}. {sm.wallets} wallets with 3+ flips made {sm.flips.toLocaleString()} flips; {sm.profitableWallets} are in profit,{' '}
           <Text style={{ color: sm.realizedSol >= 0 ? C.up : C.down }}>{signedSol(sm.realizedSol, 1, unit)}</Text> combined.
-          {sm.hiddenMarketMakers ? ` ${sm.hiddenMarketMakers} likely ${unit === 'SOL' ? 'market makers' : 'bid bots'} hidden.` : ''}
+          {sm.hiddenMarketMakers ? ` ${sm.hiddenMarketMakers} likely ${unit === 'SOL' ? 'market makers' : 'bid bots'} hidden.` : ''}{' '}
+          <Text style={{ color: C.accent }} onPress={() => router.push({ pathname: '/how-it-works', params: { s: 'badges' } })}>What the badges mean</Text>
         </Text>
       )}
 

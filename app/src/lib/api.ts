@@ -303,6 +303,8 @@ export type HolderRow = {
   symbol: string; holders: number; items: number;
   wallets: { wallet: string; name: string | null; avatar: string | null; tier: Tier }[];
 };
+export type GuideBlock = { p: string } | { list: { term: string; text: string }[] };
+export type GuideSection = { id: string; title: string; blocks: GuideBlock[] };
 export type TickerPrice = { symbol: string; usd: number; change24hPct: number | null };
 
 export const api = {
@@ -351,6 +353,7 @@ export const api = {
   holders: (userId?: string | null) =>
     req<{ smart: HolderRow[]; following: HolderRow[] }>(`/discover/holders${userId ? `?userId=${encodeURIComponent(userId)}` : ''}`),
   prices: () => req<TickerPrice[]>('/prices'),
+  guide: () => req<GuideSection[]>('/guide'),
   follows: (userId: string) => req<string[]>(`/follows/${userId}`),
   follow: (userId: string, wallet: string) => send('POST', '/follows', { userId, wallet }),
   unfollow: (userId: string, wallet: string) => send('DELETE', '/follows', { userId, wallet }),

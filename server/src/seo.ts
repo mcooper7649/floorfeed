@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { GUIDE, type GuideBlock } from "./guide.ts";
 import http from "node:http";
 import { Resvg } from "@resvg/resvg-js";
 import { listCollections } from "./collections.ts";
@@ -128,8 +129,8 @@ function render(html: string, p: Page) {
     .replace(/<div id="root"><\/div>/, `<div id="root"><div id="ssr">${p.body}</div></div>`);
 }
 
-const nav = `<nav><a href="/">Feed</a> · <a href="/markets">Markets</a> · <a href="/leaderboard">Leaders</a></nav>`;
-const foot = `<footer><p>${NAME} tracks Solana NFT trades and the wallets behind them: who is buying, how good they are, and what they did last time. Follow <a href="https://x.com/FloorFeed" rel="me">${HANDLE}</a> on X.</p></footer>`;
+const nav = `<nav><a href="/">Feed</a> · <a href="/markets">Markets</a> · <a href="/leaderboard">Leaders</a> · <a href="/how-it-works">How it works</a></nav>`;
+const foot = `<footer><p>${NAME} tracks NFT trades on Solana, Ethereum and 9 more chains, and the wallets behind them: who is buying, how good they are, and what they did last time. Follow <a href="https://x.com/FloorFeed" rel="me">${HANDLE}</a> on X.</p></footer>`;
 const doc = (main: string) => `<header><a href="/"><strong>${NAME}</strong></a> ${nav}</header><main>${main}</main>${foot}`;
 
 const org = {
@@ -147,6 +148,23 @@ const crumbs = (items: [string, string][]) => ({
 });
 
 // --- pages -----------------------------------------------------------------
+
+function guidePage(): Page {
+  const block = (b: GuideBlock) => "p" in b
+    ? `<p>${esc(b.p)}</p>`
+    : `<dl>${b.list.map((i) => `<dt>${esc(i.term)}</dt><dd>${esc(i.text)}</dd>`).join("")}</dl>`;
+  const faq = GUIDE.find((g) => g.id === "faq")?.blocks.flatMap((b) => ("list" in b ? b.list : [])) ?? [];
+  return {
+    title: `How ${NAME} works: follow NFT traders who win`,
+    description: "How to read the FloorFeed NFT feed, what trader badges mean, how profit after fees is counted, wallet alerts, paper trading and real buys.",
+    path: "/how-it-works",
+    jsonLd: [crumbs([[NAME, "/"], ["How it works", "/how-it-works"]]), {
+      "@context": "https://schema.org", "@type": "FAQPage",
+      mainEntity: faq.map((q) => ({ "@type": "Question", name: q.term, acceptedAnswer: { "@type": "Answer", text: q.text } })),
+    }],
+    body: doc(`<h1>How ${NAME} works</h1>${GUIDE.map((g) => `<section id="${g.id}"><h2>${esc(g.title)}</h2>${g.blocks.map(block).join("")}</section>`).join("")}`),
+  };
+}
 
 type Coll = ReturnType<typeof listCollections>[number];
 
@@ -346,6 +364,7 @@ export function pageFor(path: string): Page {
   if (clean === "/") return home();
   if (clean === "/markets") return marketsPage();
   if (clean === "/leaderboard") return leaderboardPage();
+  if (clean === "/how-it-works") return guidePage();
   if (clean === "/portfolio") {
     return { title: "Portfolio | FloorFeed", description: "Your paper and real NFT positions on FloorFeed.", path: "/portfolio", noindex: true, body: doc(`<h1>Portfolio</h1>`) };
   }
@@ -369,6 +388,7 @@ export function sitemap() {
     ["/", "hourly", 1.0],
     ["/markets", "hourly", 0.9],
     ["/leaderboard", "daily", 0.8],
+    ["/how-it-works", "weekly", 0.8],
     ...[...COLLECTIONS.map((c) => c.symbol), ...EVM_COLLECTIONS.map((c) => c.slug)]
       .map((s): [string, string, number] => [`/collection/${encodeURIComponent(s)}`, "hourly", 0.7]),
     ...[...leaders().rows, ...evmLeaders().rows].map((r): [string, string, number] => [`/wallet/${r.wallet}`, "daily", 0.5]),

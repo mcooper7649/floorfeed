@@ -6,6 +6,7 @@ import { NftImage } from '@/components/nft-image';
 import { Empty } from '@/components/screen';
 import { TopNav } from '@/components/top-nav';
 import { PushCard } from '@/components/push-card';
+import { SuggestedFollows } from '@/components/suggested-follows';
 import { ListRow } from '@/components/ui';
 import { C } from '@/constants/brand';
 import { T, display } from '@/constants/type';
@@ -58,9 +59,14 @@ export default function AlertsScreen() {
           contentContainerStyle={{ paddingHorizontal: pad, paddingTop: 20, paddingBottom: 40 }}
           ListHeaderComponent={header}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={C.accent} />}
-          ListEmptyComponent={<Empty text={following.size
-            ? 'No trades from the wallets you follow yet. New ones show up here as they happen.'
-            : 'Follow a wallet from the feed or the Leaders tab to get alerts when it trades.'} />}
+          ListEmptyComponent={following.size
+            ? <Empty text="No trades from the wallets you follow yet. New ones show up here as they happen." />
+            : (
+              <View style={{ gap: 8, paddingTop: 8 }}>
+                <Text style={T.meta}>Follow a wallet to get alerts when it trades. Start with the best flippers of the last 30 days:</Text>
+                <SuggestedFollows count={5} from="alerts-empty" />
+              </View>
+            )}
           renderItem={({ item: a }) => <AlertRow a={a} />}
         />
       )}

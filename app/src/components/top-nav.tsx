@@ -13,6 +13,7 @@ const LINKS = [
   { href: '/markets', label: 'Markets' },
   { href: '/leaderboard', label: 'Leaders' },
   { href: '/portfolio', label: 'Portfolio' },
+  { href: '/how-it-works', label: 'How it works' },
 ] as const;
 
 // Web header. Wide windows get the full bar (brand, sections, collection

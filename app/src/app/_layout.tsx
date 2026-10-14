@@ -49,6 +49,7 @@ export default function RootLayout() {
             <Stack.Screen name="collection/[symbol]" options={{ title: 'Collection', headerBackTitle: 'Back', headerShown: !web }} />
             <Stack.Screen name="item/[symbol]/[id]" options={{ title: 'NFT', headerBackTitle: 'Back', headerShown: !web }} />
             <Stack.Screen name="alerts" options={{ title: 'Alerts', headerBackTitle: 'Back', headerShown: !web }} />
+            <Stack.Screen name="how-it-works" options={{ title: 'How it works', headerBackTitle: 'Back', headerShown: !web }} />
           </Stack>
         </Shell>
       </PanelProvider>
