@@ -5,6 +5,7 @@ import { NftImage } from '@/components/nft-image';
 import { C } from '@/constants/brand';
 import { CHAINS } from '@/constants/chains';
 import { T } from '@/constants/type';
+import { recordTx } from '@/lib/activity';
 import { api, type Chain, type Holding } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { shortAddr } from '@/lib/format';
@@ -222,6 +223,7 @@ function SendEvm({ setBusy }: Busy) {
         chainId: fee.chainId, to: to.trim(), data: '0x', value: wei.toString(),
         description: `Send ${amount} ${native} to ${shortAddr(to.trim())}.`,
       });
+      recordTx({ hash, wallet: from, chain, kind: 'send', title: `Sent ${amount} ${native} to ${shortAddr(to.trim())}`, amount: Number(amount), unit: native });
       setSent({ hash, chain }); setAmount(''); setTo('');
     } catch (e) {
       const m = (e as Error).message || 'The transfer did not go through.';
@@ -305,6 +307,7 @@ function SendNft({ setBusy, onExport }: Busy & { onExport: () => void }) {
       const tx = await api.evmNftTransfer({ chain: pick.chain ?? 'ethereum', contract, tokenId, from: auth.evmAddress, to: to.trim() });
       setBusy(true);
       const hash = await auth.sendEvm({ ...tx, description: `Send ${pick.name ?? 'this NFT'} to ${shortAddr(to.trim())}.` });
+      recordTx({ hash, wallet: auth.evmAddress, chain: pick.chain ?? 'ethereum', kind: 'send', title: `Sent ${pick.name ?? 'an NFT'} to ${shortAddr(to.trim())}`, mint: pick.mint });
       setSent({ hash, chain: pick.chain ?? 'ethereum' }); setPick(null); setTo('');
     } catch (e) {
       const m = (e as Error).message || 'The transfer did not go through.';

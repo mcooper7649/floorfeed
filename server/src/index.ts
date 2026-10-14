@@ -18,8 +18,9 @@ import { db } from "./db.ts";
 import { feedEvents, traders } from "./feed.ts";
 import { loadDiscovered } from "./discovery.ts";
 import { itemDetail, warmRarity } from "./items.ts";
+import { ACTIVITY_KINDS, recordActivity, walletActivity } from "./activity.ts";
 import { bridgeQuote, bridgeStatus } from "./bridge.ts";
-import { EVM_ADDRESS_RE, evmApproveTx, evmBalances, evmBuyTx, evmHoldings, evmNftTransferTx, evmQuote, evmSellQuote, evmSellTx, evmTransferFee, totalEth } from "./trade-evm.ts";
+import { EVM_ADDRESS_RE, evmApproveTx, evmBalances, evmBuyTx, evmHoldings, evmNetworks, evmNftTransferTx, evmQuote, evmSellQuote, evmSellTx, evmTransferFee, evmUnwrapTx, totalEth } from "./trade-evm.ts";
 import { startIngest } from "./ingest.ts";
 import { KINDS, generate, nextPost, postedSince, reportResult, startSocial, submitExternal, xLength } from "./social.ts";
 import { amountsFrom, feeRates } from "./fees.ts";
@@ -755,6 +756,34 @@ app.get("/bridge/status/:id", async (req, reply) => {
   if (!/^0x[0-9a-fA-F]{64}$/.test(id)) return reply.code(400).send({ error: "bad request id" });
   const q = z.object({ chain: z.string().optional(), tx: z.string().regex(/^0x[0-9a-fA-F]{64}$/).optional() }).parse(req.query);
   try { return await bridgeStatus(id, q.chain && q.tx ? { chain: q.chain, tx: q.tx } : undefined); } catch (err) { return reply.code(502).send({ error: (err as Error).message }); }
+});
+
+// Balances by network (native + wrapped token) and unwrapping WETH back to ETH.
+app.get("/chain/evm/networks/:address", async (req, reply) => {
+  const { address } = req.params as { address: string };
+  if (!EVM_ADDRESS_RE.test(address)) return reply.code(400).send({ error: "Not an EVM address" });
+  return evmNetworks(address);
+});
+app.post("/chain/evm/unwrap-tx", async (req, reply) => {
+  const b = z.object({ chain: z.string(), owner: z.string().regex(EVM_ADDRESS_RE), token: z.string().regex(EVM_ADDRESS_RE), amount: z.number().positive().optional() }).parse(req.body);
+  try { return await evmUnwrapTx(b); } catch (err) { return reply.code(409).send({ error: (err as Error).message }); }
+});
+
+// A wallet's FloorFeed transactions with their on-chain outcome.
+app.post("/activity", async (req, reply) => {
+  const b = z.object({
+    hash: z.string().regex(/^0x[0-9a-fA-F]{64}$/), wallet: z.string().regex(EVM_ADDRESS_RE), chain: z.string(),
+    kind: z.enum(ACTIVITY_KINDS), title: z.string().min(1).max(140),
+    amount: z.number().finite().nullable().optional(), unit: z.string().max(12).nullable().optional(),
+    symbol: z.string().max(80).nullable().optional(), mint: z.string().max(140).nullable().optional(),
+    requestId: z.string().regex(/^0x[0-9a-fA-F]{64}$/).nullable().optional(), toChain: z.string().nullable().optional(),
+  }).parse(req.body);
+  try { recordActivity(b); return { ok: true }; } catch (err) { return reply.code(400).send({ error: (err as Error).message }); }
+});
+app.get("/activity/:wallet", async (req, reply) => {
+  const { wallet } = req.params as { wallet: string };
+  if (!EVM_ADDRESS_RE.test(wallet)) return reply.code(400).send({ error: "Not an EVM address" });
+  return walletActivity(wallet);
 });
 
 // --- Withdrawals from the Privy wallets (the user's wallet signs every one) ---

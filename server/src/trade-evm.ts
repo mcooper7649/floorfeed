@@ -1,4 +1,4 @@
-import { createPublicClient, encodeFunctionData, formatEther, http, parseAbiItem, type Hex, type PublicClient } from "viem";
+import { createPublicClient, encodeFunctionData, formatEther, http, parseAbiItem, parseEther, type Hex, type PublicClient } from "viem";
 import { abstract, apeChain, arbitrum, base, hyperEvm, ink, mainnet, monad, ronin } from "viem/chains";
 import { EVM_CHAINS, EVM_SALES, config, normalizeUnit } from "./config.ts";
 import { unitOf } from "./units.ts";
@@ -411,4 +411,90 @@ export async function evmTxState(chain: string, hash: string) {
   if (receipt) return receipt.status === "success" ? "mined" : "failed";
   const tx = await c.getTransaction({ hash: hash as Hex }).catch(() => null);
   return tx ? "pending" : "missing";
+}
+
+// --- balances by network, including the wrapped token ---
+// Offer sales pay out in the chain's wrapped token (WETH on Ink...), which a
+// plain balance read never shows, so the money looks gone. These are read
+// alongside the native balance and can be unwrapped back 1:1.
+// Addresses verified on chain with symbol() (2026-10-14).
+const WRAPPED: Partial<Record<EvmChain, { address: Hex; symbol: string; unit: string; unwrappable: boolean }[]>> = {
+  ethereum: [{ address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", symbol: "WETH", unit: "ETH", unwrappable: true }],
+  base: [{ address: "0x4200000000000000000000000000000000000006", symbol: "WETH", unit: "ETH", unwrappable: true }],
+  ink: [{ address: "0x4200000000000000000000000000000000000006", symbol: "WETH", unit: "ETH", unwrappable: true }],
+  arbitrum: [{ address: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1", symbol: "WETH", unit: "ETH", unwrappable: true }],
+  abstract: [{ address: "0x3439153EB7AF838Ad19d56E1571FBD09333C2809", symbol: "WETH", unit: "ETH", unwrappable: true }],
+  hyperevm: [{ address: "0x5555555555555555555555555555555555555555", symbol: "WHYPE", unit: "HYPE", unwrappable: true }],
+  // Ronin: WRON unwraps to RON; its WETH is bridged ETH (no native ETH there to unwrap to).
+  ronin: [
+    { address: "0xe514d9DEB7966c8BE0ca922de8a064264eA6bcd4", symbol: "WRON", unit: "RON", unwrappable: true },
+    { address: "0xc99a6A985eD2Cac1ef41640596C5A5f9F4E19Ef5", symbol: "WETH", unit: "ETH", unwrappable: false },
+  ],
+  apechain: [{ address: "0x48b62137EdfA95a428D35C09E44256a739F6B557", symbol: "WAPE", unit: "APE", unwrappable: true }],
+  monad: [{ address: "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A", symbol: "WMON", unit: "MON", unwrappable: true }],
+};
+const ERC20_BALANCE = parseAbiItem("function balanceOf(address) view returns (uint256)");
+const WETH_WITHDRAW = parseAbiItem("function withdraw(uint256 wad)");
+
+const networksCache = new Map<string, { at: number; v: unknown }>();
+export async function evmNetworks(address: string) {
+  const key = address.toLowerCase();
+  const hit = networksCache.get(key);
+  if (hit && Date.now() - hit.at < 15_000) return hit.v as Awaited<ReturnType<typeof loadNetworks>>;
+  const v = await loadNetworks(key);
+  networksCache.set(key, { at: Date.now(), v });
+  return v;
+}
+async function loadNetworks(address: string) {
+  const { v: native, failed } = await loadBalances(address);
+  return Promise.all(TRADABLE.map(async (chain) => {
+    const c = clients[chain] as unknown as PublicClient;
+    const tokens = await Promise.all((WRAPPED[chain] ?? []).map(async (t) => {
+      const raw = await c.readContract({ address: t.address, abi: [ERC20_BALANCE], functionName: "balanceOf", args: [address as Hex] }).catch(() => null);
+      return { ...t, balance: raw == null ? null : Number(formatEther(raw)) };
+    }));
+    return {
+      chain, name: EVM_CHAINS[chain].name, chainId: EVM_CHAINS[chain].id, native: EVM_CHAINS[chain].native,
+      balance: failed.has(chain) ? null : native[chain],
+      tokens: tokens.filter((t) => t.balance == null || t.balance > 0),
+    };
+  }));
+}
+// Drop the cached reads after a transaction so the next look is fresh.
+export function forgetBalances(address: string) {
+  balanceCache.delete(address.toLowerCase());
+  networksCache.delete(address.toLowerCase());
+  holdingsCache.delete(address.toLowerCase());
+}
+
+// Wrapped -> native, 1:1, on the same chain (WETH.withdraw). `amount` omitted = all of it.
+export async function evmUnwrapTx(b: { chain: string; owner: string; token: string; amount?: number }) {
+  if (!isTradable(b.chain)) throw new Error("Unsupported chain");
+  const t = (WRAPPED[b.chain] ?? []).find((x) => x.address.toLowerCase() === b.token.toLowerCase());
+  if (!t || !t.unwrappable) throw new Error("That token can't be unwrapped here.");
+  const c = clients[b.chain] as unknown as PublicClient;
+  const bal = await c.readContract({ address: t.address, abi: [ERC20_BALANCE], functionName: "balanceOf", args: [b.owner as Hex] });
+  const wad = b.amount != null ? parseEther(b.amount.toFixed(18)) : bal;
+  if (wad <= 0n || wad > bal) throw new Error(`You have ${formatEther(bal)} ${t.symbol} on ${EVM_CHAINS[b.chain].name}.`);
+  const data = encodeFunctionData({ abi: [WETH_WITHDRAW], functionName: "withdraw", args: [wad] });
+  const gas = await c.estimateGas({ account: b.owner as Hex, to: t.address, data }).catch((err: Error) => {
+    throw new Error(/insufficient funds/i.test(err.message)
+      ? `Not enough ${EVM_CHAINS[b.chain as EvmChain].native} on ${EVM_CHAINS[b.chain as EvmChain].name} for the network fee.`
+      : `The unwrap would fail: ${err.message.split("\n")[0]}`);
+  });
+  return {
+    chainId: EVM_CHAINS[b.chain].id, explorerTx: `${EVM_CHAINS[b.chain].explorer}/tx/`,
+    to: t.address, data, value: "0", gas: ((gas * 12n) / 10n).toString(),
+    amount: Number(formatEther(wad)), symbol: t.symbol, unit: t.unit,
+  };
+}
+
+// State of a transaction plus who sent it (to check an activity entry belongs to its wallet).
+export async function evmTxInfo(chain: string, hash: string) {
+  if (!isTradable(chain)) throw new Error("Unsupported chain");
+  const c = clients[chain] as unknown as PublicClient;
+  const receipt = await c.getTransactionReceipt({ hash: hash as Hex }).catch(() => null);
+  if (receipt) return { state: receipt.status === "success" ? "mined" as const : "failed" as const, from: receipt.from.toLowerCase(), block: Number(receipt.blockNumber) };
+  const tx = await c.getTransaction({ hash: hash as Hex }).catch(() => null);
+  return tx ? { state: "pending" as const, from: tx.from.toLowerCase(), block: null } : { state: "missing" as const, from: null, block: null };
 }

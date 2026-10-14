@@ -319,6 +319,17 @@ export type BridgeQuote = {
   balance: number | null; problem: string | null;
   tx: EvmTxOut | null;
 };
+export type EvmNetwork = {
+  chain: string; name: string; chainId: number; native: string; balance: number | null;
+  tokens: { address: string; symbol: string; unit: string; unwrappable: boolean; balance: number | null }[];
+};
+export type ActivityKind = 'buy' | 'sell' | 'approve' | 'bridge' | 'send' | 'unwrap';
+export type ActivityItem = {
+  hash: string; chain: string; kind: ActivityKind; title: string; amount: number | null; unit: string | null;
+  symbol: string | null; mint: string | null; toChain: string | null;
+  status: 'pending' | 'confirmed' | 'delivering' | 'failed' | 'dropped' | 'refunded';
+  createdAt: number; explorerUrl: string; outUrl: string | null;
+};
 export type EvmBuyTx = {
   chainId: number; to: string; data: string; value: string; valueEth: number; gas: string; gasCostEth: number | null;
   explorerTx?: string;
@@ -394,6 +405,15 @@ export const api = {
   },
   evmBuyTx: (b: { orderHash: string; protocolAddress: string; chain: string; buyer: string }) =>
     send('POST', '/trade/evm/buy-tx', b) as Promise<EvmBuyTx>,
+  evmNetworks: (address: string) => req<EvmNetwork[]>(`/chain/evm/networks/${address}`),
+  evmUnwrapTx: (b: { chain: string; owner: string; token: string; amount?: number }) =>
+    send('POST', '/chain/evm/unwrap-tx', b) as Promise<EvmTxOut & { amount: number; symbol: string; unit: string }>,
+  activity: (wallet: string) => req<ActivityItem[]>(`/activity/${wallet}`),
+  recordActivity: (a: {
+    hash: string; wallet: string; chain: string; kind: ActivityKind; title: string;
+    amount?: number | null; unit?: string | null; symbol?: string | null; mint?: string | null;
+    requestId?: string | null; toChain?: string | null;
+  }) => send('POST', '/activity', a) as Promise<{ ok: boolean }>,
   bridgeQuote: (b: { user: string; from: string; to: string; amount: number }) =>
     send('POST', '/bridge/quote', b) as Promise<BridgeQuote>,
   // `deposit`: mined | failed | pending | missing (the wallet's tx never reached the chain).

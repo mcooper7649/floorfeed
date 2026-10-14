@@ -12,6 +12,7 @@ import { api, type EvmQuote } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useEvmWallet } from '@/lib/evm-wallet';
 import { sol, usd } from '@/lib/format';
+import { recordTx } from '@/lib/activity';
 import { track } from '@/lib/analytics';
 import { usePrices } from '@/lib/prices';
 
@@ -77,6 +78,8 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
       setStep({ kind: 'confirm' });
       const hash = await w.send(tx);
       track('buy_signed', { chain: q.chain });
+      recordTx({ hash, wallet: w.address, chain: q.chain, kind: 'buy', title: `Bought ${q.listing.name ?? q.collection.name}`,
+        amount: q.listing.price, unit: q.native ?? q.currency ?? 'ETH', symbol: q.collection.symbol, mint: q.listing.mint });
       setStep({ kind: 'sent', hash, url: `${tx.explorerTx ?? `${chainById(tx.chainId)?.[1].explorer ?? 'https://etherscan.io'}/tx/`}${hash}` });
     } catch (e) {
       const msg = (e as Error).message || 'The purchase did not go through.';
@@ -117,7 +120,7 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
           ) : step.kind === 'sent' ? (
             <View style={{ gap: 10 }}>
               <Text style={s.ok}>✓ Purchase submitted</Text>
-              <Text style={s.meta}>It usually confirms within a minute. The NFT then shows up in your Real portfolio.</Text>
+              <Text style={s.meta}>It usually confirms within a minute. The NFT then shows up in your Real portfolio, and Activity there shows when it confirms.</Text>
               <Pressable accessibilityRole="link" onPress={() => Linking.openURL(step.url)} style={s.secondary}>
                 <Text style={s.secondaryTxt}>View transaction ↗</Text>
               </Pressable>

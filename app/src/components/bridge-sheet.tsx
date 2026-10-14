@@ -8,6 +8,7 @@ import { T } from '@/constants/type';
 import { api, type BridgeQuote } from '@/lib/api';
 import { useEvmWallet } from '@/lib/evm-wallet';
 import { sol } from '@/lib/format';
+import { recordTx } from '@/lib/activity';
 import { track } from '@/lib/analytics';
 
 // Move funds between EVM chains without leaving FloorFeed. Relay quotes the
@@ -27,6 +28,7 @@ type Props = {
   onClose: () => void;
   onDone?: (arrived: { amount: number; unit: string; chain: string }) => void; // funds landed; the sheet then closes itself
   to?: string;      // destination chain; the user picks one when omitted
+  from?: string;    // origin chain to start with (the user can change it)
   amount?: number;  // suggested amount to arrive, in the destination's token
   note?: string;    // why that amount (shown under the input)
 };
@@ -36,10 +38,10 @@ export function BridgeSheet(props: Props) {
   return props.open ? <Sheet {...props} /> : null;
 }
 
-function Sheet({ open, onClose, onDone, to: toProp, amount: amountProp, note }: Props) {
+function Sheet({ open, onClose, onDone, to: toProp, from: fromProp, amount: amountProp, note }: Props) {
   const w = useEvmWallet();
-  const [to, setTo] = useState(toProp ?? 'ink');
-  const [from, setFrom] = useState<string | null>(null);
+  const [to, setTo] = useState(toProp ?? (fromProp && fromProp !== 'ethereum' ? 'ethereum' : 'ink'));
+  const [from, setFrom] = useState<string | null>(fromProp ?? null);
   const [amount, setAmount] = useState(amountProp ? String(Math.ceil(amountProp * 1e4) / 1e4) : '');
   const [balances, setBalances] = useState<{ address: string; b: Record<string, number> } | null>(null);
   const [quote, setQuote] = useState<{ key: string; q?: BridgeQuote; error?: string } | null>(null);
@@ -87,6 +89,8 @@ function Sheet({ open, onClose, onDone, to: toProp, amount: amountProp, note }: 
     try {
       const hash = await w.send({ ...q.tx, description: `Bridge ${sol(q.send, 5, q.sendUnit)} from ${chainName(q.from)} to ${chainName(q.to)}` });
       track('bridge_signed', { from: q.from, to: q.to });
+      recordTx({ hash, wallet: w.address!, chain: q.from, kind: 'bridge', title: `Moved ${sol(q.receive, 5, q.receiveUnit)} to ${chainName(q.to)}`,
+        amount: q.receive, unit: q.receiveUnit, requestId: q.requestId, toChain: q.to });
       const url = `${q.tx.explorerTx ?? 'https://etherscan.io/tx/'}${hash}`;
       setStep({ kind: 'moving', hash, url, status: 'waiting', deposit: null, since: Date.now() });
       if (!q.requestId) return;

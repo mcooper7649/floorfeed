@@ -9,6 +9,7 @@ import { T } from '@/constants/type';
 import { api, type EvmSellQuote, type EvmTxOut } from '@/lib/api';
 import { useEvmWallet } from '@/lib/evm-wallet';
 import { signedSol, signedUsd, sol, usd } from '@/lib/format';
+import { recordTx } from '@/lib/activity';
 import { track } from '@/lib/analytics';
 import { usePrices } from '@/lib/prices';
 
@@ -92,6 +93,7 @@ export function EvmSellSheet({ symbol, id, open, onClose, onSold }: {
       const tx = await api.evmApproveTx({ chain: q.chain, contract: id.split(':')[0], owner: w.address, operator: q.operator });
       const hash = await w.send({ ...tx, description: `Step 1 of 2: let OpenSea move your ${q.collection.name} NFTs when you accept offers. This does not sell anything yet.` });
       track('sell_approved', { chain: q.chain });
+      recordTx({ hash, wallet: w.address, chain: q.chain, kind: 'approve', title: `Approved selling ${q.collection.name}`, symbol: q.collection.symbol });
       setStep({ kind: 'approving', hash });
       waitForApproval(w.address);
     } catch (e) {
@@ -110,6 +112,8 @@ export function EvmSellSheet({ symbol, id, open, onClose, onSold }: {
       setStep({ kind: 'confirm' });
       const hash = await w.send({ ...tx, description: `Sell ${q.name} for ${sol(offer.net, 4, offer.currency)}` });
       track('sell_signed', { chain: q.chain, kind: offer.kind });
+      recordTx({ hash, wallet: w.address, chain: q.chain, kind: 'sell', title: `Sold ${q.name}`,
+        amount: offer.net, unit: offer.currency, symbol: q.collection.symbol, mint: q.mint });
       setStep({ kind: 'sent', hash, url: `${explorer(tx)}${hash}` });
       onSold?.();
     } catch (e) {
@@ -134,8 +138,13 @@ export function EvmSellSheet({ symbol, id, open, onClose, onSold }: {
             <View style={{ gap: 10 }}>
               <Text style={s.ok}>✓ Sale submitted</Text>
               <Text style={s.meta}>
-                It usually confirms within a minute. The {offer?.currency ?? 'WETH'} lands in {w.walletName ?? 'your wallet'} once it does.
+                It usually confirms within a minute. Then {offer ? sol(offer.net, 4, offer.currency) : 'the payment'} lands in {w.walletName ?? 'your wallet'} on {chainName(q?.chain ?? 'ethereum')}: it stays on that network, ready for your next buy there.
               </Text>
+              {offer?.currency.startsWith('W') && (
+                <Text style={s.meta}>
+                  {offer.currency} is wrapped {offer.currency.slice(1)}, worth the same. In Portfolio, under Money by network, you can unwrap it to {offer.currency.slice(1)} or move it to another network. Activity shows when the sale confirms.
+                </Text>
+              )}
               <Pressable accessibilityRole="link" onPress={() => Linking.openURL(step.url)} style={s.secondary}>
                 <Text style={s.secondaryTxt}>View transaction ↗</Text>
               </Pressable>

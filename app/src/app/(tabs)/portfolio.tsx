@@ -3,7 +3,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { FlatList, Linking, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import { CollIcon } from '@/components/coll-icon';
+import { ActivityList } from '@/components/activity-list';
 import { EvmSellSheet } from '@/components/evm-sell-sheet';
+import { NetworksCard, networkLines } from '@/components/networks-card';
 import { MODE_COLOR, ModeToggle } from '@/components/mode-toggle';
 import { NftImage } from '@/components/nft-image';
 import { Screen } from '@/components/screen';
@@ -13,7 +15,7 @@ import { WalletsCard } from '@/components/wallet-card';
 import { C } from '@/constants/brand';
 import { openseaAsset } from '@/constants/chains';
 import { T, display } from '@/constants/type';
-import { api, type EvmHoldings, type Holding, type Holdings, type PaperPosition } from '@/lib/api';
+import { api, type EvmHoldings, type EvmNetwork, type Holding, type Holdings, type PaperPosition } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useEvmWallet } from '@/lib/evm-wallet';
 import { signedSol, signedUsd, sol, usd } from '@/lib/format';
@@ -96,6 +98,33 @@ function Totals({ label, color, units }: {
             {usdOf(u) != null && <Text style={[T.num, { color: C.text }]}>{fmt(usdOf(u)!, u.colored !== false)}</Text>}
             <Text style={T.metaNum}>{u.line}</Text>
           </View>
+        ))}
+      </View>
+    </Card>
+  );
+}
+
+// Real mode headline: all money across wallets and networks in dollars, then
+// the split (coins vs NFTs) and each currency in its own units.
+function MoneyTotal({ loading, cash, nfts, nftCount, networks, units }: {
+  loading: boolean; cash: number | null; nfts: number | null; nftCount: number; networks: number;
+  units: { unit: string; total: number | null; line: string }[];
+}) {
+  const total = cash != null && nfts != null ? cash + nfts : null;
+  return (
+    <Card>
+      <View style={s.labelRow}>
+        <View style={[s.dot, { backgroundColor: MODE_COLOR.real }]} />
+        <Text style={T.label}>Total across your wallets</Text>
+      </View>
+      <Text {...display} style={[T.hero, { color: C.text }]}>{total != null ? usd(total) : loading ? '…' : '—'}</Text>
+      <Text style={T.metaNum}>
+        {cash != null ? `${usd(cash)} in coins` : 'Coins …'}{networks > 0 ? ` on ${networks} network${networks === 1 ? '' : 's'}` : ''}
+        {' · '}{nfts != null ? `${usd(nfts)} in ${nftCount} NFT${nftCount === 1 ? '' : 's'}` : 'NFTs …'}
+      </Text>
+      <View style={[s.totals, { gap: 16, marginTop: 4 }]}>
+        {units.filter((u) => u.total != null && u.total > 0).map((u) => (
+          <Text key={u.unit} style={T.metaNum}>{sol(u.total!, 3, u.unit)}</Text>
         ))}
       </View>
     </Card>
@@ -213,6 +242,7 @@ function RealPortfolio({ solAddress, evmAddress }: { solAddress: string | null; 
   const [evm, setEvm] = useState<{ address: string; h: EvmHoldings } | { address: string; error: string } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [selling, setSelling] = useState<Row | null>(null);
+  const [nets, setNets] = useState<{ address: string; n: EvmNetwork[] } | null>(null);
 
   const fetchData = useCallback(() => {
     const jobs: Promise<unknown>[] = [];
@@ -223,6 +253,7 @@ function RealPortfolio({ solAddress, evmAddress }: { solAddress: string | null; 
     if (evmAddress) {
       jobs.push(api.evmHoldings(evmAddress).then((h) => setEvm({ address: evmAddress, h }))
         .catch((e) => setEvm({ address: evmAddress, error: (e as Error).message })));
+      jobs.push(api.evmNetworks(evmAddress).then((n) => setNets({ address: evmAddress, n })).catch(() => {}));
     }
     Promise.all(jobs).finally(() => setRefreshing(false));
   }, [solAddress, evmAddress]);
@@ -231,6 +262,7 @@ function RealPortfolio({ solAddress, evmAddress }: { solAddress: string | null; 
 
   const sh = solData?.address === solAddress && solData && 'h' in solData ? solData.h : null;
   const eh = evm?.address === evmAddress && evm && 'h' in evm ? evm.h : null;
+  const en = nets?.address === evmAddress ? nets.n : null;
   const loading = (!!solAddress && solData?.address !== solAddress) || (!!evmAddress && evm?.address !== evmAddress);
   const error = (solData && 'error' in solData && solData.error) || (evm && 'error' in evm && evm.error) || null;
   const rows: Row[] = [
@@ -239,17 +271,22 @@ function RealPortfolio({ solAddress, evmAddress }: { solAddress: string | null; 
   ];
   const untracked = (sh?.untracked ?? 0) + (eh?.untracked ?? 0);
 
-  const units = [
-    ...(solAddress ? [{ unit: 'SOL', total: sh?.totalValue ?? null, line: sh ? `${sol(sh.sol, 3)} plus ${sh.nfts.length} NFT${sh.nfts.length === 1 ? '' : 's'}` : solData && 'error' in solData ? "Couldn't load" : 'Loading…', colored: false }] : []),
-    // EVM: one value per currency (ETH across Ethereum and L2s, HYPE, RON...).
-    ...(evmAddress ? (eh?.values
-      ? Object.entries(eh.values).map(([unit, v]) => ({
-          unit, total: v.total, colored: false,
-          line: `${sol(v.cash, 3, unit)} plus ${v.nfts} NFT${v.nfts === 1 ? '' : 's'}`,
-        }))
-      : [{ unit: 'ETH', total: eh?.totalValue ?? null, colored: false,
-          line: eh ? `${sol(eh.eth, 3, 'ETH')} plus ${eh.nfts.length} NFT${eh.nfts.length === 1 ? '' : 's'}` : evm && 'error' in evm ? "Couldn't load" : 'Loading…' }]) : []),
-  ];
+  // Everything in dollars: coins on every network (wrapped included) plus NFTs at the estimated bid.
+  const cashLines = networkLines(sh?.sol ?? null, en, toUsd);
+  const cashUsd = cashLines.reduce<number | null>((a, l) => (a == null || l.usd == null ? null : a + l.usd), 0);
+  const nftUsd = rows.reduce<number | null>((a, n) => {
+    if (a == null) return null;
+    if (n.estValue == null) return a;
+    const v = toUsd(n.estValue, n.unit);
+    return v == null ? null : a + v;
+  }, 0);
+  const moneyLoading = (!!solAddress && !sh) || (!!evmAddress && (!eh || !en));
+  // The same money per currency (wrapped coins counted as their coin), for the line under the total.
+  const perUnit = new Map<string, number>();
+  for (const l of cashLines) for (const p of l.parts) perUnit.set(p.unit, (perUnit.get(p.unit) ?? 0) + p.amount);
+  for (const n of rows) if (n.estValue != null) perUnit.set(n.unit, (perUnit.get(n.unit) ?? 0) + n.estValue);
+  const unitTotals = [...perUnit].map(([unit, total]) => ({ unit, total, line: '' }));
+
 
   return (
     <>
@@ -264,8 +301,9 @@ function RealPortfolio({ solAddress, evmAddress }: { solAddress: string | null; 
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={C.accent} />}
       ListHeaderComponent={
         <View style={{ gap: 16, marginBottom: 4 }}>
-          <Totals label="Wallet value" color={MODE_COLOR.real} units={units} />
+          <MoneyTotal loading={moneyLoading} cash={cashUsd} nfts={nftUsd} nftCount={rows.length} networks={cashLines.length} units={unitTotals} />
           <WalletsCard />
+          <NetworksCard sol={solAddress ? sh?.sol ?? null : null} networks={evmAddress ? en : []} onChanged={fetchData} />
           <SectionHeader title="Holdings" count={rows.length || undefined} />
         </View>
       }
@@ -282,11 +320,21 @@ function RealPortfolio({ solAddress, evmAddress }: { solAddress: string | null; 
           )}
         </Card>
       }
-      ListFooterComponent={untracked > 0 ? (
-        <Text style={[T.caption, { paddingVertical: 12 }]}>
-          {untracked} other NFT{untracked === 1 ? '' : 's'} from collections FloorFeed doesn&apos;t track.
-        </Text>
-      ) : null}
+      ListFooterComponent={
+        <View style={{ gap: 12, paddingTop: 8 }}>
+          {untracked > 0 && (
+            <Text style={T.caption}>
+              {untracked} other NFT{untracked === 1 ? '' : 's'} from collections FloorFeed doesn&apos;t track.
+            </Text>
+          )}
+          {evmAddress && (
+            <>
+              <SectionHeader title="Activity" />
+              <ActivityList wallet={evmAddress} onSettled={fetchData} />
+            </>
+          )}
+        </View>
+      }
       renderItem={({ item: n }) => {
         const p = n.boughtAt != null && n.estValue != null ? n.estValue - n.boughtAt : null;
         const valueUsd = n.estValue != null ? toUsd(n.estValue, n.unit) : null;
