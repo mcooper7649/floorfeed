@@ -7,6 +7,7 @@ import { StatusBar } from 'expo-status-bar';
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { DiscoveryPanel } from '@/components/discovery-panel';
 import { PriceTicker } from '@/components/price-ticker';
+import { UpdateBanner } from '@/components/update-banner';
 import { TopNav } from '@/components/top-nav';
 import { C } from '@/constants/brand';
 import { AlertsProvider } from '@/lib/alerts';
@@ -15,6 +16,7 @@ import { AuthProvider } from '@/lib/auth';
 import { EvmWalletProvider } from '@/lib/evm-wallet';
 import { useLayout } from '@/lib/layout';
 import { PanelProvider, usePanel } from '@/lib/panel';
+import { PricesProvider } from '@/lib/prices';
 import { TradeModeProvider } from '@/lib/mode';
 import { SessionProvider } from '@/lib/session';
 import { WalletProvider } from '@/lib/wallet';
@@ -38,6 +40,7 @@ export default function RootLayout() {
       <EvmWalletProvider>
       <TradeModeProvider>
       <PanelProvider>
+      <PricesProvider>
         <StatusBar style="light" />
         <Pageviews />
         <AnimatedSplashOverlay />
@@ -52,6 +55,8 @@ export default function RootLayout() {
             <Stack.Screen name="how-it-works" options={{ title: 'How it works', headerBackTitle: 'Back', headerShown: !web }} />
           </Stack>
         </Shell>
+        <UpdateBanner />
+      </PricesProvider>
       </PanelProvider>
       </TradeModeProvider>
       </EvmWalletProvider>

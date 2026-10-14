@@ -229,19 +229,24 @@ const SEAPORT_INFO = parseAbiItem("function information() view returns (string v
 const GET_CONDUIT = parseAbiItem("function getConduit(bytes32 conduitKey) view returns (address conduit, bool exists)");
 const IS_APPROVED = parseAbiItem("function isApprovedForAll(address owner, address operator) view returns (bool)");
 const SET_APPROVAL = parseAbiItem("function setApprovalForAll(address operator, bool approved)");
-// OpenSea's conduit key, the same on every chain it trades on.
+// OpenSea's conduit key on Ethereum and most chains. It is NOT universal (Ink
+// uses another), so the offer's own conduitKey wins when OpenSea sends one.
 const OS_CONDUIT_KEY = "0x0000007b02230091a7ed01230072f7006a004d60a8d4e71d599b8104250f0000" as Hex;
+const ZERO_KEY = `0x${"0".repeat(64)}`;
 
-// Seaport -> its conduit controller -> OpenSea's conduit. Read from chain
-// because CREATE2 addresses differ on zkSync-based chains (Abstract).
+// Seaport -> its conduit controller -> the conduit for that key. Read from
+// chain because addresses differ by chain (and on zkSync-based Abstract).
+// A zero key means no conduit: Seaport itself moves the NFT.
 const conduitCache = new Map<string, Hex>();
-async function osConduit(chain: EvmChain, seaport: string) {
-  const key = `${chain}:${seaport.toLowerCase()}`;
+async function osConduit(chain: EvmChain, seaport: string, conduitKey?: string | null) {
+  const want = (conduitKey && /^0x[0-9a-fA-F]{64}$/.test(conduitKey) ? conduitKey : OS_CONDUIT_KEY).toLowerCase() as Hex;
+  if (want === ZERO_KEY) return seaport as Hex;
+  const key = `${chain}:${seaport.toLowerCase()}:${want}`;
   const hit = conduitCache.get(key);
   if (hit) return hit;
   const c = clients[chain] as unknown as PublicClient;
   const [, , controller] = await c.readContract({ address: seaport as Hex, abi: [SEAPORT_INFO], functionName: "information" });
-  const [conduit, exists] = await c.readContract({ address: controller, abi: [GET_CONDUIT], functionName: "getConduit", args: [OS_CONDUIT_KEY] });
+  const [conduit, exists] = await c.readContract({ address: controller, abi: [GET_CONDUIT], functionName: "getConduit", args: [want] });
   if (!exists) throw new Error(`OpenSea's conduit isn't set up on ${chain}.`);
   conduitCache.set(key, conduit);
   return conduit;
@@ -283,7 +288,7 @@ export async function evmSellQuote(symbol: string, id: string, seller: string) {
   let operator: Hex | null = null;
   let approved: boolean | null = null;
   if (offer && owned) {
-    operator = await osConduit(chain, offer.protocolAddress).catch(() => null);
+    operator = await osConduit(chain, offer.protocolAddress, offer.conduitKey).catch(() => null);
     if (operator) {
       const c = clients[chain] as unknown as PublicClient;
       approved = await c.readContract({ address: contract as Hex, abi: [IS_APPROVED], functionName: "isApprovedForAll", args: [seller as Hex, operator] }).catch(() => null);

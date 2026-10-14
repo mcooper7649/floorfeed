@@ -16,9 +16,10 @@ import { T, display } from '@/constants/type';
 import { api, type EvmHoldings, type Holding, type Holdings, type PaperPosition } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useEvmWallet } from '@/lib/evm-wallet';
-import { signedSol, sol } from '@/lib/format';
+import { signedSol, signedUsd, sol, usd } from '@/lib/format';
 import { useLayout } from '@/lib/layout';
 import { useTradeMode } from '@/lib/mode';
+import { usePrices } from '@/lib/prices';
 import { useSession } from '@/lib/session';
 import { useTitle } from '@/lib/use-title';
 import { useWallet } from '@/lib/wallet';
@@ -73,11 +74,17 @@ function Totals({ label, color, units }: {
   units: { unit: string; total: number | null; line: string; colored?: boolean }[];  // null = loading
 }) {
   const many = units.length > 1;
+  const { toUsd } = usePrices();
+  // Each currency in dollars at today's price, plus one combined figure when there are several.
+  const usdOf = (u: (typeof units)[number]) => (u.total == null ? null : toUsd(u.total, u.unit));
+  const usdAll = units.reduce<number | null>((a, u) => (a == null || usdOf(u) == null ? null : a + usdOf(u)!), 0);
+  const fmt = (n: number, colored: boolean) => `≈ ${colored ? signedUsd(n) : usd(n)}`;
   return (
     <Card>
       <View style={s.labelRow}>
         <View style={[s.dot, { backgroundColor: color }]} />
-        <Text style={T.label}>{label}</Text>
+        <Text style={[T.label, { flex: 1 }]}>{label}</Text>
+        {many && usdAll != null && <Text style={[T.num, { color: C.text }]}>{fmt(usdAll, units.some((u) => u.colored !== false))} total</Text>}
       </View>
       <View style={[s.totals, many && { gap: 24 }]}>
         {units.map((u) => (
@@ -86,6 +93,7 @@ function Totals({ label, color, units }: {
               style={[many ? T.display : T.hero, { color: u.total == null || u.colored === false ? C.text : u.total >= 0 ? C.up : C.down }]}>
               {u.total == null ? `… ${u.unit}` : u.colored === false ? sol(u.total, 3, u.unit) : signedSol(u.total, 3, u.unit)}
             </Text>
+            {usdOf(u) != null && <Text style={[T.num, { color: C.text }]}>{fmt(usdOf(u)!, u.colored !== false)}</Text>}
             <Text style={T.metaNum}>{u.line}</Text>
           </View>
         ))}
@@ -175,6 +183,8 @@ function PaperPortfolio() {
 
 function PositionRow({ p, onSell }: { p: PaperPosition; onSell: () => void }) {
   const u = p.currency ?? 'SOL';
+  const { toUsd } = usePrices();
+  const pnlUsd = toUsd(p.pnlSol, u);
   return (
     <ListRow
       onPress={() => router.push({ pathname: '/collection/[symbol]', params: { symbol: p.collection.symbol } })}
@@ -185,6 +195,7 @@ function PositionRow({ p, onSell }: { p: PaperPosition; onSell: () => void }) {
         : `${sol(p.entryPrice, 2, u)} → ${sol(p.exitPrice ?? 0, 2, u)}`}
       value={signedSol(p.pnlSol, 3, u)}
       valueColor={p.pnlSol >= 0 ? C.up : C.down}
+      note={pnlUsd != null ? `≈ ${signedUsd(pnlUsd)}` : undefined}
       sub={p.open ? 'Open' : 'Closed'}
       action={p.open ? <RowAction label="Sell" onPress={onSell} /> : <View style={{ width: 52 }} />}
     />
@@ -197,6 +208,7 @@ type Row = Omit<Holding, 'unit' | 'chain'> & { unit: string; chain: 'solana' | '
 
 function RealPortfolio({ solAddress, evmAddress }: { solAddress: string | null; evmAddress: string | null }) {
   const { pad } = useLayout();
+  const { toUsd } = usePrices();
   const [solData, setSol] = useState<{ address: string; h: Holdings } | { address: string; error: string } | null>(null);
   const [evm, setEvm] = useState<{ address: string; h: EvmHoldings } | { address: string; error: string } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -277,6 +289,8 @@ function RealPortfolio({ solAddress, evmAddress }: { solAddress: string | null; 
       ) : null}
       renderItem={({ item: n }) => {
         const p = n.boughtAt != null && n.estValue != null ? n.estValue - n.boughtAt : null;
+        const valueUsd = n.estValue != null ? toUsd(n.estValue, n.unit) : null;
+        const pUsd = p != null ? toUsd(p, n.unit) : null;
         const sellUrl = n.chain === 'solana'
           ? `https://magiceden.io/item-details/${n.mint}`
           : openseaAsset(n.evmChain ?? 'ethereum', n.mint);
@@ -287,7 +301,8 @@ function RealPortfolio({ solAddress, evmAddress }: { solAddress: string | null; 
             title={n.name || n.collection.name}
             meta={n.boughtAt != null ? `${n.collection.name}, bought at ${sol(n.boughtAt, 2, n.unit)}` : n.collection.name}
             value={n.estValue != null ? sol(n.estValue, 3, n.unit) : '—'}
-            sub={p != null ? signedSol(p, 3, n.unit) : undefined}
+            note={valueUsd != null ? `≈ ${usd(valueUsd)}` : undefined}
+            sub={p != null ? `${signedSol(p, 3, n.unit)}${pUsd != null ? ` (${signedUsd(pUsd)})` : ''}` : undefined}
             subColor={p != null ? (p >= 0 ? C.up : C.down) : undefined}
             // Ethereum-family NFTs sell in-app into the best offer; Solana still finishes on Magic Eden.
             action={<RowAction label="Sell" onPress={() => (n.chain === 'evm' ? setSelling(n) : Linking.openURL(sellUrl))} />}

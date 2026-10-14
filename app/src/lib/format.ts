@@ -41,3 +41,13 @@ export function usdCompact(n: number) {
   if (n >= 1e3) return `$${(n / 1e3).toFixed(n >= 1e5 ? 0 : 1)}K`;
   return `$${n.toFixed(0)}`;
 }
+
+// Dollar amounts next to coin amounts: "$24.29", "$5,530", "$0.42", "< $0.01".
+export function usd(n: number) {
+  const a = Math.abs(n);
+  const body = a >= 1000 ? a.toLocaleString('en-US', { maximumFractionDigits: 0 })
+    : a >= 0.01 || a === 0 ? a.toFixed(2) : null;
+  if (body == null) return n < 0 ? '−< $0.01' : '< $0.01';
+  return `${n < 0 ? '−' : ''}$${body}`;
+}
+export const signedUsd = (n: number) => (n >= 0 ? `+${usd(n)}` : usd(n));

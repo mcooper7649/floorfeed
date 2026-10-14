@@ -8,8 +8,9 @@ import { chainById, chainName } from '@/constants/chains';
 import { T } from '@/constants/type';
 import { api, type EvmSellQuote, type EvmTxOut } from '@/lib/api';
 import { useEvmWallet } from '@/lib/evm-wallet';
-import { signedSol, sol } from '@/lib/format';
+import { signedSol, signedUsd, sol, usd } from '@/lib/format';
 import { track } from '@/lib/analytics';
+import { usePrices } from '@/lib/prices';
 
 // Real-mode sell on an EVM chain: accept the best OpenSea offer (item, trait or
 // collection) for one NFT the wallet holds. The first sale from a collection
@@ -31,6 +32,7 @@ export function EvmSellSheet({ symbol, id, open, onClose, onSold }: {
   onSold?: () => void;
 }) {
   const w = useEvmWallet();
+  const { toUsd } = usePrices();
   const [quote, setQuote] = useState<{ key: string; q: EvmSellQuote } | { key: string; error: string } | null>(null);
   const [step, setStep] = useState<Step>({ kind: 'idle' });
   const [nonce, setNonce] = useState(0);
@@ -72,6 +74,8 @@ export function EvmSellSheet({ symbol, id, open, onClose, onSold }: {
   const offer = q?.offer ?? null;
   const unit = offer?.unit ?? 'ETH';
   const pnl = offer && q?.boughtAt != null ? offer.net - q.boughtAt : null;
+  // "0.0100 WETH · $24.29"
+  const both = (n: number, u: string) => { const d = toUsd(n, u); return d != null ? `${sol(n, 4, u)} · ${usd(d)}` : sol(n, 4, u); };
   const busy = step.kind === 'approving' || step.kind === 'preparing' || step.kind === 'confirm';
   const close = () => {
     if (polling.current) { clearInterval(polling.current); polling.current = null; }
@@ -149,6 +153,7 @@ export function EvmSellSheet({ symbol, id, open, onClose, onSold }: {
                   <Text style={s.name}>{q.name}</Text>
                   <Text style={s.meta}>{q.collection.name} · {chainName(q.chain)}</Text>
                   <Text style={s.price}>{offer ? sol(offer.net, 4, offer.currency) : '—'}</Text>
+                  {offer && toUsd(offer.net, offer.currency) != null && <Text style={s.meta}>≈ {usd(toUsd(offer.net, offer.currency)!)}</Text>}
                 </View>
               </View>
 
@@ -156,10 +161,10 @@ export function EvmSellSheet({ symbol, id, open, onClose, onSold }: {
                 <View style={s.rows}>
                   <Row label={KIND_LABEL[offer.kind]} value={sol(offer.price, 4, offer.currency)} />
                   <Row label="Marketplace fee and royalty" value={`−${sol(offer.price - offer.net, 4, offer.currency)}`} />
-                  <Row label="You receive" value={sol(offer.net, 4, offer.currency)} strong />
+                  <Row label="You receive" value={both(offer.net, offer.currency)} strong />
                   {q.collection.floor != null && <Row label="Collection floor" value={sol(q.collection.floor, 3, unit)} />}
                   {q.boughtAt != null && <Row label="You paid" value={sol(q.boughtAt, 3, unit)} />}
-                  {pnl != null && <Row label="Profit after fees" value={signedSol(pnl, 4, unit)} color={pnl >= 0 ? C.up : C.down} />}
+                  {pnl != null && <Row label="Profit after fees" value={`${signedSol(pnl, 4, unit)}${toUsd(pnl, unit) != null ? ` (${signedUsd(toUsd(pnl, unit)!)})` : ''}`} color={pnl >= 0 ? C.up : C.down} />}
                   <Row label="Network fee" value="shown in your wallet" />
                 </View>
               )}

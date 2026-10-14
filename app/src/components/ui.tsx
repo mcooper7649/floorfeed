@@ -26,12 +26,13 @@ export function SectionHeader({ title, count, action }: { title: string; count?:
 }
 
 // [art] title / meta ............ value / sub [action]
-export function ListRow({ art, title, meta, value, valueColor, sub, subColor, action, onPress }: {
+export function ListRow({ art, title, meta, value, valueColor, note, sub, subColor, action, onPress }: {
   art?: ReactNode;
   title: string;
   meta?: string;
   value?: string;
   valueColor?: string;
+  note?: string; // a second reading of `value`, e.g. its dollar value
   sub?: string;
   subColor?: string;
   action?: ReactNode;
@@ -47,6 +48,7 @@ export function ListRow({ art, title, meta, value, valueColor, sub, subColor, ac
       {value != null || sub ? (
         <View style={s.rowValue}>
           {value != null ? <Text style={[T.num, valueColor ? { color: valueColor } : null]}>{value}</Text> : null}
+          {note ? <Text style={T.metaNum}>{note}</Text> : null}
           {sub ? <Text style={[T.metaNum, subColor ? { color: subColor } : null]}>{sub}</Text> : null}
         </View>
       ) : null}

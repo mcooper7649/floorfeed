@@ -11,8 +11,9 @@ import { T } from '@/constants/type';
 import { api, type EvmQuote } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useEvmWallet } from '@/lib/evm-wallet';
-import { sol } from '@/lib/format';
+import { sol, usd } from '@/lib/format';
 import { track } from '@/lib/analytics';
+import { usePrices } from '@/lib/prices';
 
 // Real-mode buy on an EVM chain (Ethereum, its L2s, HyperEVM, Ronin, ApeChain, Monad): the cheapest OpenSea listing (or one NFT's
 // listing when `id` is given). FloorFeed builds the Seaport transaction and
@@ -31,6 +32,7 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
 }) {
   const w = useEvmWallet();
   const auth = useAuth();
+  const { toUsd } = usePrices();
   const [quote, setQuote] = useState<{ key: string; q: EvmQuote } | { key: string; error: string } | null>(null);
   const [step, setStep] = useState<Step>({ kind: 'idle' });
   useEffect(() => { if (open) track('buy_open', { chain: 'evm' }); }, [open]);
@@ -135,13 +137,14 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
                   <Text style={s.name}>{q.listing?.name ?? q.collection.name}</Text>
                   <Text style={s.meta}>{q.collection.name} · {chainName(q.chain)} · OpenSea listing</Text>
                   <Text style={s.price}>{price != null ? sol(price, 3, priceUnit) : '—'}</Text>
+                  {price != null && toUsd(price, priceUnit) != null && <Text style={s.meta}>≈ {usd(toUsd(price, priceUnit)!)}</Text>}
                 </View>
               </View>
 
               <View style={s.rows}>
                 <Row label="Listing price" value={price != null ? sol(price, 3, priceUnit) : '—'} />
                 <Row label="Network fee" value="shown in your wallet" />
-                <Row label="Your wallet" value={balance != null ? sol(balance, 3, unit) : '—'} />
+                <Row label="Your wallet" value={balance != null ? `${sol(balance, 3, unit)}${toUsd(balance, unit) != null ? ` · ${usd(toUsd(balance, unit)!)}` : ''}` : '—'} />
                 <Row label="Wallet" value={w.walletName ?? '—'} />
               </View>
 

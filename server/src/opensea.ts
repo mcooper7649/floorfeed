@@ -279,6 +279,7 @@ export async function getOsBestOffer(slug: string, id: string) {
         offer?: { token: string; startAmount: string }[];
         consideration?: { itemType: number; token: string; startAmount: string }[];
         endTime?: string;
+        conduitKey?: string;
       } };
     }>(`/offers/collection/${slug}/nfts/${id}/best`);
     const p = r.price;
@@ -300,6 +301,8 @@ export async function getOsBestOffer(slug: string, id: string) {
       chain: fromOsChain(r.chain ?? "ethereum"),
       kind: r.criteria?.traits?.length ? "trait" as const : r.criteria ? "collection" as const : "item" as const,
       expiresAt: params.endTime ? Number(params.endTime) : null,
+      // Which conduit moves the NFT. OpenSea's key differs by chain (Ink has its own).
+      conduitKey: params.conduitKey ?? null,
     };
   } catch {
     return null; // 404 = no offers
