@@ -35,7 +35,7 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
   const [step, setStep] = useState<Step>({ kind: 'idle' });
   useEffect(() => { if (open) track('buy_open', { chain: 'evm' }); }, [open]);
   const [deposit, setDeposit] = useState(false);
-  const [bridging, setBridging] = useState(false);
+  const [bridging, setBridging] = useState<{ to: string; amount?: number } | null>(null);
   const [nonce, setNonce] = useState(0);
   const key = `${symbol}:${id ?? ''}:${w.address}:${nonce}`;
 
@@ -77,7 +77,10 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
     }
   };
 
+  // The bridge and deposit sheets sit beside this Modal, not inside it: a hidden
+  // Modal unmounts its children on web, which would hide them too.
   return (
+    <>
     <Modal visible={open && !deposit && !bridging} transparent animationType="fade" onRequestClose={close}>
       <Pressable style={s.backdrop} onPress={close}>
         <Pressable style={s.sheet} onPress={() => {}}>
@@ -151,7 +154,7 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
                     </Text>
                   )}
                   {elsewhere.length > 0 ? (
-                    <Pressable accessibilityRole="button" onPress={() => { track('bridge_click', { chain: q.chain }); setBridging(true); }} style={s.primary}>
+                    <Pressable accessibilityRole="button" onPress={() => { track('bridge_click', { chain: q.chain }); setBridging({ to: q.chain, amount: short + Math.max(short * 0.02, 0.0003) }); }} style={s.primary}>
                       <Text style={s.primaryTxt}>Move {unit} to {chainName(q.chain)}</Text>
                     </Pressable>
                   ) : unit === 'ETH' && q.chain === 'ethereum' ? (
@@ -193,13 +196,12 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
           </View>
         </Pressable>
       </Pressable>
-      {q && (
-        <BridgeSheet open={bridging} to={q.chain} amount={short != null && short > 0 ? short + Math.max(short * 0.02, 0.0003) : undefined}
-          onDone={() => setNonce((n) => n + 1)} onClose={() => { setBridging(false); setNonce((n) => n + 1); }} />
-      )}
-      <DepositSheet chain="ethereum" open={deposit} suggest={short ?? undefined}
-        onClose={() => { setDeposit(false); setNonce((n) => n + 1); }} />
     </Modal>
+    <BridgeSheet open={!!bridging} to={bridging?.to} amount={bridging?.amount}
+      onDone={() => setNonce((n) => n + 1)} onClose={() => { setBridging(null); setNonce((n) => n + 1); }} />
+    <DepositSheet chain="ethereum" open={deposit} suggest={short ?? undefined}
+      onClose={() => { setDeposit(false); setNonce((n) => n + 1); }} />
+    </>
   );
 }
 
