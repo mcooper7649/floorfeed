@@ -59,7 +59,7 @@ export function DiscoveryPanel() {
   return (
     <View style={s.panel}>
       <View style={s.tabs}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, alignItems: 'center' }} style={{ flex: 1 }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 11, alignItems: 'center' }} style={{ flex: 1 }}>
           {TABS.map((t) => (
             <Pressable key={t.key} onPress={() => setTab(t.key)} accessibilityRole="tab" accessibilityState={{ selected: tab === t.key }}>
               <Text style={[s.tab, tab === t.key && s.tabOn]}>
@@ -488,7 +488,7 @@ const s = StyleSheet.create({
   railBtn: { width: 28, height: 28, borderRadius: 8, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center' },
   railTxt: { color: C.dim, fontSize: 16, lineHeight: 18 },
   tabs: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingTop: 12, paddingBottom: 8 },
-  tab: { color: C.dim, fontSize: 14, fontWeight: '500' },
+  tab: { color: C.dim, fontSize: 13, fontWeight: '500' },
   tabOn: { color: C.text },
   dot: { color: C.accent, fontSize: 10 },
   collapse: { color: C.dim, fontSize: 18, lineHeight: 20 },
