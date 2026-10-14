@@ -322,6 +322,11 @@ export type CollectionSale = {
   signature: string; mint: string; image: string | null; price: number; t: number; vsFloorPct: number | null;
   kind: 'listing' | 'bid'; buyer: WalletRef; seller: WalletRef;
 };
+// A trade drawn on the price chart as the trader's avatar.
+export type ChartMarker = {
+  t: number; price: number; side: 'buy' | 'sell'; wallet: string; mint: string;
+  name: string | null; avatar: string | null; tier: Tier;
+};
 export type GuideBlock = { p: string } | { list: { term: string; text: string }[] };
 export type GuideSection = { id: string; title: string; blocks: GuideBlock[] };
 export type TickerPrice = { symbol: string; usd: number; change24hPct: number | null };
@@ -375,6 +380,11 @@ export const api = {
   guide: () => req<GuideSection[]>('/guide'),
   collectionHolders: (symbol: string) => req<CollectionHolder[]>(`/collections/${encodeURIComponent(symbol)}/holders`),
   collectionSales: (symbol: string) => req<CollectionSale[]>(`/collections/${encodeURIComponent(symbol)}/sales`),
+  collectionMarkers: (symbol: string, range: number, proven: boolean, wallets: string[]) => {
+    const q = new URLSearchParams({ range: String(range), proven: proven ? '1' : '0' });
+    if (wallets.length) q.set('wallets', wallets.join(','));
+    return req<ChartMarker[]>(`/collections/${encodeURIComponent(symbol)}/markers?${q}`);
+  },
   follows: (userId: string) => req<string[]>(`/follows/${userId}`),
   follow: (userId: string, wallet: string) => send('POST', '/follows', { userId, wallet }),
   unfollow: (userId: string, wallet: string) => send('DELETE', '/follows', { userId, wallet }),

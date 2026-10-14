@@ -3,7 +3,7 @@ import { Platform, StyleSheet, Text, View, type GestureResponderEvent } from 're
 import Svg, { Circle, G, Line, Path, Text as SvgText } from 'react-native-svg';
 
 import { C } from '@/constants/brand';
-import type { DailyPoint } from '@/lib/api';
+import type { ChartMarker, DailyPoint } from '@/lib/api';
 import { DAY, fmtWhen, priceSeries, type Sale } from '@/lib/price-series';
 import { fmtSol, linear, niceTicks } from '@/lib/scale';
 
@@ -30,6 +30,8 @@ type Props = {
   asOf: number;
   dimmed?: boolean;
   tall?: boolean;
+  scale?: 'auto' | 'pct' | 'log'; // web only (Lightweight Charts)
+  markers?: ChartMarker[];        // web only
 };
 
 // Time ticks at round steps, at most `max` of them.

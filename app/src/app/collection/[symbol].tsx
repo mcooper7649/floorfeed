@@ -13,17 +13,21 @@ import { NftImage, Pill } from '@/components/nft-image';
 import { PriceChart } from '@/components/price-chart';
 import { Empty } from '@/components/screen';
 import { TopNav } from '@/components/top-nav';
-import { Chip } from '@/components/ui';
 import { chainName } from '@/constants/chains';
 import { C } from '@/constants/brand';
 import { T, display } from '@/constants/type';
-import { api, type CollectionDetail } from '@/lib/api';
+import { api, type ChartMarker, type CollectionDetail } from '@/lib/api';
+import { useEvmWallet } from '@/lib/evm-wallet';
+import { useSession } from '@/lib/session';
+import { useWallet } from '@/lib/wallet';
 import { amt, shortAddr, signedSol, sol, usdCompact } from '@/lib/format';
 import { columnsFor, useLayout } from '@/lib/layout';
 import { fmtDay, fmtSol } from '@/lib/scale';
 import { useTitle } from '@/lib/use-title';
 
-const RANGES = [1, 7, 30] as const;
+const RANGES = [{ d: 1, label: '1D' }, { d: 7, label: '1W' }, { d: 30, label: '1M' }, { d: 90, label: '3M' }] as const;
+const SCALES = [{ key: 'pct', label: '%' }, { key: 'log', label: 'log' }, { key: 'auto', label: 'auto' }] as const;
+type Overlays = { proven: boolean; mine: boolean; following: boolean; minSize: boolean };
 type TabKey = 'holders' | 'sales' | 'listings' | 'flippers';
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'holders', label: 'Holders' }, { key: 'sales', label: 'Sales' },
@@ -42,6 +46,30 @@ export default function CollectionScreen() {
   const [tab, setTab] = useState<TabKey>('holders');
   const [filter, setFilter] = useState<TabFilter>({ proven: false, following: false });
   const [holderCount, setHolderCount] = useState<number | null>(null);
+  const [scale, setScale] = useState<'auto' | 'pct' | 'log'>('auto');
+  const [overlays, setOverlays] = useState<Overlays>({ proven: true, mine: true, following: false, minSize: false });
+  const [markerState, setMarkerState] = useState<{ key: string; list: ChartMarker[] } | null>(null);
+  const { following } = useSession();
+  const solAddr = useWallet().address;
+  const evmAddr = useEvmWallet().address;
+
+  // Trader avatars for the chart: proven wallets, your own wallets, or only
+  // the wallets you follow, per the overlay toggles.
+  const followKey = [...following].sort().join(',');
+  const mine = overlays.mine ? [solAddr, evmAddr].filter((a): a is string => !!a) : [];
+  const markerWallets = [...mine, ...(overlays.following ? followKey.split(',').filter(Boolean) : [])];
+  const markerProven = overlays.proven && !overlays.following;
+  const markerKey = `${symbol}|${range}|${markerProven}|${markerWallets.join(',')}`;
+  useEffect(() => {
+    const [sym, r, proven, wallets] = markerKey.split('|');
+    if (proven !== 'true' && !wallets) return;
+    let alive = true;
+    api.collectionMarkers(sym, Number(r), proven === 'true', wallets ? wallets.split(',') : [])
+      .then((list) => alive && setMarkerState({ key: markerKey, list }))
+      .catch(() => alive && setMarkerState({ key: markerKey, list: [] }));
+    return () => { alive = false; };
+  }, [markerKey]);
+  const markers = markerState?.key === markerKey ? markerState.list : [];
   useTitle(data && `${data.name} floor price, chart & top flippers | FloorFeed`);
 
   const fetchData = useCallback(() => {
@@ -84,13 +112,33 @@ export default function CollectionScreen() {
   const partial = data.historyStartsAt != null && data.historyStartsAt > rangeStart + 86_400;
   const market = data.source === 'opensea' ? 'OpenSea' : 'Magic Eden';
 
+  // USD per unit, for the "Min size" overlay filter.
+  const usdRate = st.floor && st.floorUsd ? st.floorUsd / st.floor : null;
+  const shownMarkers = overlays.minSize && usdRate != null ? markers.filter((m) => m.price * usdRate >= 1000) : markers;
   const priceCard = (
     <Card title="Price" right={
-      data.daily.length >= 2 && (
-        <Pressable onPress={() => setTable((t) => !t)} hitSlop={8}>
-          <Text style={s.link}>{table ? 'Chart' : 'Table'}</Text>
-        </Pressable>
-      )}>
+      <View style={s.toolbar}>
+        {RANGES.map((r) => (
+          <Pressable key={r.d} onPress={() => pickRange(r.d)} style={[s.tool, range === r.d && s.toolOn]}>
+            <Text style={[s.toolTxt, range === r.d && { color: C.text }]}>{r.label}</Text>
+          </Pressable>
+        ))}
+        {web && !table && <View style={s.toolSep} />}
+        {web && !table && SCALES.map((sc) => (
+          <Pressable key={sc.key} onPress={() => setScale(sc.key)} style={[s.tool, scale === sc.key && s.toolOn]}>
+            <Text style={[s.toolTxt, scale === sc.key && { color: C.text }]}>{sc.label}</Text>
+          </Pressable>
+        ))}
+        {data.daily.length >= 2 && (
+          <>
+            <View style={s.toolSep} />
+            <Pressable onPress={() => setTable((t) => !t)} hitSlop={8}>
+              <Text style={s.link}>{table ? 'Chart' : 'Table'}</Text>
+            </Pressable>
+          </>
+        )}
+      </View>
+    }>
       {data.daily.length < 2 ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           {thin && polls < 4 && <ActivityIndicator size="small" color={C.accent} />}
@@ -120,7 +168,8 @@ export default function CollectionScreen() {
         </View>
       ) : (
         <PriceChart sales={data.sales} buckets={data.daily} bucketSec={data.bucketSec} floor={st.floor}
-          rangeDays={data.rangeDays} asOf={data.asOf} dimmed={loading} tall={wide} unit={cur} />
+          rangeDays={data.rangeDays} asOf={data.asOf} dimmed={loading} tall={wide} unit={cur}
+          scale={scale} markers={shownMarkers} />
       )}
     </Card>
   );
@@ -171,11 +220,18 @@ export default function CollectionScreen() {
     </Card>
   ) : (
     <View style={{ gap: 10 }}>
-      <View style={s.filters}>
-        {RANGES.map((r) => <Chip key={r} label={r === 1 ? '24H' : `${r}D`} on={range === r} onPress={() => pickRange(r)} />)}
-        {partial && <Text style={s.note}>Tracking since {fmtDay(data.historyStartsAt!)}</Text>}
-      </View>
       {priceCard}
+      {web && !table && (
+        <View style={s.filters}>
+          <Text style={s.overlayLabel}>Chart overlays</Text>
+          <Toggle label="Proven traders" on={overlays.proven} onPress={() => setOverlays((o) => ({ ...o, proven: !o.proven }))} />
+          <Toggle label="My trades" on={overlays.mine} onPress={() => setOverlays((o) => ({ ...o, mine: !o.mine }))} />
+          <Toggle label="Following only" on={overlays.following} onPress={() => setOverlays((o) => ({ ...o, following: !o.following }))} />
+          {usdRate != null && <Toggle label="Min size (>$1K)" on={overlays.minSize} onPress={() => setOverlays((o) => ({ ...o, minSize: !o.minSize }))} />}
+          {partial && <Text style={s.note}>Tracking since {fmtDay(data.historyStartsAt!)}</Text>}
+        </View>
+      )}
+      {(!web || table) && partial && <Text style={s.note}>Tracking since {fmtDay(data.historyStartsAt!)}</Text>}
     </View>
   );
 
@@ -332,7 +388,13 @@ const s = StyleSheet.create({
   toggleTxt: { ...T.caption, color: C.dim, fontWeight: '500' },
   badgeRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   desc: T.meta,
-  filters: { flexDirection: 'row', gap: 8, alignItems: 'center', marginTop: 4 },
+  filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, alignItems: 'center', paddingHorizontal: 4 },
+  overlayLabel: { ...T.caption, color: C.text, fontWeight: '600' },
+  toolbar: { flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' },
+  tool: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 7 },
+  toolOn: { backgroundColor: C.cardHi },
+  toolTxt: { ...T.caption, color: C.dim, fontWeight: '600' },
+  toolSep: { width: 1, height: 14, backgroundColor: C.border, marginHorizontal: 4 },
   note: { ...T.caption, marginLeft: 4 },
   cols: { flexDirection: 'row', gap: 16, alignItems: 'flex-start' },
   card: { backgroundColor: C.card, borderRadius: 16, padding: 16, gap: 10, borderWidth: 1, borderColor: C.border },

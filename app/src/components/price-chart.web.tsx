@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Linking, StyleSheet, Text, View } from 'react-native';
+import { Image } from 'expo-image';
+import { router } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
-  AreaSeries, HistogramSeries, LineStyle,
+  AreaSeries, HistogramSeries, LineStyle, PriceScaleMode,
   customSeriesDefaultOptions,
   type AutoscaleInfo, type CustomData, type CustomSeriesOptions, type ICustomSeriesPaneRenderer, type ICustomSeriesPaneView,
   type IPriceLine, type ISeriesApi, type PaneRendererCustomData,
@@ -10,7 +12,9 @@ import {
 import type { CanvasRenderingTarget2D } from 'fancy-canvas';
 
 import { C } from '@/constants/brand';
-import type { DailyPoint } from '@/lib/api';
+import type { ChartMarker, DailyPoint } from '@/lib/api';
+import { shortAddr } from '@/lib/format';
+import { thumb } from '@/lib/img';
 import { alpha, tickFormatter, TV_URL, useLwChart } from '@/lib/lw-chart';
 import { DAY, fmtWhen, priceSeries, type Sale, type Slot } from '@/lib/price-series';
 import { fmtSol } from '@/lib/scale';
@@ -35,7 +39,12 @@ type Props = {
   asOf: number;
   dimmed?: boolean;
   tall?: boolean;
+  scale?: 'auto' | 'pct' | 'log';
+  markers?: ChartMarker[]; // trader avatars drawn where they traded
 };
+
+const AV = 22; // avatar marker size
+type Placed = { m: ChartMarker; x: number; y: number };
 
 // --- sale dots: a custom series, one row per bucket holding its sales ---
 type DotRow = CustomData<Time> & { dots: { p: number; f: number }[] }; // f = offset within the bucket, 0..1
@@ -73,7 +82,7 @@ class SaleDots implements ICustomSeriesPaneView<Time, DotRow, CustomSeriesOption
 
 type Hover = { slot: Slot; x: number } | null;
 
-export function PriceChart({ sales, buckets, bucketSec, floor, rangeDays, asOf, dimmed, tall, unit = 'SOL' }: Props) {
+export function PriceChart({ sales, buckets, bucketSec, floor, rangeDays, asOf, dimmed, tall, unit = 'SOL', scale = 'auto', markers = [] }: Props) {
   const PLOT_H = tall ? 300 : 220;
   const VOL_H = tall ? 80 : 56;
   const H = PLOT_H + VOL_H + 26;
@@ -176,6 +185,58 @@ export function PriceChart({ sales, buckets, bucketSec, floor, rangeDays, asOf, 
     chart.timeScale().fitContent();
   }, [chart, series, sales, bucketSec, floor, tall, PLOT_H, VOL_H]);
 
+  // Price scale: plain, percent change from the first visible point, or log.
+  useEffect(() => {
+    if (!chart) return;
+    chart.priceScale('right').applyOptions({
+      mode: scale === 'pct' ? PriceScaleMode.Percentage : scale === 'log' ? PriceScaleMode.Logarithmic : PriceScaleMode.Normal,
+    });
+  }, [chart, scale]);
+
+  // Avatar markers sit over the chart: each one is placed with the chart's
+  // own coordinate mapping (bucket x plus its offset inside the bucket, price
+  // y) and re-placed whenever the view pans, zooms, rescales or resizes.
+  const [placed, setPlaced] = useState<Placed[]>([]);
+  const [hoverMark, setHoverMark] = useState<Placed | null>(null);
+  const markersRef = useRef(markers);
+  useEffect(() => { markersRef.current = markers; });
+  const place = useCallback(() => {
+    const r = refs.current;
+    if (!chart || !r) return;
+    const ts = chart.timeScale();
+    const paneH = chart.panes()[0]?.getHeight() ?? PLOT_H;
+    const plotW = ts.width();
+    const out: Placed[] = [];
+    for (const m of markersRef.current) {
+      const day = Math.floor(m.t / bucketSec) * bucketSec;
+      const x0 = ts.timeToCoordinate(day as UTCTimestamp);
+      if (x0 == null) continue;
+      const x1 = ts.timeToCoordinate((day + bucketSec) as UTCTimestamp);
+      const spacing = x1 != null ? x1 - x0 : ts.options().barSpacing;
+      const x = x0 + ((m.t - day) / bucketSec - 0.5) * spacing;
+      const y = r.median.priceToCoordinate(m.price);
+      if (y == null || x < AV / 2 || x > plotW - AV / 2 || y < AV / 2 || y > paneH - AV / 2) continue;
+      out.push({ m, x, y });
+    }
+    setPlaced(out);
+  }, [chart, bucketSec, PLOT_H]);
+  useEffect(() => {
+    if (!chart) return;
+    let raf = 0;
+    const queue = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(place); };
+    chart.timeScale().subscribeVisibleLogicalRangeChange(queue);
+    chart.timeScale().subscribeSizeChange(queue);
+    queue();
+    // Price-axis changes (autoscale after new data, scale mode) don't fire a
+    // time-range event; a short delay catches them.
+    const t = setTimeout(queue, 120);
+    return () => {
+      chart.timeScale().unsubscribeVisibleLogicalRangeChange(queue);
+      chart.timeScale().unsubscribeSizeChange(queue);
+      cancelAnimationFrame(raf); clearTimeout(t);
+    };
+  }, [chart, place, markers, series, scale, width]);
+
   const { last, change, hi } = series;
   const hidden = sales.filter((s) => s.price > hi).length;
   const rangeLabel = rangeDays === 1 ? '24h' : `${rangeDays}d`;
@@ -226,6 +287,29 @@ export function PriceChart({ sales, buckets, bucketSec, floor, rangeDays, asOf, 
         accessibilityRole="image"
         accessibilityLabel={last ? `Rolling median sale price, latest ${fmtSol(last.roll!)} ${unit}` : 'Price chart'}>
         <View ref={host} style={StyleSheet.absoluteFill} />
+
+        {placed.map((p, i) => (
+          <Pressable key={`${p.m.wallet}:${p.m.t}:${p.m.side}:${i}`}
+            onPress={() => router.push({ pathname: '/wallet/[address]', params: { address: p.m.wallet } })}
+            onHoverIn={() => setHoverMark(p)} onHoverOut={() => setHoverMark((h) => (h === p ? null : h))}
+            accessibilityLabel={`${p.m.name ?? shortAddr(p.m.wallet)} ${p.m.side === 'buy' ? 'bought' : 'sold'} at ${fmtSol(p.m.price)} ${unit}`}
+            style={[s.mark, { left: p.x - AV / 2, top: p.y - AV / 2, borderColor: p.m.side === 'buy' ? C.up : C.down }]}>
+            {p.m.avatar
+              ? <Image source={thumb(p.m.avatar, AV * 2)} style={s.markImg} contentFit="cover" />
+              : <Text style={s.markTxt}>{(p.m.name ?? p.m.wallet).slice(0, 1).toUpperCase()}</Text>}
+          </Pressable>
+        ))}
+        {hoverMark && (
+          <View pointerEvents="none" style={[s.markTip, {
+            left: Math.min(Math.max(0, hoverMark.x - 90), Math.max(0, width - 240)), top: Math.max(0, hoverMark.y - AV / 2 - 46),
+          }]}>
+            <Text style={s.tipWhen} numberOfLines={1}>
+              {hoverMark.m.name ?? shortAddr(hoverMark.m.wallet)}{' '}
+              <Text style={{ color: hoverMark.m.side === 'buy' ? C.up : C.down }}>{hoverMark.m.side === 'buy' ? 'bought' : 'sold'}</Text>
+            </Text>
+            <Text style={s.tipLabel}>{fmtSol(hoverMark.m.price)} {unit} · {new Date(hoverMark.m.t * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</Text>
+          </View>
+        )}
 
         {/* tooltip follows the crosshair, flips sides near the right edge */}
         {sel && hover && !narrow && (
@@ -290,6 +374,16 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: C.border, shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 12,
   },
   tipWhen: { color: C.text, fontWeight: '600', fontSize: 13, marginBottom: 2 },
+  mark: {
+    position: 'absolute', width: AV, height: AV, borderRadius: AV / 2, borderWidth: 2, overflow: 'hidden', zIndex: 4,
+    backgroundColor: C.cardHi, alignItems: 'center', justifyContent: 'center',
+  },
+  markImg: { width: '100%', height: '100%' },
+  markTxt: { color: C.text, fontSize: 10, fontWeight: '700' },
+  markTip: {
+    position: 'absolute', width: 240, backgroundColor: C.cardHi, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7,
+    borderWidth: 1, borderColor: C.border, zIndex: 6,
+  },
   tipRow: { flexDirection: 'row', justifyContent: 'space-between' },
   tipSep: { height: 1, backgroundColor: C.border, marginVertical: 3 },
   tipLabel: { color: C.dim, fontSize: 12 },

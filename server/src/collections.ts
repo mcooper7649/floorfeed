@@ -33,6 +33,17 @@ const median = (xs: number[]) => {
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 };
 
+// The chart draws every sale as a dot; busy collections over 90 days have
+// tens of thousands. Above the cap, keep an even spread (and the extremes).
+const MAX_DOTS = 4000;
+function thin<T extends { price: number }>(sales: T[]) {
+  if (sales.length <= MAX_DOTS) return sales;
+  const step = sales.length / MAX_DOTS;
+  const out = Array.from({ length: MAX_DOTS }, (_, i) => sales[Math.floor(i * step)]);
+  const hi = sales.reduce((m, x) => (x.price > m.price ? x : m)); const lo = sales.reduce((m, x) => (x.price < m.price ? x : m));
+  return [...new Set([...out, hi, lo])];
+}
+
 // Group sales into UTC days: low / median / high / count per day.
 // Chart buckets: hourly for 1D, 6-hourly for 7D, daily beyond. `day` is the
 // bucket start (kept for API compatibility).
@@ -200,7 +211,7 @@ async function evmDetail(slug: string, rangeDays: number) {
     bucketSec: bucketFor(rangeDays),
     asOf: now,
     historyStartsAt: firstTracked,
-    sales: sales.map(({ signature, price, t }) => ({ signature, price, t })),
+    sales: thin(sales).map(({ signature, price, t }) => ({ signature, price, t })),
     daily: daily(sales, bucketFor(rangeDays)),
     floorHistory: snapshotsSince.all(slug, (now - rangeDays * DAY) * 1000),
     listings: await evmListings(slug),
@@ -282,7 +293,7 @@ export async function collectionDetail(symbol: string, rangeDays: number) {
     bucketSec: bucketFor(rangeDays),
     asOf: now,
     historyStartsAt: firstTracked,
-    sales: sales.map(({ signature, price, t }) => ({ signature, price, t })),
+    sales: thin(sales).map(({ signature, price, t }) => ({ signature, price, t })),
     daily: daily(sales, bucketFor(rangeDays)),
     floorHistory: db.prepare(
       `SELECT ts, floor FROM collection_snapshots WHERE symbol = ? AND ts >= ? ORDER BY ts`,

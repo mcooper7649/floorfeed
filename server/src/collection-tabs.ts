@@ -121,3 +121,28 @@ export async function collectionAbout(symbol: string) {
     },
   };
 }
+
+// --- Chart markers ------------------------------------------------------------------
+
+const rangeTrades = db.prepare(`SELECT mint, buyer, seller, price, block_time AS t FROM trades WHERE collection = ? AND block_time >= ?`);
+const MAX_MARKERS = 150;
+
+export function collectionMarkers(symbol: string, days: number, opts: { proven: boolean; wallets: string[] }) {
+  const wanted = new Set(opts.wallets);
+  const proven = opts.proven ? provenWallets() : new Map();
+  const pick = (w: string) => wanted.has(w) || proven.has(w);
+  const rows = rangeTrades.all(symbol, Math.floor(Date.now() / 1000) - days * 86_400) as { mint: string; buyer: string; seller: string; price: number; t: number }[];
+  const marks: { t: number; price: number; side: "buy" | "sell"; wallet: string; mint: string }[] = [];
+  for (const r of rows) {
+    if (pick(r.buyer)) marks.push({ t: r.t, price: r.price, side: "buy", wallet: r.buyer, mint: r.mint });
+    if (pick(r.seller)) marks.push({ t: r.t, price: r.price, side: "sell", wallet: r.seller, mint: r.mint });
+  }
+  // Newest first when there are too many; the wallets asked for by name always stay.
+  marks.sort((a, b) => Number(wanted.has(b.wallet)) - Number(wanted.has(a.wallet)) || b.t - a.t);
+  const kept = marks.slice(0, MAX_MARKERS);
+  const who = traders(kept.map((m) => m.wallet));
+  return kept.map((m) => {
+    const t = who.get(m.wallet)!;
+    return { ...m, name: t.name, avatar: t.avatar, tier: t.tier };
+  });
+}

@@ -11,7 +11,7 @@ import { checkAlerts, hasPush, inbox, markRead, pushKey, startAlerts, subscribe,
 import { adoptDevice, authorize, privyUser } from "./auth.ts";
 import { ADDRESS_RE, capabilities, collectionOfMint, hasDas, holdings, solBalance } from "./chain.ts";
 import { cheapestListings, collectionDetail, listCollections, listingLadder } from "./collections.ts";
-import { collectionAbout, collectionHolders, collectionSales } from "./collection-tabs.ts";
+import { collectionAbout, collectionHolders, collectionMarkers, collectionSales } from "./collection-tabs.ts";
 import { COLLECTIONS, UNITS, collectionName, config, isEvm } from "./config.ts";
 import { db } from "./db.ts";
 import { feedEvents, traders } from "./feed.ts";
@@ -123,7 +123,7 @@ app.post("/trade/buy-tx", async (_req, reply) => {
 
 app.get("/collections/:symbol", async (req, reply) => {
   const { symbol } = req.params as { symbol: string };
-  const { range } = z.object({ range: z.coerce.number().int().refine((d) => [1, 7, 30].includes(d)).default(7) })
+  const { range } = z.object({ range: z.coerce.number().int().refine((d) => [1, 7, 30, 90].includes(d)).default(7) })
     .parse(req.query);
   const detail = await collectionDetail(symbol, range);
   if (!detail) return reply.code(404).send({ error: "unknown collection" });
@@ -142,6 +142,17 @@ app.get("/collections/:symbol", async (req, reply) => {
 app.get("/collections/:symbol/holders", async (req) => {
   const { symbol } = req.params as { symbol: string };
   return collectionHolders(symbol);
+});
+// Trader avatars on the price chart: trades by proven wallets and/or the given wallets.
+app.get("/collections/:symbol/markers", async (req) => {
+  const { symbol } = req.params as { symbol: string };
+  const q = z.object({
+    range: z.coerce.number().int().refine((d) => [1, 7, 30, 90].includes(d)).default(7),
+    proven: z.enum(["0", "1"]).default("1"),
+    wallets: z.string().max(4000).optional(), // comma-separated
+  }).parse(req.query);
+  const wallets = (q.wallets ?? "").split(",").map((w) => w.trim()).filter(Boolean).slice(0, 100);
+  return collectionMarkers(symbol, q.range, { proven: q.proven === "1", wallets });
 });
 app.get("/collections/:symbol/sales", async (req) => {
   const { symbol } = req.params as { symbol: string };
