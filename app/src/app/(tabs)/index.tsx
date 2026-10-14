@@ -6,7 +6,9 @@ import { EventCard } from '@/components/event-card';
 import { Empty, Screen } from '@/components/screen';
 import { SuggestedFollows } from '@/components/suggested-follows';
 import { Card, Chip, ChipRow } from '@/components/ui';
+import { ThesisFeedRow } from '@/components/thesis';
 import { WelcomeCard } from '@/components/welcome-card';
+import { useThesisFeed } from '@/components/discovery-panel';
 import { C } from '@/constants/brand';
 import { T } from '@/constants/type';
 import { api, type FeedChain, type FeedEvent, type FeedView } from '@/lib/api';
@@ -20,17 +22,20 @@ const CHAINS: { key: FeedChain; label: string }[] = [
   { key: 'all', label: 'All chains' }, { key: 'solana', label: 'Solana' }, { key: 'evm', label: 'Ethereum & L2s' },
 ];
 
-const VIEWS: { key: FeedView; label: string; hint: string }[] = [
+type View_ = FeedView | 'thesis';
+const VIEWS: { key: View_; label: string; hint: string }[] = [
   { key: 'top', label: 'Top', hint: 'The last 72 hours, ranked by who traded, how much and how recently.' },
   { key: 'latest', label: 'Latest', hint: 'Every buy, flip and sweep as it happens.' },
   { key: 'wins', label: 'Wins', hint: 'Profitable flips, newest first.' },
+  { key: 'thesis', label: 'Thesis', hint: 'What holders and traders think, from every collection, newest first.' },
 ];
 
 export default function FeedScreen() {
   useTitle('FloorFeed: live Solana NFT trades from proven wallets');
   const { userId, following } = useSession();
   const [scope, setScope] = useState<Scope>('all');
-  const [view, setView] = useState<FeedView>('top');
+  const [view, setView] = useState<View_>('top');
+  const theses = useThesisFeed();
   const [chain, setChain] = useState<FeedChain>('all');
   const [items, setItems] = useState<FeedEvent[]>([]);
   const [next, setNext] = useState<number | null>(null);
@@ -42,7 +47,7 @@ export default function FeedScreen() {
 
   const load = useCallback(async (before?: number) => {
     if (scope === 'following' && !userId) return { events: [], next: null };
-    return api.events({ view, before, chain, following: scope === 'following' ? userId! : undefined });
+    return api.events({ view: view === 'thesis' ? 'latest' : view, before, chain, following: scope === 'following' ? userId! : undefined });
   }, [scope, view, chain, userId]);
 
   const fetchFirst = useCallback(() => {
@@ -75,6 +80,7 @@ export default function FeedScreen() {
           </Pressable>
         ))}
       </View>
+      {view !== 'thesis' && (
       <ChipRow pad={pad} groups={[
         (['all', 'following'] as const).map((m) => (
           <Chip key={m} on={scope === m} onPress={() => m !== scope && pick(() => setScope(m))}
@@ -82,9 +88,18 @@ export default function FeedScreen() {
         )),
         CHAINS.map((c) => <Chip key={c.key} label={c.label} on={chain === c.key} onPress={() => c.key !== chain && pick(() => setChain(c.key))} />),
       ]} />
+      )}
       <Text style={[T.meta, s.hint, { paddingHorizontal: pad }]}>{VIEWS.find((v) => v.key === view)!.hint}</Text>
 
-      {loading ? (
+      {view === 'thesis' ? (
+        <FlatList
+          data={theses ?? []}
+          keyExtractor={(t) => `${t.kind}:${t.id}`}
+          renderItem={({ item }) => <ThesisFeedRow t={item} />}
+          contentContainerStyle={[s.list, { paddingHorizontal: pad, maxWidth: 760 }]}
+          ListEmptyComponent={theses ? <Empty text="No theses yet. Open any collection and post the first one in its Thesis tab." /> : <ActivityIndicator style={{ marginTop: 40 }} color={C.accent} />}
+        />
+      ) : loading ? (
         <ActivityIndicator style={{ marginTop: 40 }} color={C.accent} />
       ) : (
         <FlatList

@@ -1,7 +1,7 @@
 import { createHash, createPublicKey, verify as edVerify } from "node:crypto";
 import { verifyMessage } from "viem";
 import { ADDRESS_RE, hasDas, holdings } from "./chain.ts";
-import { config, isEvm } from "./config.ts";
+import { collectionName, config, isEvm } from "./config.ts";
 import { db } from "./db.ts";
 import { feeRates } from "./fees.ts";
 import { traders } from "./feed.ts";
@@ -32,7 +32,39 @@ CREATE TABLE IF NOT EXISTS user_takes (
 CREATE INDEX IF NOT EXISTS user_takes_coll ON user_takes(collection, created_at DESC);
 CREATE TABLE IF NOT EXISTS take_likes (take_id INTEGER NOT NULL, user_id TEXT NOT NULL, PRIMARY KEY (take_id, user_id));
 CREATE TABLE IF NOT EXISTS take_reports (take_id INTEGER NOT NULL, user_id TEXT NOT NULL, PRIMARY KEY (take_id, user_id));
+-- Display names users pick for themselves (shown on their theses).
+CREATE TABLE IF NOT EXISTS profiles (
+  user_id    TEXT PRIMARY KEY,
+  name       TEXT NOT NULL,
+  name_lower TEXT NOT NULL UNIQUE,
+  updated_at INTEGER NOT NULL
+);
 `);
+
+// --- profiles ---------------------------------------------------------------------
+
+const NAME_RE = /^[A-Za-z0-9_.-]{3,20}$/;
+const RESERVED = /^(floorfeed|admin|moderator|mod|support|official|ai|system|null|undefined)$/i;
+const profileOf = db.prepare(`SELECT name, updated_at FROM profiles WHERE user_id = ?`);
+
+export function getProfile(userId: string) {
+  const p = profileOf.get(userId) as { name: string } | undefined;
+  return { name: p?.name ?? null, fallback: memberName(userId) };
+}
+
+export function setProfileName(userId: string, raw: string) {
+  const name = raw.trim();
+  if (!NAME_RE.test(name)) throw new TakeError("Use 3–20 letters, numbers, dots, dashes or underscores.");
+  if (RESERVED.test(name) || /floorfeed/i.test(name)) throw new TakeError("That name is reserved.");
+  const taken = db.prepare(`SELECT user_id FROM profiles WHERE name_lower = ?`).get(name.toLowerCase()) as { user_id: string } | undefined;
+  if (taken && taken.user_id !== userId) throw new TakeError("That name is taken.", 409);
+  const prev = profileOf.get(userId) as { updated_at: number } | undefined;
+  if (prev && !taken && Date.now() - prev.updated_at < 60_000) throw new TakeError("You just changed your name. Try again in a minute.", 429);
+  db.prepare(`INSERT INTO profiles (user_id, name, name_lower, updated_at) VALUES (?, ?, ?, ?)
+              ON CONFLICT(user_id) DO UPDATE SET name = excluded.name, name_lower = excluded.name_lower, updated_at = excluded.updated_at`)
+    .run(userId, name, name.toLowerCase(), Date.now());
+  return { name };
+}
 
 const MAX_LEN = 280;
 const HIDE_AT = 3;
@@ -144,8 +176,22 @@ const aiTakes = db.prepare(`
   FROM takes k JOIN trades t ON t.signature = k.signature
   WHERE t.collection = ? ORDER BY t.block_time DESC LIMIT 10`);
 
-// A stable, non-identifying name for authors without a verified wallet.
-const memberName = (userId: string) => `Member ${createHash("sha256").update(userId).digest("hex").slice(0, 4)}`;
+// A stable, non-identifying name for authors without a chosen name or a verified wallet.
+function memberName(userId: string) { return `Member ${createHash("sha256").update(userId).digest("hex").slice(0, 4)}`; }
+
+// Who wrote a thesis: their chosen name, else the verified wallet's .sol/ENS
+// name, else the short wallet address, else "Member ab12".
+const nameOf = db.prepare(`SELECT name FROM profiles WHERE user_id = ?`);
+type Who = { name: string | null; avatar: string | null; tier: string | null } | null | undefined;
+export function authorOf(r: { user_id: string; wallet: string | null }, w: Who) {
+  const chosen = (nameOf.get(r.user_id) as { name: string } | undefined)?.name ?? null;
+  const short = r.wallet ? `${r.wallet.slice(0, 4)}…${r.wallet.slice(-4)}` : null;
+  return {
+    name: chosen ?? w?.name ?? short ?? memberName(r.user_id),
+    walletName: w?.name ?? short, // shown next to a chosen name
+    avatar: w?.avatar ?? null, wallet: r.wallet, tier: (w?.tier ?? null) as "elite" | "pro" | "mm" | "new" | null,
+  };
+}
 
 export function collectionTakes(collection: string, viewer: string | null) {
   const rows = list.all(collection, 60) as Row[];
@@ -156,7 +202,7 @@ export function collectionTakes(collection: string, viewer: string | null) {
     const w = r.wallet ? who.get(r.wallet) : null;
     return {
       kind: "user" as const, id: r.id, text: r.text, t: Math.floor(r.created_at / 1000),
-      author: { name: w?.name ?? (r.wallet ? `${r.wallet.slice(0, 4)}…${r.wallet.slice(-4)}` : memberName(r.user_id)), avatar: w?.avatar ?? null, wallet: r.wallet, tier: w?.tier ?? null },
+      author: authorOf(r, w), 
       holder: r.wallet && r.items != null && r.items > 0 ? { items: r.items, pnlPct: r.pnl_pct } : null,
       verified: r.wallet != null,
       floor: r.floor, likes: r.likes, liked: liked.has(r.id), mine: viewer === r.user_id,
@@ -210,4 +256,35 @@ export function deleteTake(id: number, userId: string | null) {
 export function takeMarkers(collection: string, sinceSec: number) {
   return (db.prepare(`SELECT * FROM user_takes WHERE collection = ? AND hidden = 0 AND created_at >= ? AND floor IS NOT NULL ORDER BY created_at DESC LIMIT 40`)
     .all(collection, sinceSec * 1000) as Row[]);
+}
+
+// --- the live thesis feed (all collections) ---------------------------------------------
+
+const recentAll = db.prepare(`SELECT * FROM user_takes WHERE hidden = 0 ORDER BY created_at DESC LIMIT ?`);
+const recentAi = db.prepare(`
+  SELECT k.signature, k.text, t.collection, t.buyer, t.price, t.mint, t.block_time
+  FROM takes k JOIN trades t ON t.signature = k.signature
+  ORDER BY t.block_time DESC LIMIT ?`);
+const collInfo = db.prepare(`SELECT image, COALESCE(sale_currency, currency) AS currency, chain FROM collections WHERE symbol = ?`);
+
+export function recentTheses(limit: number, viewer: string | null, withAi: boolean) {
+  const rows = recentAll.all(limit) as Row[];
+  const ai = withAi ? (recentAi.all(limit) as { signature: string; text: string; collection: string; buyer: string; price: number; mint: string; block_time: number }[]) : [];
+  const liked = new Set(viewer ? (db.prepare(`SELECT take_id FROM take_likes WHERE user_id = ?`).all(viewer) as { take_id: number }[]).map((r) => r.take_id) : []);
+  const who = traders([...rows.flatMap((r) => (r.wallet ? [r.wallet] : [])), ...ai.map((a) => a.buyer)]);
+  const coll = (symbol: string) => {
+    const c = (collInfo.get(symbol) ?? {}) as { image?: string | null; currency?: string | null; chain?: string | null };
+    return { symbol, name: collectionName(symbol), image: c.image ?? null, currency: c.currency ?? "SOL", chain: c.chain ?? "solana" };
+  };
+  const user = rows.map((r) => ({
+    kind: "user" as const, id: r.id, text: r.text, t: Math.floor(r.created_at / 1000), collection: coll(r.collection),
+    author: authorOf(r, r.wallet ? who.get(r.wallet) : null),
+    holder: r.wallet && r.items != null && r.items > 0 ? { items: r.items, pnlPct: r.pnl_pct } : null,
+    verified: r.wallet != null, likes: r.likes, liked: liked.has(r.id), mine: viewer === r.user_id,
+  }));
+  const aiRows = ai.map((a) => ({
+    kind: "ai" as const, id: a.signature, text: a.text, t: a.block_time, collection: coll(a.collection),
+    trade: { buyer: a.buyer, buyerName: who.get(a.buyer)?.name ?? null, price: a.price, mint: a.mint },
+  }));
+  return [...user, ...aiRows].sort((x, y) => y.t - x.t).slice(0, limit);
 }

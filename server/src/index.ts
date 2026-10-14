@@ -12,7 +12,7 @@ import { adoptDevice, authorize, privyUser } from "./auth.ts";
 import { ADDRESS_RE, capabilities, collectionOfMint, hasDas, holdings, rpc, solBalance } from "./chain.ts";
 import { cheapestListings, collectionDetail, listCollections, listingLadder } from "./collections.ts";
 import { collectionAbout, collectionHolders, collectionMarkers, collectionSales } from "./collection-tabs.ts";
-import { TakeError, collectionTakes, deleteTake, postTake, reportTake, signedMessage, takeMarkers, toggleLike } from "./takes.ts";
+import { TakeError, authorOf, collectionTakes, deleteTake, getProfile, postTake, recentTheses, reportTake, setProfileName, signedMessage, takeMarkers, toggleLike } from "./takes.ts";
 import { COLLECTIONS, UNITS, collectionName, config, isEvm } from "./config.ts";
 import { db } from "./db.ts";
 import { feedEvents, traders } from "./feed.ts";
@@ -47,7 +47,7 @@ const tradeSelect = `
   FROM trades t LEFT JOIN collections c ON c.symbol = t.collection`;
 
 const app = Fastify({ logger: { level: "info" } });
-await app.register(cors, { origin: true, methods: ["GET", "HEAD", "POST", "DELETE"] });
+await app.register(cors, { origin: true, methods: ["GET", "HEAD", "POST", "PUT", "DELETE"] });
 
 app.get("/health", async () => ({
   ok: true,
@@ -149,6 +149,23 @@ app.get("/collections/:symbol/takes", async (req) => {
   const { userId } = z.object({ userId: z.string().optional() }).parse(req.query);
   return collectionTakes(symbol, userId ?? null);
 });
+// The live thesis feed across collections (discovery panel, phone Feed).
+app.get("/theses", async (req) => {
+  const q = z.object({ limit: z.coerce.number().int().min(1).max(100).default(40), userId: z.string().optional(), ai: z.enum(["0", "1"]).default("1") }).parse(req.query);
+  return recentTheses(q.limit, q.userId ?? null, q.ai === "1");
+});
+// Your display name (signed-in accounts), shown on your theses.
+app.get("/profile", async (req, reply) => {
+  const userId = await privyUser(req);
+  if (!userId) return reply.code(401).send({ error: "Sign in again." });
+  return getProfile(userId);
+});
+app.put("/profile", async (req, reply) => {
+  const userId = await privyUser(req);
+  if (!userId) return reply.code(401).send({ error: "Sign in again." });
+  const { name } = z.object({ name: z.string().max(40) }).parse(req.body);
+  try { return setProfileName(userId, name); } catch (err) { return takeReply(reply, err); }
+});
 app.get("/takes/message", async (req) => {
   const q = z.object({ collection: z.string(), text: z.string().max(2000), ts: z.coerce.number().int() }).parse(req.query);
   return { message: signedMessage(q.collection, q.text.trim(), q.ts) };
@@ -210,7 +227,7 @@ app.get("/collections/:symbol/markers", async (req) => {
   const who = traders(rows.flatMap((r) => (r.wallet ? [r.wallet] : [])));
   return [...trades, ...rows.map((r) => ({
     t: Math.floor(r.created_at / 1000), price: r.floor!, side: "take" as const, wallet: r.wallet ?? "", mint: "",
-    name: r.wallet ? who.get(r.wallet)?.name ?? null : null, avatar: r.wallet ? who.get(r.wallet)?.avatar ?? null : null,
+    name: authorOf(r, r.wallet ? who.get(r.wallet) : null).name, avatar: r.wallet ? who.get(r.wallet)?.avatar ?? null : null,
     tier: r.wallet ? who.get(r.wallet)?.tier ?? null : null, text: r.text, takeId: r.id,
   }))];
 });

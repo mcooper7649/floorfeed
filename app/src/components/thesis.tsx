@@ -2,25 +2,28 @@ import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { CollIcon } from '@/components/coll-icon';
 import { Avatar, TierBadge } from '@/components/event-card';
+import { ProfileName } from '@/components/profile-name';
 import { C } from '@/constants/brand';
 import { T } from '@/constants/type';
 import { track } from '@/lib/analytics';
-import { api, type AiTake, type TakeItem, type UserTake } from '@/lib/api';
+import { api, type AiTake, type TakeItem, type ThesisFeedItem, type UserTake } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useEvmWallet } from '@/lib/evm-wallet';
 import { shortAddr, sol, timeAgo } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useWallet } from '@/lib/wallet';
 
-// The collection page's Takes tab (FOMO's "Thesis"): short posts by signed-in
+// The collection page's Thesis tab (FOMO's "Thesis"): short posts by signed-in
 // users. Signing with a connected wallet adds a holder badge when that wallet
 // owns NFTs from the collection. FloorFeed's AI takes on notable buys appear
-// in the same list, labelled.
+// in the same list, labelled. ThesisFeedRow is the cross-collection version
+// used by the live feed (discovery panel, phone Feed).
 
 const MAX = 280;
 
-export function TakesTab({ symbol, name, currency, chain, onCount }: {
+export function ThesisTab({ symbol, name, currency, chain, onCount }: {
   symbol: string; name: string; currency: string; chain: string; onCount?: (n: number) => void;
 }) {
   const { userId } = useSession();
@@ -42,7 +45,7 @@ export function TakesTab({ symbol, name, currency, chain, onCount }: {
     <View style={{ gap: 6 }}>
       <Composer symbol={symbol} name={name} chain={chain} onPosted={reload} />
       {!list ? <ActivityIndicator style={{ marginVertical: 24 }} color={C.accent} />
-        : !list.length ? <Text style={s.none}>No takes on {name} yet. Be the first.</Text>
+        : !list.length ? <Text style={s.none}>No thesis on {name} yet. Be the first.</Text>
         : list.map((t) => t.kind === 'user'
           ? <UserTakeRow key={`u${t.id}`} t={t} currency={currency} onChange={reload} />
           : <AiTakeRow key={`a${t.id}`} t={t} symbol={symbol} currency={currency} />)}
@@ -68,7 +71,7 @@ function Composer({ symbol, name, chain, onPosted }: { symbol: string; name: str
   if (!signedIn) {
     return (
       <View style={s.composer}>
-        <Text style={T.meta}>What do you think {name} does next? Sign in to post a take. Connect a wallet that holds one and your take shows a holder badge.</Text>
+        <Text style={T.meta}>What do you think {name} does next? Sign in to post your thesis. Connect a wallet that holds one and it shows a holder badge.</Text>
         {auth.supported && (
           <Pressable onPress={() => auth.login()} style={s.post}><Text style={s.postTxt}>Sign in to post</Text></Pressable>
         )}
@@ -102,8 +105,8 @@ function Composer({ symbol, name, chain, onPosted }: { symbol: string; name: str
 
   return (
     <View style={s.composer}>
-      <TextInput value={text} onChangeText={(v) => setText(v.slice(0, MAX))} multiline placeholder={`Your take on ${name}…`}
-        placeholderTextColor={C.muted} style={s.input} accessibilityLabel="Your take" />
+      <TextInput value={text} onChangeText={(v) => setText(v.slice(0, MAX))} multiline placeholder={`Your thesis on ${name}…`}
+        placeholderTextColor={C.muted} style={s.input} accessibilityLabel="Your thesis" />
       <View style={s.composerRow}>
         {canSign ? (
           <Pressable onPress={() => setSign((v) => !v)} style={s.check} accessibilityRole="checkbox" accessibilityState={{ checked: sign }}>
@@ -119,7 +122,8 @@ function Composer({ symbol, name, chain, onPosted }: { symbol: string; name: str
         </Pressable>
       </View>
       {msg && <Text style={[T.caption, { color: C.down }]}>{msg}</Text>}
-      <Text style={T.caption}>No links. Takes are public. Not financial advice.</Text>
+      <ProfileName compact />
+      <Text style={T.caption}>No links. Theses are public. Not financial advice.</Text>
     </View>
   );
 }
@@ -142,7 +146,7 @@ function HolderBadge({ t }: { t: UserTake }) {
   return null;
 }
 
-function UserTakeRow({ t, onChange }: { t: UserTake; currency: string; onChange: () => void }) {
+export function UserTakeRow({ t, onChange }: { t: UserTake; currency: string; onChange: () => void }) {
   const { userId } = useSession();
   const [likes, setLikes] = useState({ n: t.likes, on: t.liked });
   const [armed, setArmed] = useState<'report' | 'delete' | null>(null);
@@ -169,6 +173,7 @@ function UserTakeRow({ t, onChange }: { t: UserTake; currency: string; onChange:
       <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
         <View style={s.head}>
           <Text style={s.name} numberOfLines={1}>{t.author.name}</Text>
+          {t.author.walletName && t.author.walletName !== t.author.name ? <Text style={s.time} numberOfLines={1}>{t.author.walletName}</Text> : null}
           {t.author.tier === 'elite' || t.author.tier === 'pro' ? <TierBadge tier={t.author.tier} /> : null}
           <HolderBadge t={t} />
           <Text style={s.time}>{timeAgo(t.t)}</Text>
@@ -189,13 +194,13 @@ function UserTakeRow({ t, onChange }: { t: UserTake; currency: string; onChange:
   );
 }
 
-function AiTakeRow({ t, symbol, currency }: { t: AiTake; symbol: string; currency: string }) {
+export function AiTakeRow({ t, symbol, currency }: { t: AiTake; symbol: string; currency: string }) {
   return (
     <View style={s.row}>
       <View style={s.aiMark}><Text style={s.aiMarkTxt}>AI</Text></View>
       <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
         <View style={s.head}>
-          <Text style={s.name} numberOfLines={1}>AI take</Text>
+          <Text style={s.name} numberOfLines={1}>AI thesis</Text>
           <Pressable onPress={() => router.push({ pathname: '/item/[symbol]/[id]', params: { symbol, id: t.trade.mint } })}>
             <Text style={s.time} numberOfLines={1}>on {t.trade.buyerName ?? shortAddr(t.trade.buyer)}&apos;s buy at {sol(t.trade.price, 2, currency)}</Text>
           </Pressable>
@@ -233,4 +238,30 @@ const s = StyleSheet.create({
   badgeTxt: { fontSize: 11, fontWeight: '600', color: C.dim },
   aiMark: { width: 34, height: 34, borderRadius: 17, backgroundColor: C.cardHi, borderWidth: 1, borderColor: C.ai, alignItems: 'center', justifyContent: 'center' },
   aiMarkTxt: { color: C.ai, fontSize: 12, fontWeight: '700' },
+});
+
+// --- live feed row (any collection) ---------------------------------------------------
+
+
+export function ThesisFeedRow({ t, compact }: { t: ThesisFeedItem; compact?: boolean }) {
+  const open = () => router.push({ pathname: '/collection/[symbol]', params: { symbol: t.collection.symbol, tab: 'thesis' } });
+  return (
+    <View style={{ gap: 0 }}>
+      <Pressable onPress={open} style={f.coll} accessibilityRole="link">
+        <CollIcon name={t.collection.name} uri={t.collection.image} size={18} radius={5} />
+        <Text style={f.collTxt} numberOfLines={1}>{t.collection.name}</Text>
+      </Pressable>
+      <View style={compact ? f.compact : undefined}>
+        {t.kind === 'user'
+          ? <UserTakeRow t={t} currency={t.collection.currency} onChange={() => {}} />
+          : <AiTakeRow t={t} symbol={t.collection.symbol} currency={t.collection.currency} />}
+      </View>
+    </View>
+  );
+}
+
+const f = StyleSheet.create({
+  coll: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: 10, alignSelf: 'flex-start' },
+  collTxt: { ...T.caption, color: C.accent, fontWeight: '600', flexShrink: 1 },
+  compact: { marginTop: -4 },
 });

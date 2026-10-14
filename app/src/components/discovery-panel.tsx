@@ -5,11 +5,12 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 
 import { CollIcon } from '@/components/coll-icon';
 import { PushCard } from '@/components/push-card';
+import { ThesisFeedRow } from '@/components/thesis';
 import { C } from '@/constants/brand';
 import { CHAINS } from '@/constants/chains';
 import { useAlerts } from '@/lib/alerts';
 import {
-  api, type Alert, type Chain, type CollectionSummary, type FeedEvent, type HolderRow, type LeaderWindow, type Trader, type Unit,
+  api, type Alert, type Chain, type CollectionSummary, type FeedEvent, type HolderRow, type LeaderWindow, type ThesisFeedItem, type Trader, type Unit,
 } from '@/lib/api';
 import { shortAddr, signedSol, sol, timeAgo } from '@/lib/format';
 import { thumb } from '@/lib/img';
@@ -21,11 +22,11 @@ import { useSession } from '@/lib/session';
 // following), Leaders, and a live Feed. Dense rows: art with a chain badge,
 // name and one fact on the left; floor and 24h change on the right.
 
-type Tab = 'alerts' | 'collections' | 'leaders' | 'feed';
+type Tab = 'alerts' | 'collections' | 'thesis' | 'leaders' | 'feed';
 type List = 'watch' | 'blue' | 'trending' | 'smart' | 'breakouts' | 'following';
 
 const TABS: { key: Tab; label: string }[] = [
-  { key: 'alerts', label: 'Alerts' }, { key: 'collections', label: 'Collections' },
+  { key: 'alerts', label: 'Alerts' }, { key: 'collections', label: 'Collections' }, { key: 'thesis', label: 'Thesis' },
   { key: 'leaders', label: 'Leaders' }, { key: 'feed', label: 'Feed' },
 ];
 const LISTS: { key: List; label: string }[] = [
@@ -71,6 +72,7 @@ export function DiscoveryPanel() {
       </View>
       {tab === 'alerts' && <AlertsTab />}
       {tab === 'collections' && <CollectionsTab />}
+      {tab === 'thesis' && <ThesisFeedTab />}
       {tab === 'leaders' && <LeadersTab />}
       {tab === 'feed' && <FeedTab />}
     </View>
@@ -291,6 +293,35 @@ function AlertsTab() {
               onPress={() => go({ pathname: '/item/[symbol]/[id]', params: { symbol: a.collection.symbol, id: a.mint } })} />
           ))}
           <Pressable onPress={() => go('/alerts')} style={s.more}><Text style={s.moreTxt}>All alerts →</Text></Pressable>
+        </>
+      ) : null}
+    </Scroll>
+  );
+}
+
+// --- Thesis: the live feed of theses across collections ---------------------------
+
+export function useThesisFeed() {
+  const { userId } = useSession();
+  const [items, setItems] = useState<ThesisFeedItem[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const load = () => api.theses(userId).then((r) => alive && setItems(r)).catch(() => alive && setItems((x) => x ?? []));
+    load();
+    const t = setInterval(load, 20_000);
+    return () => { alive = false; clearInterval(t); };
+  }, [userId]);
+  return items;
+}
+
+function ThesisFeedTab() {
+  const items = useThesisFeed();
+  return (
+    <Scroll loading={!items} empty={<Empty text="No theses yet. Open any collection and post the first one in its Thesis tab." />}>
+      {items?.length ? (
+        <>
+          <Text style={s.caption}>Live: what holders and traders think, newest first</Text>
+          {items.map((t) => <ThesisFeedRow key={`${t.kind}:${t.id}`} t={t} compact />)}
         </>
       ) : null}
     </Scroll>

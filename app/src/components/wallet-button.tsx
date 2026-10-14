@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { DepositSheet } from '@/components/deposit-sheet';
+import { ProfileName } from '@/components/profile-name';
 import { SendSheet } from '@/components/send-sheet';
 import { ModeChip, ModeToggle } from '@/components/mode-toggle';
 import { C } from '@/constants/brand';
@@ -128,6 +129,7 @@ export function WalletSheet({ open, onClose }: { open: boolean; onClose: () => v
               <Text style={s.note}>
                 Your wallet&apos;s key is secured by Privy and never reaches FloorFeed.
               </Text>
+              <ProfileName />
               <Pressable accessibilityRole="button" onPress={openDeposit} style={s.primary}>
                 <Text style={s.primaryTxt}>Deposit SOL</Text>
               </Pressable>
@@ -177,9 +179,12 @@ export function WalletSheet({ open, onClose }: { open: boolean; onClose: () => v
                 <Text style={s.secondaryTxt}>Disconnect</Text>
               </Pressable>
               {auth.supported && (auth.userId ? (
+                <View style={{ gap: 8 }}>
+                <ProfileName />
                 <View style={s.signedRow}>
                   <Text style={[s.meta, { flex: 1 }]}>Signed in{auth.label ? ` as ${auth.label}` : ''}</Text>
                   <Pressable accessibilityRole="button" onPress={signOut}><Text style={s.link}>Sign out</Text></Pressable>
+                </View>
                 </View>
               ) : (
                 <Pressable accessibilityRole="button" onPress={signIn}>

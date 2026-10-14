@@ -332,12 +332,15 @@ export type ChartMarker = {
 // Takes on a collection (server takes.ts): users' posts, plus FloorFeed's AI takes on notable buys.
 export type UserTake = {
   kind: 'user'; id: number; text: string; t: number;
-  author: { name: string; avatar: string | null; wallet: string | null; tier: Tier };
+  author: { name: string; walletName: string | null; avatar: string | null; wallet: string | null; tier: Tier };
   holder: { items: number; pnlPct: number | null } | null; verified: boolean;
   floor: number | null; likes: number; liked: boolean; mine: boolean;
 };
 export type AiTake = { kind: 'ai'; id: string; text: string; t: number; trade: { buyer: string; buyerName: string | null; price: number; mint: string } };
 export type TakeItem = UserTake | AiTake;
+// The live thesis feed across collections.
+export type FeedColl = { symbol: string; name: string; image: string | null; currency: string; chain: Chain };
+export type ThesisFeedItem = (UserTake & { collection: FeedColl }) | (AiTake & { collection: FeedColl });
 export type GuideBlock = { p: string } | { list: { term: string; text: string }[] };
 export type GuideSection = { id: string; title: string; blocks: GuideBlock[] };
 export type TickerPrice = { symbol: string; usd: number; change24hPct: number | null };
@@ -384,6 +387,10 @@ export const api = {
   markRead: (userId: string) => send('POST', `/alerts/${encodeURIComponent(userId)}/read`, {}),
   takes: (symbol: string, userId?: string | null) =>
     req<TakeItem[]>(`/collections/${encodeURIComponent(symbol)}/takes${userId ? `?userId=${encodeURIComponent(userId)}` : ''}`),
+  theses: (userId?: string | null) =>
+    req<ThesisFeedItem[]>(`/theses?limit=40${userId ? `&userId=${encodeURIComponent(userId)}` : ''}`),
+  profile: () => req<{ name: string | null; fallback: string }>('/profile'),
+  setProfileName: (name: string) => req<{ name: string }>('/profile', { method: 'PUT', body: JSON.stringify({ name }) }),
   takeMessage: (collection: string, text: string, ts: number) =>
     req<{ message: string }>(`/takes/message?${new URLSearchParams({ collection, text, ts: String(ts) })}`),
   postTake: (b: { collection: string; text: string; wallet?: string; signature?: string; ts?: number }) =>

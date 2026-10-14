@@ -292,7 +292,7 @@ export function PriceChart({ sales, buckets, bucketSec, floor, rangeDays, asOf, 
           <Pressable key={`${p.m.wallet}:${p.m.t}:${p.m.side}:${i}`}
             onPress={() => p.m.wallet && router.push({ pathname: '/wallet/[address]', params: { address: p.m.wallet } })}
             onHoverIn={() => setHoverMark(p)} onHoverOut={() => setHoverMark((h) => (h === p ? null : h))}
-            accessibilityLabel={p.m.side === 'take' ? `Take: ${p.m.text ?? ''}` : `${p.m.name ?? shortAddr(p.m.wallet)} ${p.m.side === 'buy' ? 'bought' : 'sold'} at ${fmtSol(p.m.price)} ${unit}`}
+            accessibilityLabel={p.m.side === 'take' ? `Thesis: ${p.m.text ?? ''}` : `${p.m.name ?? shortAddr(p.m.wallet)} ${p.m.side === 'buy' ? 'bought' : 'sold'} at ${fmtSol(p.m.price)} ${unit}`}
             style={[s.mark, { left: p.x - AV / 2, top: p.y - AV / 2, borderColor: p.m.side === 'buy' ? C.up : p.m.side === 'take' ? C.ai : C.down }]}>
             {p.m.avatar
               ? <Image source={thumb(p.m.avatar, AV * 2)} style={s.markImg} contentFit="cover" />
@@ -304,9 +304,9 @@ export function PriceChart({ sales, buckets, bucketSec, floor, rangeDays, asOf, 
             left: Math.min(Math.max(0, hoverMark.x - 90), Math.max(0, width - 240)), top: Math.max(0, hoverMark.y - AV / 2 - (hoverMark.m.side === 'take' ? 96 : 46)),
           }]}>
             <Text style={s.tipWhen} numberOfLines={1}>
-              {hoverMark.m.side === 'take' && !hoverMark.m.wallet ? 'Take' : hoverMark.m.name ?? shortAddr(hoverMark.m.wallet)}{' '}
+              {hoverMark.m.side === 'take' && !hoverMark.m.wallet ? 'Thesis' : hoverMark.m.name ?? shortAddr(hoverMark.m.wallet)}{' '}
               <Text style={{ color: hoverMark.m.side === 'buy' ? C.up : hoverMark.m.side === 'take' ? C.ai : C.down }}>
-                {hoverMark.m.side === 'buy' ? 'bought' : hoverMark.m.side === 'take' ? 'posted a take' : 'sold'}
+                {hoverMark.m.side === 'buy' ? 'bought' : hoverMark.m.side === 'take' ? 'posted a thesis' : 'sold'}
               </Text>
             </Text>
             {hoverMark.m.side === 'take' && hoverMark.m.text ? <Text style={s.tipLabel} numberOfLines={3}>“{hoverMark.m.text}”</Text> : null}

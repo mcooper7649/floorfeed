@@ -5,7 +5,7 @@ import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, V
 import { ChainBadge } from '@/components/chain-badge';
 import { AboutPanel, PositionsPanel, TradeBox } from '@/components/collection-side';
 import { HoldersTab, SalesTab, type TabFilter } from '@/components/collection-tabs';
-import { TakesTab } from '@/components/takes-tab';
+import { ThesisTab } from '@/components/thesis';
 import { CollIcon } from '@/components/coll-icon';
 import { DepthChart } from '@/components/depth-chart';
 import { Avatar } from '@/components/event-card';
@@ -29,22 +29,22 @@ import { useTitle } from '@/lib/use-title';
 const RANGES = [{ d: 1, label: '1D' }, { d: 7, label: '1W' }, { d: 30, label: '1M' }, { d: 90, label: '3M' }] as const;
 const SCALES = [{ key: 'pct', label: '%' }, { key: 'log', label: 'log' }, { key: 'auto', label: 'auto' }] as const;
 type Overlays = { proven: boolean; mine: boolean; following: boolean; minSize: boolean; takes: boolean };
-type TabKey = 'holders' | 'sales' | 'takes' | 'listings' | 'flippers';
+type TabKey = 'holders' | 'sales' | 'thesis' | 'listings' | 'flippers';
 const TABS: { key: TabKey; label: string }[] = [
-  { key: 'holders', label: 'Holders' }, { key: 'sales', label: 'Sales' }, { key: 'takes', label: 'Takes' },
+  { key: 'holders', label: 'Holders' }, { key: 'sales', label: 'Sales' }, { key: 'thesis', label: 'Thesis' },
   { key: 'listings', label: 'Listings' }, { key: 'flippers', label: 'Top flippers' },
 ];
 const web = Platform.OS === 'web';
 
 export default function CollectionScreen() {
-  const { symbol } = useLocalSearchParams<{ symbol: string }>();
+  const { symbol, tab: tabParam } = useLocalSearchParams<{ symbol: string; tab?: string }>();
   const { wide, pad, maxWidth, contentWidth } = useLayout();
   const [range, setRange] = useState<number>(7);
   const [data, setData] = useState<CollectionDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [table, setTable] = useState(false);
-  const [tab, setTab] = useState<TabKey>('holders');
+  const [tab, setTab] = useState<TabKey>(TABS.some((t) => t.key === tabParam) ? (tabParam as TabKey) : 'holders');
   const [filter, setFilter] = useState<TabFilter>({ proven: false, following: false });
   const [holderCount, setHolderCount] = useState<number | null>(null);
   const [scale, setScale] = useState<'auto' | 'pct' | 'log'>('auto');
@@ -228,7 +228,7 @@ export default function CollectionScreen() {
           <Text style={s.overlayLabel}>Chart overlays</Text>
           <Toggle label="Proven traders" on={overlays.proven} onPress={() => setOverlays((o) => ({ ...o, proven: !o.proven }))} />
           <Toggle label="My trades" on={overlays.mine} onPress={() => setOverlays((o) => ({ ...o, mine: !o.mine }))} />
-          <Toggle label="Takes" on={overlays.takes} onPress={() => setOverlays((o) => ({ ...o, takes: !o.takes }))} />
+          <Toggle label="Thesis" on={overlays.takes} onPress={() => setOverlays((o) => ({ ...o, takes: !o.takes }))} />
           <Toggle label="Following only" on={overlays.following} onPress={() => setOverlays((o) => ({ ...o, following: !o.following }))} />
           {usdRate != null && <Toggle label="Min size (>$1K)" on={overlays.minSize} onPress={() => setOverlays((o) => ({ ...o, minSize: !o.minSize }))} />}
           {partial && <Text style={s.note}>Tracking since {fmtDay(data.historyStartsAt!)}</Text>}
@@ -246,7 +246,7 @@ export default function CollectionScreen() {
             <Pressable key={t.key} onPress={() => setTab(t.key)} accessibilityRole="tab" accessibilityState={{ selected: tab === t.key }}>
               <Text style={[s.tab, tab === t.key && s.tabOn]}>
                 {t.label}{t.key === 'holders' && (about?.info.holdersTracked ?? holderCount) != null ? ` (${(about?.info.holdersTracked ?? holderCount)!.toLocaleString()})` : ''}
-                {t.key === 'takes' && takeCount ? ` (${takeCount})` : ''}
+                {t.key === 'thesis' && takeCount ? ` (${takeCount})` : ''}
               </Text>
             </Pressable>
           ))}
@@ -260,7 +260,7 @@ export default function CollectionScreen() {
       </View>
       {tab === 'holders' && <HoldersTab symbol={data.symbol} currency={cur} filter={filter} onCount={setHolderCount} />}
       {tab === 'sales' && <SalesTab symbol={data.symbol} currency={cur} filter={filter} />}
-      {tab === 'takes' && <TakesTab symbol={data.symbol} name={data.name} currency={cur} chain={data.chain} onCount={setTakeCount} />}
+      {tab === 'thesis' && <ThesisTab symbol={data.symbol} name={data.name} currency={cur} chain={data.chain} onCount={setTakeCount} />}
       {tab === 'listings' && (
         <View style={{ gap: 14 }}>
           {st.floor != null && data.listings.length > 0 && (
