@@ -184,7 +184,8 @@ function useCollections() {
 
 // --- Collections -------------------------------------------------------------------
 
-function CollectionsTab() {
+// Also the phone's Discover view (Markets tab).
+export function CollectionsTab() {
   const [list, setList] = useState<List>('trending');
   const rows = useCollections();
   const { watchlist, userId } = useSession();

@@ -5,6 +5,7 @@ import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, Text
 import { ChainBadge } from '@/components/chain-badge';
 import { CollIcon } from '@/components/coll-icon';
 import { NftImage } from '@/components/nft-image';
+import { CollectionsTab } from '@/components/discovery-panel';
 import { Empty, Screen } from '@/components/screen';
 import { Sparkline } from '@/components/sparkline';
 import { Chip, ChipRow, Stat } from '@/components/ui';
@@ -67,6 +68,7 @@ export default function MarketsScreen() {
   ], [rows]);
   const [cat, setCat] = useState<CatFilter>('all');
   const [sort, setSort] = useState<Sort>('volume');
+  const [view, setView] = useState<'discover' | 'all'>('discover');
 
   const fetchRows = useCallback(() => {
     api.collections().then((r) => { setRows(r); setError(null); })
@@ -193,8 +195,28 @@ export default function MarketsScreen() {
     </View>
   );
 
+  // Phones get the desktop discovery panel's lists as a Discover view.
+  const switcher = !wide && (
+    <View style={[s.views, { marginHorizontal: pad }]}>
+      {(['discover', 'all'] as const).map((v) => (
+        <Pressable key={v} onPress={() => setView(v)} style={[s.viewBtn, view === v && s.viewOn]} accessibilityRole="tab" accessibilityState={{ selected: view === v }}>
+          <Text style={[s.viewTxt, view === v && { color: C.text }]}>{v === 'discover' ? 'Discover' : 'All collections'}</Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+  if (!wide && view === 'discover' && !q) {
+    return (
+      <Screen title="Markets" subtitle="Trending, smart money, breakouts and your watchlist">
+        {switcher}
+        <View style={{ flex: 1, paddingHorizontal: pad - 6 }}><CollectionsTab /></View>
+      </Screen>
+    );
+  }
+
   return (
     <Screen title="Markets" subtitle="NFT collections across 11 chains, ranked by volume in USD">
+      {switcher}
       <FlatList
         data={visible}
         keyExtractor={(r) => r.symbol}
@@ -358,6 +380,10 @@ function Chips<K extends string>({ items, value, onChange }: { items: { key: K; 
 }
 
 const s = StyleSheet.create({
+  views: { flexDirection: 'row', backgroundColor: C.card, borderRadius: 12, borderWidth: 1, borderColor: C.border, padding: 3, marginBottom: 12 },
+  viewBtn: { flex: 1, borderRadius: 9, paddingVertical: 8, alignItems: 'center' },
+  viewOn: { backgroundColor: C.cardHi },
+  viewTxt: { color: C.dim, fontSize: 14, fontWeight: '600' },
   tiles: { flexDirection: 'row', gap: 8 },
   tile: { flex: 1, flexBasis: 0 },
   section: { ...T.title },
