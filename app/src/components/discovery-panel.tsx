@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { CollIcon } from '@/components/coll-icon';
 import { PushCard } from '@/components/push-card';
@@ -10,7 +10,7 @@ import { C } from '@/constants/brand';
 import { CHAINS } from '@/constants/chains';
 import { useAlerts } from '@/lib/alerts';
 import {
-  api, type Alert, type Chain, type CollectionSummary, type FeedEvent, type HolderRow, type LeaderWindow, type ThesisFeedItem, type Trader, type Unit,
+  api, type Alert, type Chain, type CollectionSummary, type Drop, type FeedEvent, type HolderRow, type LeaderWindow, type ThesisFeedItem, type Trader, type Unit,
 } from '@/lib/api';
 import { shortAddr, signedSol, sol, timeAgo } from '@/lib/format';
 import { thumb } from '@/lib/img';
@@ -23,7 +23,7 @@ import { useSession } from '@/lib/session';
 // name and one fact on the left; floor and 24h change on the right.
 
 type Tab = 'alerts' | 'collections' | 'thesis' | 'leaders' | 'feed';
-type List = 'watch' | 'blue' | 'trending' | 'smart' | 'breakouts' | 'following';
+type List = 'watch' | 'blue' | 'trending' | 'smart' | 'new' | 'minting' | 'breakouts' | 'following';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'alerts', label: 'Alerts' }, { key: 'collections', label: 'Collections' }, { key: 'thesis', label: 'Thesis' },
@@ -31,9 +31,11 @@ const TABS: { key: Tab; label: string }[] = [
 ];
 const LISTS: { key: List; label: string }[] = [
   { key: 'watch', label: 'Watchlist' }, { key: 'blue', label: 'Blue chips' }, { key: 'trending', label: 'Trending' },
-  { key: 'smart', label: 'Smart money' }, { key: 'breakouts', label: 'Breakouts' }, { key: 'following', label: 'Following' },
+  { key: 'smart', label: 'Smart money' }, { key: 'new', label: 'New' }, { key: 'minting', label: 'Minting' },
+  { key: 'breakouts', label: 'Breakouts' }, { key: 'following', label: 'Following' },
 ];
 
+const ageDays = (date: string) => (Date.now() - Date.parse(`${date}T00:00:00Z`)) / 86_400_000;
 const usd = (n: number | null | undefined) =>
   n == null ? '—' : n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(1)}K` : `$${n.toFixed(0)}`;
 const go = (href: Parameters<typeof router.push>[0]) => router.push(href);
@@ -211,6 +213,9 @@ export function CollectionsTab() {
       case 'trending': return rows.filter((r) => vol24(r) >= 5_000 && (r.volume7dUsd ?? 0) > 0)
         .map((r) => ({ r, x: vol24(r) / ((r.volume7dUsd ?? 1) / 7) }))
         .sort((a, b) => b.x - a.x).slice(0, 40).map((v) => v.r);
+      // New & hot: created in the last 30 days and already in a chain's top-volume list.
+      case 'new': return rows.filter((r) => r.createdAt && ageDays(r.createdAt) <= 30)
+        .sort((a, b) => (b.volume7dUsd ?? 0) - (a.volume7dUsd ?? 0)).slice(0, 40);
       case 'breakouts': return rows.filter((r) => (r.change24hPct ?? 0) > 0 && (vol24(r) >= 2_000 || (r.volume7dUsd ?? 0) >= 20_000))
         .sort((a, b) => (b.change24hPct ?? 0) - (a.change24hPct ?? 0)).slice(0, 40);
       default: return [];
@@ -228,7 +233,9 @@ export function CollectionsTab() {
   });
 
   let body: ReactNode;
-  if (list === 'smart' || list === 'following') {
+  if (list === 'minting') {
+    body = <MintingList />;
+  } else if (list === 'smart' || list === 'following') {
     const hs = holders?.[list] ?? [];
     body = (
       <Scroll loading={!holders || !rows} empty={list === 'following'
@@ -248,7 +255,12 @@ export function CollectionsTab() {
         {list === 'breakouts' && ranked.length
           ? <Notice tone="caution" title="Floors move fast" text="Biggest 24h floor gains among collections with real volume. Thin books can drop as quickly as they rise." />
           : null}
-        {ranked.length ? ranked.map((c) => collRow(c, list === 'trending' || list === 'breakouts'
+        {list === 'new' && ranked.length
+          ? <Notice tone="caution" title="Young collections" text="Created in the last 30 days and already among the busiest on their chain. New projects are the riskiest kind." />
+          : null}
+        {ranked.length ? ranked.map((c) => collRow(c, list === 'new'
+          ? `🌱 ${Math.max(1, Math.round(ageDays(c.createdAt!)))}d old · ${usd(c.volume7dUsd)} vol 7d`
+          : list === 'trending' || list === 'breakouts'
           ? `${usd(c.volume24hUsd)} vol 24h`
           : `${usd(c.volume7dUsd)} vol 7d`)) : null}
       </Scroll>
@@ -262,6 +274,50 @@ export function CollectionsTab() {
     </>
   );
 }
+
+// --- Minting: live and upcoming OpenSea drops ---------------------------------------
+
+function inWords(sec: number) {
+  const d = Math.abs(sec);
+  return d >= 86_400 ? `${Math.round(d / 86_400)}d` : d >= 3600 ? `${Math.round(d / 3600)}h` : `${Math.max(1, Math.round(d / 60))}m`;
+}
+
+function MintingList() {
+  const [loaded, setLoaded] = useState<{ drops: Drop[]; now: number } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    api.drops().then((d) => alive && setLoaded({ drops: d, now: Date.now() / 1000 }))
+      .catch(() => alive && setLoaded({ drops: [], now: Date.now() / 1000 }));
+    return () => { alive = false; };
+  }, []);
+  const drops = loaded?.drops ?? null;
+  const now = loaded?.now ?? 0;
+  return (
+    <Scroll loading={!drops} empty={<Empty text="No live or upcoming mints right now." />}>
+      {drops?.length ? (
+        <>
+          <Notice tone="caution" title="Mints happen on OpenSea" text="Live and upcoming drops across chains. Check the collection and contract before minting: most new NFTs lose value." />
+          {drops.map((d) => {
+            const soon = !d.minting && d.startsAt != null && d.startsAt > now;
+            const when = d.minting
+              ? d.endsAt ? `ends in ${inWords(d.endsAt - now)}` : 'minting now'
+              : soon ? `starts in ${inWords(d.startsAt! - now)}` : 'minted';
+            return (
+              <Row key={d.slug} left={<Art uri={d.image} name={d.name} chain={(d.chain in CHAINS ? d.chain : undefined) as Chain | undefined} />}
+                title={d.name}
+                extra={d.minting ? <Badge text="Live" tone="buy" /> : soon ? <Badge text="Soon" tone="info" /> : null}
+                sub={`${d.chain === 'robinhood' ? 'Robinhood Chain' : CHAINS[d.chain as Chain]?.name ?? d.chain} · ${d.stage ? `${d.stage} · ` : ''}${when}`}
+                value={d.price == null ? '—' : d.price === 0 ? 'Free' : `${trimNum(d.price)} ${d.currency}`}
+                change={d.priceUsd ? `$${d.priceUsd >= 100 ? d.priceUsd.toFixed(0) : d.priceUsd.toFixed(2)}` : undefined}
+                onPress={() => Linking.openURL(d.url)} />
+            );
+          })}
+        </>
+      ) : null}
+    </Scroll>
+  );
+}
+const trimNum = (n: number) => (n >= 1 ? n.toFixed(2) : n.toPrecision(2)).replace(/\.?0+$/, '');
 
 // --- Alerts --------------------------------------------------------------------------
 

@@ -1,4 +1,7 @@
 import { db } from "./db.ts";
+import { EVM_CHAINS } from "./config.ts";
+import { getOsDrops, hasOsKey } from "./opensea.ts";
+import { usdPrice } from "./prices.ts";
 import { provenWallets, traders } from "./feed.ts";
 
 // Collection holdings behind the discovery panel's Smart money and Following
@@ -54,4 +57,49 @@ export function smartMoney(limit = 40) {
 export function followingHoldings(wallets: Set<string>, limit = 40) {
   if (!wallets.size) return [];
   return byCollection(holdings().filter((r) => wallets.has(r.wallet)), () => 0).slice(0, limit);
+}
+
+// --- Minting: OpenSea drops, live and upcoming, across chains -------------------
+
+
+export type Drop = {
+  slug: string; name: string; chain: string; image: string | null; url: string; minting: boolean; featured: boolean;
+  stage: string | null; price: number | null; currency: string; priceUsd: number | null; startsAt: number | null; endsAt: number | null;
+};
+let dropCache: { at: number; data: Drop[] } | null = null;
+async function loadDrops(): Promise<Drop[]> {
+  const [featured, upcoming, recent] = await Promise.all(
+    (["featured", "upcoming", "recently_minted"] as const).map((t) => getOsDrops(t, 30).catch(() => [])));
+  const seen = new Set<string>();
+  const out: Drop[] = [];
+  for (const [list, src] of [[featured, "featured"], [upcoming, "upcoming"], [recent, "recent"]] as const) {
+    for (const d of list) {
+      if (seen.has(d.collection_slug)) continue;
+      seen.add(d.collection_slug);
+      const stage = d.active_stage ?? d.next_stage;
+      const native = (EVM_CHAINS as Record<string, { native: string }>)[d.chain]?.native ?? "ETH";
+      const price = stage?.price != null ? Number(BigInt(stage.price)) / 1e18 : null;
+      const start = stage?.start_time ? Date.parse(stage.start_time) / 1000 : null;
+      const end = d.active_stage?.end_time ? Date.parse(d.active_stage.end_time) / 1000 : null;
+      out.push({
+        slug: d.collection_slug, name: d.collection_name, chain: d.chain, image: d.image_url, url: d.opensea_url,
+        minting: d.is_minting, featured: src === "featured",
+        stage: stage?.label ?? stage?.stage_type ?? null, price, currency: native, priceUsd: price != null ? (usdPrice(native) ?? 0) * price || null : null,
+        startsAt: start, endsAt: end,
+      });
+    }
+  }
+  // Live mints first (featured first), then upcoming by start time, then the rest.
+  const now = Date.now() / 1000;
+  const rank = (x: Drop) => (x.minting ? 0 : x.startsAt && x.startsAt > now ? 1 : 2);
+  out.sort((a, b) => rank(a) - rank(b) || Number(b.featured) - Number(a.featured) || (a.startsAt ?? 0) - (b.startsAt ?? 0));
+  return out;
+}
+
+export async function mintingDrops() {
+  if (!hasOsKey()) return [];
+  if (dropCache && Date.now() - dropCache.at < 10 * 60_000) return dropCache.data;
+  const data = await loadDrops();
+  dropCache = { at: Date.now(), data };
+  return data;
 }

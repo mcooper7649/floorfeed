@@ -162,6 +162,7 @@ for (const col of [
   "royalty_bps INTEGER", "seller_fee_bps INTEGER",
   // collection page links (OpenSea info for EVM)
   "website TEXT", "twitter TEXT", "discord TEXT", "contract TEXT",
+  "created_ext TEXT", // collection creation date (OpenSea), for "New & hot"
 ]) {
   try { db.exec(`ALTER TABLE collections ADD COLUMN ${col}`); } catch {}
 }

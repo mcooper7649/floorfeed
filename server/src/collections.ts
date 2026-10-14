@@ -122,6 +122,7 @@ export function listCollections() {
       volume24h: isLive ? w.vol : null,
       volume24hUsd: isLive ? toUsd(w.vol, "SOL") : null,
       spark: daily(sales).map((d) => ({ day: d.day, median: d.median })),
+      createdAt: null as string | null,
     };
   });
   const evm = EVM_COLLECTIONS.map(({ slug, name, chain, category }) => {
@@ -151,6 +152,7 @@ export function listCollections() {
       volume24hUsd: toUsd(c.volume_24h_ext ?? null, currency),
       // Sale medians once OpenSea sales are in; until then our floor snapshots.
       spark: evmSpark(slug, now),
+      createdAt: (c as CollectionRow & { created_ext?: string | null }).created_ext || null, // YYYY-MM-DD
     };
   });
   return [...sol, ...evm].sort((a, b) => (b.volume7dUsd ?? 0) - (a.volume7dUsd ?? 0));

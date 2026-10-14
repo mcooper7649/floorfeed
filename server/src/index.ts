@@ -3,7 +3,7 @@ import cors from "@fastify/cors";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import { z } from "zod";
 import { cachedTake, getTake } from "./ai.ts";
-import { followingHoldings, smartMoney } from "./discover.ts";
+import { followingHoldings, mintingDrops, smartMoney } from "./discover.ts";
 import { GUIDE } from "./guide.ts";
 import { refreshPrices, tickerPrices } from "./prices.ts";
 import { dashboard, record, startAnalytics, summary, type Hit } from "./analytics.ts";
@@ -583,6 +583,7 @@ app.get("/discover/holders", async (req, reply) => {
     : new Set<string>();
   return { smart: smartMoney(), following: followingHoldings(followed) };
 });
+app.get("/drops", async () => mintingDrops());
 app.get("/prices", async (_req, reply) => reply.header("cache-control", "public, max-age=60").send(tickerPrices()));
 
 // --- Wallet alerts: inbox and web push (alerts.ts) ---

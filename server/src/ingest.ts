@@ -24,9 +24,9 @@ const insertSnapshot = db.prepare(
   `INSERT OR IGNORE INTO collection_snapshots (symbol, ts, floor, listed) VALUES (?, ?, ?, ?)`,
 );
 // EVM: art missing, or fees not read yet (fees.ts)
-const needsInfo = db.prepare(`SELECT image IS NULL AS missing, seller_fee_bps IS NULL OR contract IS NULL AS noFees FROM collections WHERE symbol = ?`);
+const needsInfo = db.prepare(`SELECT image IS NULL AS missing, seller_fee_bps IS NULL OR contract IS NULL OR created_ext IS NULL AS noFees FROM collections WHERE symbol = ?`);
 const setSellerFee = db.prepare(`UPDATE collections SET seller_fee_bps = ? WHERE symbol = ?`);
-const setLinks = db.prepare(`UPDATE collections SET website = ?, twitter = ?, discord = ?, contract = ? WHERE symbol = ?`);
+const setLinks = db.prepare(`UPDATE collections SET website = ?, twitter = ?, discord = ?, contract = ?, created_ext = COALESCE(?, '') WHERE symbol = ?`);
 
 // Official metadata (logo, description) for Solana collections. Magic Eden's
 // metadata endpoint rate-limits hard, so each collection is retried on a
@@ -244,7 +244,7 @@ export async function refreshEvmStats() {
         const info = await getOsInfo(c.slug);
         setEvmInfo.run(info.image, info.description, info.supply, info.url, c.slug);
         setSellerFee.run(info.feeBps, c.slug);
-        setLinks.run(info.website, info.twitter, info.discord, info.contract, c.slug);
+        setLinks.run(info.website, info.twitter, info.discord, info.contract, info.created, c.slug);
       }
     } catch (err) {
       console.warn(`[opensea] ${c.slug}:`, (err as Error).message);

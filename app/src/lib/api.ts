@@ -178,6 +178,12 @@ export type CollectionSummary = {
   volume24h: number | null;
   volume24hUsd: number | null;
   spark: { day: number; median: number }[];
+  createdAt?: string | null; // YYYY-MM-DD, EVM collections (OpenSea)
+};
+// A mint (OpenSea drop): live or upcoming.
+export type Drop = {
+  slug: string; name: string; chain: string; image: string | null; url: string; minting: boolean; featured: boolean;
+  stage: string | null; price: number | null; currency: string; priceUsd: number | null; startsAt: number | null; endsAt: number | null;
 };
 
 export type Listing = { mint: string; price: number; name: string | null; image: string | null; rank: number | null };
@@ -408,6 +414,7 @@ export const api = {
   holders: (userId?: string | null) =>
     req<{ smart: HolderRow[]; following: HolderRow[] }>(`/discover/holders${userId ? `?userId=${encodeURIComponent(userId)}` : ''}`),
   prices: () => req<TickerPrice[]>('/prices'),
+  drops: () => req<Drop[]>('/drops'),
   guide: () => req<GuideSection[]>('/guide'),
   collectionHolders: (symbol: string) => req<CollectionHolder[]>(`/collections/${encodeURIComponent(symbol)}/holders`),
   collectionSales: (symbol: string) => req<CollectionSale[]>(`/collections/${encodeURIComponent(symbol)}/sales`),

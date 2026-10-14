@@ -83,6 +83,7 @@ export async function getOsInfo(slug: string) {
     fees?: { fee: number; required: boolean }[];
     project_url?: string; twitter_username?: string; discord_url?: string;
     contracts?: { address: string; chain: string }[];
+    created_date?: string;
   }>(`/collections/${slug}`);
   return {
     // Fees a seller can't avoid (OpenSea's own plus enforced creator fees), in basis points.
@@ -90,6 +91,7 @@ export async function getOsInfo(slug: string) {
     twitter: c.twitter_username || null,
     discord: c.discord_url || null,
     contract: c.contracts?.[0]?.address?.toLowerCase() ?? null,
+    created: c.created_date || null, // YYYY-MM-DD
     feeBps: c.fees ? Math.round(c.fees.filter((f) => f.required).reduce((a, f) => a + f.fee, 0) * 100) : null,
     image: c.image_url || null,
     description: c.description || null,
@@ -272,4 +274,17 @@ export async function getOsWeek(slug: string) {
   const s = await get<{ total: { floor_price?: number; floor_price_symbol?: string }; intervals: Interval[] }>(`/collections/${slug}/stats`);
   const week = s.intervals.find((i) => i.interval === "seven_day");
   return { floor: s.total.floor_price ?? null, symbol: s.total.floor_price_symbol || "", sales7d: week?.sales ?? 0, volume7d: week?.volume ?? 0 };
+}
+
+// --- Drops (mints): featured, upcoming and recently minted, across chains ---
+
+type OsDrop = {
+  collection_slug: string; collection_name: string; chain: string; contract_address: string; is_minting: boolean;
+  image_url: string | null; opensea_url: string;
+  active_stage: { label?: string; stage_type?: string; price?: string; start_time?: string; end_time?: string } | null;
+  next_stage: { label?: string; stage_type?: string; price?: string; start_time?: string } | null;
+};
+export async function getOsDrops(type: "featured" | "upcoming" | "recently_minted", limit = 30) {
+  const r = await get<{ drops: OsDrop[] }>(`/drops?type=${type}&limit=${limit}`);
+  return r.drops ?? [];
 }
