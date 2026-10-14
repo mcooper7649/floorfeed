@@ -18,7 +18,7 @@ import { db } from "./db.ts";
 import { feedEvents, traders } from "./feed.ts";
 import { loadDiscovered } from "./discovery.ts";
 import { itemDetail, warmRarity } from "./items.ts";
-import { EVM_ADDRESS_RE, evmBalances, evmBuyTx, evmHoldings, evmNftTransferTx, evmQuote, evmTransferFee, totalEth } from "./trade-evm.ts";
+import { EVM_ADDRESS_RE, evmApproveTx, evmBalances, evmBuyTx, evmHoldings, evmNftTransferTx, evmQuote, evmSellQuote, evmSellTx, evmTransferFee, totalEth } from "./trade-evm.ts";
 import { startIngest } from "./ingest.ts";
 import { KINDS, generate, nextPost, postedSince, reportResult, startSocial, submitExternal, xLength } from "./social.ts";
 import { amountsFrom, feeRates } from "./fees.ts";
@@ -713,6 +713,35 @@ app.post("/trade/evm/buy-tx", async (req, reply) => {
   } catch (err) {
     return reply.code(409).send({ error: (err as Error).message });
   }
+});
+
+// Selling into the best OpenSea offer: quote (offer, ownership, approval), the
+// one-time conduit approval, then the fill. Every transaction is simulated as
+// the seller and signed in their wallet.
+const MINT_RE = /^0x[0-9a-fA-F]{40}:\d{1,78}$/;
+app.get("/trade/evm/sell-quote/:symbol", async (req, reply) => {
+  const { symbol } = req.params as { symbol: string };
+  const q = z.object({ seller: z.string().regex(EVM_ADDRESS_RE), id: z.string().regex(MINT_RE) }).parse(req.query);
+  const quote = await evmSellQuote(symbol, q.id, q.seller).catch((err) => { req.log.warn({ err }, "evm sell quote"); return null; });
+  if (!quote) return reply.code(404).send({ error: "No quote for this NFT" });
+  return quote;
+});
+app.post("/trade/evm/approve-tx", async (req, reply) => {
+  const b = z.object({
+    chain: z.string(), contract: z.string().regex(EVM_ADDRESS_RE),
+    owner: z.string().regex(EVM_ADDRESS_RE), operator: z.string().regex(EVM_ADDRESS_RE),
+  }).parse(req.body);
+  try { return await evmApproveTx(b); } catch (err) { return reply.code(409).send({ error: (err as Error).message }); }
+});
+app.post("/trade/evm/sell-tx", async (req, reply) => {
+  const b = z.object({
+    orderHash: z.string().regex(/^0x[0-9a-fA-F]{64}$/),
+    protocolAddress: z.string().regex(EVM_ADDRESS_RE),
+    chain: z.string(),
+    seller: z.string().regex(EVM_ADDRESS_RE),
+    mint: z.string().regex(MINT_RE),
+  }).parse(req.body);
+  try { return await evmSellTx(b); } catch (err) { return reply.code(409).send({ error: (err as Error).message }); }
 });
 
 // --- Withdrawals from the Privy wallets (the user's wallet signs every one) ---

@@ -4,6 +4,7 @@ import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, StyleSheet
 
 import { ChainBadge } from '@/components/chain-badge';
 import { EvmBuySheet } from '@/components/evm-buy-sheet';
+import { EvmSellSheet } from '@/components/evm-sell-sheet';
 import { Avatar, TierBadge } from '@/components/event-card';
 import { NftImage, Pill } from '@/components/nft-image';
 import { Empty } from '@/components/screen';
@@ -13,6 +14,7 @@ import { C } from '@/constants/brand';
 import { T, display } from '@/constants/type';
 import { api, type ItemDetail } from '@/lib/api';
 import { shortAddr, signedSol, sol, timeAgo } from '@/lib/format';
+import { useEvmWallet } from '@/lib/evm-wallet';
 import { useLayout } from '@/lib/layout';
 import { useTradeMode } from '@/lib/mode';
 import { useTitle } from '@/lib/use-title';
@@ -40,6 +42,8 @@ export default function ItemScreen() {
   const { wide, pad, maxWidth } = useLayout();
   const { mode } = useTradeMode();
   const [buyOpen, setBuyOpen] = useState(false);
+  const [sellOpen, setSellOpen] = useState(false);
+  const evmWallet = useEvmWallet();
 
   useTitle(data && `${data.name ?? data.collection.name}${data.rarity ? ` · Rank ${data.rarity.rank.toLocaleString()}` : ''}: traits, rarity & sales | FloorFeed`);
 
@@ -59,6 +63,8 @@ export default function ItemScreen() {
   const title = data.name ?? `${data.collection.name} ${shortAddr(data.id)}`;
   const b = data.rarity ? band(data.rarity.rank, data.rarity.total) : null;
   const market = data.chain === 'solana' ? 'Magic Eden' : 'OpenSea';
+  // The connected Ethereum wallet holds this NFT: offer the in-app sale (the quote re-checks ownership on chain).
+  const mine = data.chain !== 'solana' && !!evmWallet.address && data.owner?.wallet?.toLowerCase() === evmWallet.address;
   const vsFloor = data.listing && data.collection.floor
     ? ((data.listing.price - data.collection.floor) / data.collection.floor) * 100 : null;
 
@@ -109,7 +115,11 @@ export default function ItemScreen() {
       )}
 
       <View style={s.ctaRow}>
-        {data.listing && data.chain !== 'solana' && mode === 'real' ? (
+        {mine ? (
+          <Pressable accessibilityRole="button" onPress={() => setSellOpen(true)} style={s.primary}>
+            <Text style={s.primaryTxt}>Sell to the best offer</Text>
+          </Pressable>
+        ) : data.listing && data.chain !== 'solana' && mode === 'real' ? (
           <Pressable accessibilityRole="button" onPress={() => setBuyOpen(true)} style={s.primary}>
             <Text style={s.primaryTxt}>Buy now · {sol(data.listing.price, 2, u)}</Text>
           </Pressable>
@@ -185,6 +195,7 @@ export default function ItemScreen() {
       <Stack.Screen options={{ title }} />
       {nav}
       {data.chain !== 'solana' && <EvmBuySheet symbol={data.symbol} id={data.id} open={buyOpen} onClose={() => setBuyOpen(false)} />}
+      {mine && <EvmSellSheet symbol={data.symbol} id={data.id} open={sellOpen} onClose={() => setSellOpen(false)} />}
       <ScrollView contentContainerStyle={{ padding: pad, paddingBottom: 60, width: '100%', maxWidth, alignSelf: 'center', gap: 24 }}>
         {wide ? (
           <View style={{ flexDirection: 'row', gap: 32, alignItems: 'flex-start' }}>

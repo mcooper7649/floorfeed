@@ -293,6 +293,22 @@ export type EvmQuote = {
   reason: string | null;
   marketUrl: string;
 };
+export type EvmSellQuote = {
+  collection: { symbol: string; name: string; floor: number | null };
+  chain: string; mint: string; name: string; image: string | null;
+  boughtAt: number | null;
+  offer: {
+    price: number; net: number; currency: string; unit: string; orderHash: string; protocolAddress: string; chain: string;
+    kind: 'item' | 'trait' | 'collection'; expiresAt: number | null; belowFloor: number | null;
+  } | null;
+  owned: boolean | null;
+  approved: boolean | null;
+  operator: string | null;
+  executable: boolean;
+  reason: string | null;
+  marketUrl: string;
+};
+export type EvmTxOut = { chainId: number; to: string; data: string; value: string; gas: string; explorerTx?: string };
 export type EvmBuyTx = {
   chainId: number; to: string; data: string; value: string; valueEth: number; gas: string; gasCostEth: number | null;
   explorerTx?: string;
@@ -368,6 +384,12 @@ export const api = {
   },
   evmBuyTx: (b: { orderHash: string; protocolAddress: string; chain: string; buyer: string }) =>
     send('POST', '/trade/evm/buy-tx', b) as Promise<EvmBuyTx>,
+  evmSellQuote: (symbol: string, seller: string, id: string) =>
+    req<EvmSellQuote>(`/trade/evm/sell-quote/${encodeURIComponent(symbol)}?${new URLSearchParams({ seller, id })}`),
+  evmApproveTx: (b: { chain: string; contract: string; owner: string; operator: string }) =>
+    send('POST', '/trade/evm/approve-tx', b) as Promise<EvmTxOut>,
+  evmSellTx: (b: { orderHash: string; protocolAddress: string; chain: string; seller: string; mint: string }) =>
+    send('POST', '/trade/evm/sell-tx', b) as Promise<EvmTxOut>,
   feed: (p: { before?: number; following?: string } = {}) => {
     const q = new URLSearchParams({ limit: '25' });
     if (p.before) q.set('before', String(p.before));

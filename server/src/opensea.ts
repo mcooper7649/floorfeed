@@ -263,6 +263,65 @@ export async function getOsFulfillment(orderHash: string, chain: string, protoco
 }
 
 // Top collections on a chain by 7-day volume (metadata only; no prices).
+// The best offer a holder could accept for one NFT right now: an item,
+// trait or collection offer, whichever pays most. `net` is what the seller
+// receives: the offer minus the fee and royalty items the offer's own
+// consideration pays out of it.
+export async function getOsBestOffer(slug: string, id: string) {
+  try {
+    const r = await get<{
+      order_hash?: string; chain?: string; protocol_address?: string; status?: string;
+      price?: { value: string; decimals: number; currency: string };
+      criteria?: { traits?: { type: string; value: string }[] | null } | null;
+      protocol_data?: { parameters?: {
+        offer?: { token: string; startAmount: string }[];
+        consideration?: { itemType: number; token: string; startAmount: string }[];
+        endTime?: string;
+      } };
+    }>(`/offers/collection/${slug}/nfts/${id}/best`);
+    const p = r.price;
+    const params = r.protocol_data?.parameters;
+    if (!p || !r.order_hash || !r.protocol_address || !params?.offer?.length) return null;
+    const token = params.offer[0].token.toLowerCase();
+    const gross = BigInt(params.offer[0].startAmount);
+    // ERC-20 items (itemType 1) in the offer's token go to fees and royalties.
+    const fees = (params.consideration ?? [])
+      .filter((c) => c.itemType === 1 && c.token.toLowerCase() === token)
+      .reduce((a, c) => a + BigInt(c.startAmount), 0n);
+    const scale = 10 ** p.decimals;
+    return {
+      price: Number(p.value) / scale,
+      net: Number(gross - fees) / scale,
+      currency: p.currency,
+      orderHash: r.order_hash,
+      protocolAddress: r.protocol_address,
+      chain: fromOsChain(r.chain ?? "ethereum"),
+      kind: r.criteria?.traits?.length ? "trait" as const : r.criteria ? "collection" as const : "item" as const,
+      expiresAt: params.endTime ? Number(params.endTime) : null,
+    };
+  } catch {
+    return null; // 404 = no offers
+  }
+}
+
+// Seaport fill data for accepting an offer with one specific NFT. Trait and
+// collection offers need the token named so OpenSea can add the criteria proof.
+export async function getOsOfferFulfillment(p: {
+  orderHash: string; chain: string; protocolAddress: string; fulfiller: string; contract: string; tokenId: string;
+}) {
+  const r = await post<{ fulfillment_data?: { transaction?: {
+    function: string; chain: number; to: string; value: string | number; input_data: Record<string, unknown>;
+    calldata_suffix?: string;
+  } } }>("/offers/fulfillment_data", {
+    offer: { hash: p.orderHash, chain: osChain(p.chain), protocol_address: p.protocolAddress },
+    fulfiller: { address: p.fulfiller },
+    consideration: { asset_contract_address: p.contract, token_id: p.tokenId },
+  });
+  const tx = r.fulfillment_data?.transaction;
+  if (!tx) throw new Error("OpenSea returned no transaction for this offer");
+  return tx;
+}
+
 export async function getOsTopCollections(chain: string, limit = 25) {
   const r = await get<{ collections: {
     collection: string; name: string; category?: string | null; is_disabled?: boolean; is_nsfw?: boolean;

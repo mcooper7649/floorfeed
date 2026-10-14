@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { FlatList, Linking, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import { CollIcon } from '@/components/coll-icon';
+import { EvmSellSheet } from '@/components/evm-sell-sheet';
 import { MODE_COLOR, ModeToggle } from '@/components/mode-toggle';
 import { NftImage } from '@/components/nft-image';
 import { Screen } from '@/components/screen';
@@ -199,6 +200,7 @@ function RealPortfolio({ solAddress, evmAddress }: { solAddress: string | null; 
   const [solData, setSol] = useState<{ address: string; h: Holdings } | { address: string; error: string } | null>(null);
   const [evm, setEvm] = useState<{ address: string; h: EvmHoldings } | { address: string; error: string } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [selling, setSelling] = useState<Row | null>(null);
 
   const fetchData = useCallback(() => {
     const jobs: Promise<unknown>[] = [];
@@ -238,6 +240,11 @@ function RealPortfolio({ solAddress, evmAddress }: { solAddress: string | null; 
   ];
 
   return (
+    <>
+    {selling && (
+      <EvmSellSheet symbol={selling.collection.symbol} id={selling.mint} open onClose={() => setSelling(null)}
+        onSold={() => setTimeout(fetchData, 20_000)} />
+    )}
     <FlatList
       data={rows}
       keyExtractor={(n) => n.mint}
@@ -282,11 +289,13 @@ function RealPortfolio({ solAddress, evmAddress }: { solAddress: string | null; 
             value={n.estValue != null ? sol(n.estValue, 3, n.unit) : '—'}
             sub={p != null ? signedSol(p, 3, n.unit) : undefined}
             subColor={p != null ? (p >= 0 ? C.up : C.down) : undefined}
-            action={<RowAction label="Sell" onPress={() => Linking.openURL(sellUrl)} />}
+            // Ethereum-family NFTs sell in-app into the best offer; Solana still finishes on Magic Eden.
+            action={<RowAction label="Sell" onPress={() => (n.chain === 'evm' ? setSelling(n) : Linking.openURL(sellUrl))} />}
           />
         );
       }}
     />
+    </>
   );
 }
 
