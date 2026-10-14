@@ -284,6 +284,7 @@ export type EvmQuote = {
   currency?: Unit;         // the collection's unit
   native?: string | null;  // the chain's gas token, what a buy is paid in
   balance?: number | null; // buyer's balance in `native`
+  elsewhere?: { chain: string; balance: number }[]; // the same token on other chains
   listing: {
     mint: string; price: number; currency?: string; orderHash: string | null; protocolAddress: string | null; chain: string;
     name: string | null; image: string | null;

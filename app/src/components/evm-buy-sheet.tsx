@@ -54,6 +54,7 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
   const priceUnit = q?.currency ?? unit; // listings show in the collection's currency (Axie: ETH on Ronin)
   const balance = q?.balance ?? q?.balanceEth ?? null;
   const short = price != null && balance != null && q?.executable ? price - balance : null;
+  const elsewhere = q?.elsewhere ?? [];
   const close = () => { setStep({ kind: 'idle' }); onClose(); };
 
   const buy = async () => {
@@ -138,8 +139,20 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
 
               {short != null && short > 0 ? (
                 <>
-                  <Text style={s.err}>Not enough {unit}: you need about {sol(short, 3, unit)} more, plus gas.</Text>
-                  {unit === 'ETH' ? (
+                  <Text style={s.err}>
+                    Not enough {unit} on {chainName(q.chain)}: you have {sol(balance ?? 0, 4, unit)} there and need about {sol(short, 3, unit)} more, plus gas.
+                  </Text>
+                  {elsewhere.length > 0 && (
+                    <Text style={s.meta}>
+                      Your {unit} is on {elsewhere.map((e) => `${chainName(e.chain)} (${sol(e.balance, 4, unit)})`).join(', ')}.
+                      Each network keeps its own balance, so NFTs on {chainName(q.chain)} need {unit} on {chainName(q.chain)}. A bridge moves it over, usually in under a minute.
+                    </Text>
+                  )}
+                  {elsewhere.length > 0 && unit === 'ETH' && q.chain !== 'ethereum' ? (
+                    <Pressable accessibilityRole="link" onPress={() => { track('bridge_click', { chain: q.chain }); void Linking.openURL(`https://relay.link/bridge/${q.chain}`); }} style={s.primary}>
+                      <Text style={s.primaryTxt}>Bridge ETH to {chainName(q.chain)} ↗</Text>
+                    </Pressable>
+                  ) : unit === 'ETH' && q.chain === 'ethereum' ? (
                     <Pressable accessibilityRole="button" onPress={() => setDeposit(true)} style={s.primary}>
                       <Text style={s.primaryTxt}>Deposit ETH</Text>
                     </Pressable>

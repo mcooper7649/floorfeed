@@ -37,15 +37,22 @@ const isTradable = (c: string): c is EvmChain => (TRADABLE as string[]).includes
 
 // --- balances and holdings ---
 
-const balanceCache = new Map<string, { at: number; v: Record<EvmChain, number> }>();
-export async function evmBalances(address: string) {
+const balanceCache = new Map<string, { at: number; v: Record<EvmChain, number>; failed: Set<EvmChain> }>();
+async function loadBalances(address: string) {
   const key = address.toLowerCase();
   const hit = balanceCache.get(key);
-  if (hit && Date.now() - hit.at < 15_000) return hit.v;
-  const wei = await Promise.all(TRADABLE.map((c) => (clients[c] as unknown as PublicClient).getBalance({ address: address as Hex }).catch(() => 0n)));
+  if (hit && Date.now() - hit.at < 15_000) return hit;
+  const failed = new Set<EvmChain>();
+  const wei = await Promise.all(TRADABLE.map((c) => (clients[c] as unknown as PublicClient).getBalance({ address: address as Hex })
+    .catch(() => { failed.add(c); return 0n; })));
   const v = Object.fromEntries(TRADABLE.map((c, i) => [c, Number(formatEther(wei[i]))])) as Record<EvmChain, number>;
-  balanceCache.set(key, { at: Date.now(), v });
-  return v;
+  // Don't cache a read where an RPC failed: a 0 there isn't a real balance.
+  const entry = { at: failed.size ? 0 : Date.now(), v, failed };
+  balanceCache.set(key, entry);
+  return entry;
+}
+export async function evmBalances(address: string) {
+  return (await loadBalances(address)).v;
 }
 // Balances summed per native token: { ETH: across ETH chains, HYPE: ..., ... }.
 export function nativeTotals(b: Record<string, number>) {
@@ -132,9 +139,17 @@ export async function evmQuote(symbol: string, buyer: string | undefined, id: st
   // tokens (WETH, WRON...) need a separate approval transaction first.
   const nativePriced = !!listing && listing.currency === native;
   const tradable = isTradable(chain) && nativePriced && !!listing?.orderHash && !!listing?.protocolAddress;
-  const balances = buyer ? await evmBalances(buyer).catch(() => null) : null;
+  const read = buyer ? await loadBalances(buyer).catch(() => null) : null;
+  const balances = read?.v ?? null;
   const floor = (floorOf.get(symbol) as { floor: number | null } | undefined)?.floor ?? null;
-  const balance = balances && isTradable(chain) ? balances[chain] : null;
+  // null = unknown (RPC down), so the app doesn't claim an empty wallet.
+  const balance = balances && isTradable(chain) && !read!.failed.has(chain) ? balances[chain] : null;
+  // The same gas token on other chains (ETH on Ethereum while buying on Ink...):
+  // the usual reason a "funded" wallet can't pay.
+  const elsewhere = balances && native
+    ? TRADABLE.filter((c) => c !== chain && EVM_CHAINS[c].native === native && balances[c] > 0)
+        .map((c) => ({ chain: c, balance: balances[c] })).sort((a, b) => b.balance - a.balance)
+    : [];
   return {
     collection: { symbol, name: meta.name, floor },
     chain,
@@ -147,6 +162,7 @@ export async function evmQuote(symbol: string, buyer: string | undefined, id: st
     },
     balance,
     balanceEth: balance, // older app builds
+    elsewhere,
     executable: tradable,
     reason: !listing ? `No ${unit} listing is live right now.`
       : !isTradable(chain) ? `Buying on ${chain} isn't supported yet.`
