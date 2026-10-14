@@ -229,11 +229,13 @@ export async function getOsBestListings(slug: string, limit = 20) {
 }
 
 // A wallet's NFTs on one chain (up to `pages` x 200).
-export async function getOsAccountNfts(chain: string, address: string, pages = 3) {
+// 100 per page: OpenSea answers limit=200 with an empty list on some chains
+// (Ink, 2026-10-14) while 100-199 work, so stay well under it.
+export async function getOsAccountNfts(chain: string, address: string, pages = 6) {
   const out: { collection: string; contract: string; identifier: string; name: string | null; image: string | null }[] = [];
   let next: string | undefined;
   for (let i = 0; i < pages; i++) {
-    const q = new URLSearchParams({ limit: "200" });
+    const q = new URLSearchParams({ limit: "100" });
     if (next) q.set("next", next);
     const r = await get<{ nfts: { collection: string; contract: string; identifier: string; name?: string | null;
       display_image_url?: string | null; image_url?: string | null }[]; next?: string | null }>(
