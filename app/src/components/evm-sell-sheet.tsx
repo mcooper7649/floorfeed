@@ -36,6 +36,7 @@ export function EvmSellSheet({ symbol, id, open, onClose, onSold }: {
   const [quote, setQuote] = useState<{ key: string; q: EvmSellQuote } | { key: string; error: string } | null>(null);
   const [step, setStep] = useState<Step>({ kind: 'idle' });
   const [nonce, setNonce] = useState(0);
+  const [justApproved, setJustApproved] = useState(false); // step 1 done in this session: make step 2 obvious
   const key = `${symbol}:${id}:${w.address}:${nonce}`;
   useEffect(() => { if (open) track('sell_open', { chain: 'evm' }); }, [open]);
 
@@ -59,6 +60,7 @@ export function EvmSellSheet({ symbol, id, open, onClose, onSold }: {
       if (q?.approved) {
         clearInterval(polling.current!);
         polling.current = null;
+        setJustApproved(true);
         setNonce((n) => n + 1); // refetch: the quote now shows approved
         setStep({ kind: 'idle' });
       } else if (Date.now() - started > 5 * 60_000) {
@@ -88,7 +90,7 @@ export function EvmSellSheet({ symbol, id, open, onClose, onSold }: {
     setStep({ kind: 'approving' });
     try {
       const tx = await api.evmApproveTx({ chain: q.chain, contract: id.split(':')[0], owner: w.address, operator: q.operator });
-      const hash = await w.send({ ...tx, description: `Let OpenSea move your ${q.collection.name} NFTs when you accept offers` });
+      const hash = await w.send({ ...tx, description: `Step 1 of 2: let OpenSea move your ${q.collection.name} NFTs when you accept offers. This does not sell anything yet.` });
       track('sell_approved', { chain: q.chain });
       setStep({ kind: 'approving', hash });
       waitForApproval(w.address);
@@ -178,13 +180,21 @@ export function EvmSellSheet({ symbol, id, open, onClose, onSold }: {
               {step.kind === 'error' && <Text style={s.err}>{step.message}</Text>}
 
               {q.executable && w.send && (q.approved ? (
-                <Pressable accessibilityRole="button" onPress={sell} disabled={busy} style={[s.primary, busy && { opacity: 0.7 }]}>
-                  <Text style={s.primaryTxt}>
-                    {step.kind === 'preparing' ? 'Checking the offer…'
-                      : step.kind === 'confirm' ? 'Confirm in your wallet…'
-                      : `Sell for ${offer ? sol(offer.net, 4, offer.currency) : ''}`}
-                  </Text>
-                </Pressable>
+                <View style={{ gap: 8 }}>
+                  {justApproved && (
+                    <View style={s.stepBox}>
+                      <Text style={s.okLine}>✓ Step 1 done: selling is approved.</Text>
+                      <Text style={s.meta}>Step 2 of 2: confirm the sale below. Your NFT hasn&apos;t been sold yet.</Text>
+                    </View>
+                  )}
+                  <Pressable accessibilityRole="button" onPress={sell} disabled={busy} style={[s.primary, busy && { opacity: 0.7 }]}>
+                    <Text style={s.primaryTxt}>
+                      {step.kind === 'preparing' ? 'Checking the offer…'
+                        : step.kind === 'confirm' ? 'Confirm the sale in your wallet…'
+                        : `${justApproved ? 'Step 2: ' : ''}Sell for ${offer ? sol(offer.net, 4, offer.currency) : ''}`}
+                    </Text>
+                  </Pressable>
+                </View>
               ) : (
                 <View style={{ gap: 8 }}>
                   <Text style={s.meta}>
@@ -192,7 +202,7 @@ export function EvmSellSheet({ symbol, id, open, onClose, onSold }: {
                   </Text>
                   <Pressable accessibilityRole="button" onPress={approve} disabled={busy} style={[s.primary, busy && { opacity: 0.7 }]}>
                     <Text style={s.primaryTxt}>
-                      {step.kind === 'approving' ? (step.hash ? 'Waiting for the approval to confirm…' : 'Confirm in your wallet…') : 'Approve selling'}
+                      {step.kind === 'approving' ? (step.hash ? 'Waiting for the approval to confirm…' : 'Confirm the approval in your wallet…') : 'Step 1: Approve selling'}
                     </Text>
                   </Pressable>
                 </View>
@@ -245,6 +255,8 @@ const s = StyleSheet.create({
   err: { ...T.meta, color: C.down },
   warn: { ...T.meta, color: C.down },
   ok: { ...T.title, color: C.up },
+  okLine: { ...T.bodyStrong, color: C.up },
+  stepBox: { gap: 4, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: C.up },
   link: { ...T.label, textAlign: 'center' },
   primary: { backgroundColor: C.accent, borderRadius: 12, paddingVertical: 13, alignItems: 'center' },
   primaryTxt: { ...T.button, color: C.accentInk },
