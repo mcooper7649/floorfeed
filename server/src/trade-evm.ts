@@ -194,3 +194,45 @@ export async function evmBuyTx(p: { orderHash: string; protocolAddress: string; 
   };
 }
 
+
+// --- withdrawals: plain transfers out of the user's Privy wallet ---
+
+const ERC721_TRANSFER = parseAbiItem("function safeTransferFrom(address from, address to, uint256 tokenId)");
+const ERC1155_TRANSFER = parseAbiItem("function safeTransferFrom(address from, address to, uint256 id, uint256 amount, bytes data)");
+const OWNER_OF = parseAbiItem("function ownerOf(uint256 tokenId) view returns (address)");
+const BALANCE_1155 = parseAbiItem("function balanceOf(address account, uint256 id) view returns (uint256)");
+const SUPPORTS = parseAbiItem("function supportsInterface(bytes4 interfaceId) view returns (bool)");
+
+// What a plain native-token transfer costs right now (21k gas, with headroom),
+// so "Max" leaves enough for the fee.
+export async function evmTransferFee(chain: string) {
+  if (!isTradable(chain)) throw new Error("Unsupported chain");
+  const c = clients[chain] as unknown as PublicClient;
+  const gasPrice = await c.getGasPrice();
+  const fee = (gasPrice * 21_000n * 13n) / 10n;
+  return { chain, chainId: c.chain!.id, native: EVM_CHAINS[chain].native, fee: Number(formatEther(fee)) };
+}
+
+// An NFT transfer from the user's wallet to another address: checks the
+// wallet owns it, picks ERC-721 or ERC-1155, and simulates it as the sender.
+export async function evmNftTransferTx(b: { chain: string; contract: string; tokenId: string; from: string; to: string }) {
+  if (!isTradable(b.chain)) throw new Error("Unsupported chain");
+  const c = clients[b.chain] as unknown as PublicClient;
+  const contract = b.contract as Hex, from = b.from as Hex, to = b.to as Hex;
+  const id = BigInt(b.tokenId);
+  const is1155 = await c.readContract({ address: contract, abi: [SUPPORTS], functionName: "supportsInterface", args: ["0xd9b67a26"] }).catch(() => false);
+  let data: Hex;
+  if (is1155) {
+    const bal = await c.readContract({ address: contract, abi: [BALANCE_1155], functionName: "balanceOf", args: [from, id] });
+    if (bal < 1n) throw new Error("This wallet doesn't hold that NFT.");
+    data = encodeFunctionData({ abi: [ERC1155_TRANSFER], functionName: "safeTransferFrom", args: [from, to, id, 1n, "0x"] });
+  } else {
+    const owner = await c.readContract({ address: contract, abi: [OWNER_OF], functionName: "ownerOf", args: [id] }).catch(() => null);
+    if (!owner || owner.toLowerCase() !== from.toLowerCase()) throw new Error("This wallet doesn't hold that NFT.");
+    data = encodeFunctionData({ abi: [ERC721_TRANSFER], functionName: "safeTransferFrom", args: [from, to, id] });
+  }
+  const gas = await c.estimateGas({ account: from, to: contract, data }).catch((err: Error) => {
+    throw new Error(`The transfer would fail: ${err.message.split("\n")[0]}`);
+  });
+  return { chainId: c.chain!.id, to: contract, data, value: "0", gas: ((gas * 12n) / 10n).toString(), standard: is1155 ? "erc1155" : "erc721" };
+}

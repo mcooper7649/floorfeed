@@ -9,7 +9,7 @@ import { refreshPrices, tickerPrices } from "./prices.ts";
 import { dashboard, record, startAnalytics, summary, type Hit } from "./analytics.ts";
 import { checkAlerts, hasPush, inbox, markRead, pushKey, startAlerts, subscribe, syncWebhook, unreadCount, unsubscribe } from "./alerts.ts";
 import { adoptDevice, authorize, privyUser } from "./auth.ts";
-import { ADDRESS_RE, capabilities, collectionOfMint, hasDas, holdings, solBalance } from "./chain.ts";
+import { ADDRESS_RE, capabilities, collectionOfMint, hasDas, holdings, rpc, solBalance } from "./chain.ts";
 import { cheapestListings, collectionDetail, listCollections, listingLadder } from "./collections.ts";
 import { collectionAbout, collectionHolders, collectionMarkers, collectionSales } from "./collection-tabs.ts";
 import { TakeError, collectionTakes, deleteTake, postTake, reportTake, signedMessage, takeMarkers, toggleLike } from "./takes.ts";
@@ -18,7 +18,7 @@ import { db } from "./db.ts";
 import { feedEvents, traders } from "./feed.ts";
 import { loadDiscovered } from "./discovery.ts";
 import { itemDetail, warmRarity } from "./items.ts";
-import { EVM_ADDRESS_RE, evmBalances, evmBuyTx, evmHoldings, evmQuote, totalEth } from "./trade-evm.ts";
+import { EVM_ADDRESS_RE, evmBalances, evmBuyTx, evmHoldings, evmNftTransferTx, evmQuote, evmTransferFee, totalEth } from "./trade-evm.ts";
 import { startIngest } from "./ingest.ts";
 import { KINDS, generate, nextPost, postedSince, reportResult, startSocial, submitExternal, xLength } from "./social.ts";
 import { amountsFrom, feeRates } from "./fees.ts";
@@ -695,6 +695,28 @@ app.post("/trade/evm/buy-tx", async (req, reply) => {
   } catch (err) {
     return reply.code(409).send({ error: (err as Error).message });
   }
+});
+
+// --- Withdrawals from the Privy wallets (the user's wallet signs every one) ---
+app.get("/chain/blockhash", async (_req, reply) => {
+  try {
+    const r = await rpc<{ value: { blockhash: string; lastValidBlockHeight: number } }>("getLatestBlockhash", [{ commitment: "confirmed" }]);
+    return { blockhash: r.value.blockhash, lastValidBlockHeight: String(r.value.lastValidBlockHeight) };
+  } catch (err) {
+    return reply.code(502).send({ error: (err as Error).message });
+  }
+});
+app.get("/chain/evm/transfer-fee", async (req, reply) => {
+  const { chain } = z.object({ chain: z.string() }).parse(req.query);
+  try { return await evmTransferFee(chain); } catch (err) { return reply.code(400).send({ error: (err as Error).message }); }
+});
+app.post("/chain/evm/nft-transfer", async (req, reply) => {
+  const b = z.object({
+    chain: z.string(), contract: z.string().regex(EVM_ADDRESS_RE), tokenId: z.string().regex(/^\d{1,78}$/),
+    from: z.string().regex(EVM_ADDRESS_RE), to: z.string().regex(EVM_ADDRESS_RE),
+  }).parse(req.body);
+  if (b.from.toLowerCase() === b.to.toLowerCase()) return reply.code(400).send({ error: "That's the same wallet." });
+  try { return await evmNftTransferTx(b); } catch (err) { return reply.code(409).send({ error: (err as Error).message }); }
 });
 
 // One NFT: traits with rarity, rank, owner, listing and its sale history.

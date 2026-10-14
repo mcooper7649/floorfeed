@@ -349,7 +349,7 @@ export const api = {
   balance: (address: string) => req<{ lamports: number; sol: number }>(`/chain/balance/${address}`),
   holdings: (address: string) => req<Holdings>(`/chain/holdings/${address}`),
   quote: (symbol: string, buyer: string) => req<BuyQuote>(`/trade/quote/${symbol}?buyer=${buyer}`),
-  evmBalance: (address: string) => req<{ ethereum: number; base: number; eth: number }>(`/chain/evm/balance/${address}`),
+  evmBalance: (address: string) => req<Record<string, number> & { eth: number }>(`/chain/evm/balance/${address}`),
   evmHoldings: (address: string) => req<EvmHoldings>(`/chain/evm/holdings/${address}`),
   evmQuote: (symbol: string, buyer?: string, id?: string) => {
     const q = new URLSearchParams();
@@ -391,6 +391,10 @@ export const api = {
   likeTake: (id: number, userId: string) => send('POST', `/takes/${id}/like`, { userId }) as Promise<{ liked: boolean; likes: number }>,
   reportTake: (id: number, userId: string) => send('POST', `/takes/${id}/report`, { userId }),
   deleteTake: (id: number) => req<{ ok: boolean }>(`/takes/${id}`, { method: 'DELETE' }),
+  blockhash: () => req<{ blockhash: string; lastValidBlockHeight: string }>('/chain/blockhash'),
+  evmTransferFee: (chain: string) => req<{ chain: string; chainId: number; native: string; fee: number }>(`/chain/evm/transfer-fee?chain=${chain}`),
+  evmNftTransfer: (b: { chain: string; contract: string; tokenId: string; from: string; to: string }) =>
+    send('POST', '/chain/evm/nft-transfer', b) as Promise<{ chainId: number; to: string; data: string; value: string; gas: string; standard: string }>,
   pushKey: () => req<{ key: string }>('/push/key'),
   subscribePush: (userId: string, subscription: PushSubscriptionBody) => send('POST', '/push/subscribe', { userId, subscription }),
   unsubscribePush: (endpoint: string) => send('POST', '/push/unsubscribe', { endpoint }),

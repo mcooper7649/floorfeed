@@ -86,6 +86,7 @@ export const GUIDE: GuideSection[] = [
     title: "Your keys stay yours",
     blocks: [
       { p: "FloorFeed never holds your keys, your funds or your NFTs. A connected wallet asks before signing anything, and the built-in wallet's key is secured by Privy, not by us. Before you sign an Ethereum purchase, we simulate it so a failing transaction shows up before you pay gas." },
+      { p: "Withdraw any time: Send moves SOL, ETH or an Ethereum-chain NFT from your FloorFeed wallet to any address, and Export hands you the wallet's key so you can open it in Phantom or MetaMask with everything in it. There are no holds or limits." },
     ],
   },
   {

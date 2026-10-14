@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ChainBadge } from '@/components/chain-badge';
 import { DepositSheet } from '@/components/deposit-sheet';
+import { SendSheet } from '@/components/send-sheet';
 import { Card, RowAction } from '@/components/ui';
 import { useBalance, useCapabilities, useEvmBalance, WalletSheet } from '@/components/wallet-button';
 import { C } from '@/constants/brand';
@@ -21,6 +22,9 @@ export function WalletsCard() {
   const caps = useCapabilities();
   const [manage, setManage] = useState(false);
   const [deposit, setDeposit] = useState<'solana' | 'ethereum' | null>(null);
+  const [sendOpen, setSendOpen] = useState(false);
+  // Withdrawals are for the FloorFeed (Privy) wallets; extensions send from their own app.
+  const embedded = (chain: 'solana' | 'ethereum') => (chain === 'solana' ? w.kind : ew.kind) === 'embedded';
 
   const row = (chain: 'solana' | 'ethereum', address: string, name: string | null, balance: string) => (
     <View style={s.row} key={chain}>
@@ -29,6 +33,7 @@ export function WalletsCard() {
         <Text style={T.num} numberOfLines={1}>{balance}</Text>
         <Text style={T.metaNum} numberOfLines={1}>{shortAddr(address)}{name ? ` · ${name}` : ''}</Text>
       </View>
+      {embedded(chain) && <RowAction label="Send" onPress={() => setSendOpen(true)} />}
       <RowAction label="Deposit" onPress={() => setDeposit(chain)} />
     </View>
   );
@@ -51,6 +56,7 @@ export function WalletsCard() {
       <WalletSheet open={manage} onClose={() => setManage(false)} />
       <DepositSheet open={deposit === 'solana'} onClose={() => setDeposit(null)} />
       <DepositSheet chain="ethereum" open={deposit === 'ethereum'} onClose={() => setDeposit(null)} />
+      <SendSheet open={sendOpen} onClose={() => setSendOpen(false)} />
     </Card>
   );
 }

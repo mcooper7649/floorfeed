@@ -16,6 +16,9 @@ const NATIVE: AuthState = {
   evmAddress: null,
   sendEvm: null,
   fundEth: null,
+  sendSol: null,
+  exportSolana: null,
+  exportEvm: null,
 };
 
 const Ctx = createContext<AuthState>(NATIVE);

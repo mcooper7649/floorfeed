@@ -19,9 +19,16 @@ export type AuthState = {
   evmAddress: string | null;
   sendEvm: ((tx: EvmTx) => Promise<string>) | null;
   fundEth: ((address: string, amountEth?: string, chainId?: number) => Promise<void>) | null;
+  // Withdrawals from the Privy wallets: send SOL (resolves to the signature),
+  // and Privy's own key-export screens (the key never reaches FloorFeed).
+  sendSol: ((t: SolTransfer) => Promise<string>) | null;
+  exportSolana: (() => Promise<void>) | null;
+  exportEvm: (() => Promise<void>) | null;
 };
 
-export type EvmTx = { to: string; data: string; value: string; chainId: number; gas?: string };
+// `description` is shown in Privy's confirmation screen.
+export type EvmTx = { to: string; data: string; value: string; chainId: number; gas?: string; description?: string };
+export type SolTransfer = { to: string; lamports: string; blockhash: string; lastValidBlockHeight: string };
 
 // What the separately built Privy bundle (privy/entry.tsx) reports back.
 export type PrivyState = Omit<AuthState, 'supported'> & {

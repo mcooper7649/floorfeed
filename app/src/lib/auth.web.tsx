@@ -33,6 +33,9 @@ const OFF: AuthState = {
   evmAddress: null,
   sendEvm: null,
   fundEth: null,
+  sendSol: null,
+  exportSolana: null,
+  exportEvm: null,
 };
 
 const Ctx = createContext<AuthState>(OFF);
@@ -103,6 +106,9 @@ function PrivyLoader({ children }: { children: ReactNode }) {
         evmAddress: privy.evmAddress,
         sendEvm: privy.sendEvm,
         fundEth: privy.fundEth,
+        sendSol: privy.sendSol,
+        exportSolana: privy.exportSolana,
+        exportEvm: privy.exportEvm,
       }
     : {
         ...OFF,

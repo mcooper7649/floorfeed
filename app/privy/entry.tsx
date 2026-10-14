@@ -1,12 +1,20 @@
 import {
-  PrivyProvider, useCreateWallet, useFundWallet as useFundEvmWallet, usePrivy, useSendTransaction,
+  PrivyProvider, useCreateWallet, useExportWallet as useExportEvmWallet, useFundWallet as useFundEvmWallet, usePrivy, useSendTransaction,
 } from '@privy-io/react-auth';
-import { useFundWallet } from '@privy-io/react-auth/solana';
+import {
+  useExportWallet as useExportSolanaWallet, useFundWallet, useSignAndSendTransaction, useWallets as useSolanaWallets,
+} from '@privy-io/react-auth/solana';
+import { getTransferSolInstruction } from '@solana-program/system';
+import {
+  address as solAddress, appendTransactionMessageInstruction, blockhash as solBlockhash, compileTransaction, createNoopSigner,
+  createTransactionMessage, getBase58Decoder, getTransactionEncoder, pipe, setTransactionMessageFeePayerSigner,
+  setTransactionMessageLifetimeUsingBlockhash,
+} from '@solana/kit';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { abstract, apeChain, arbitrum, base, hyperEvm, ink, mainnet, monad, ronin } from 'viem/chains';
 
-import type { EvmTx, PrivyMountOptions, PrivyState } from '../src/lib/auth-types';
+import type { EvmTx, PrivyMountOptions, PrivyState, SolTransfer } from '../src/lib/auth-types';
 
 // Privy's SDK is several MB, so it is built on its own (scripts/build-privy.mjs)
 // and only fetched when someone signs in, or is already signed in. It runs in
@@ -39,6 +47,10 @@ function Bridge({ onState }: { onState: (s: PrivyState) => void }) {
   const { fundWallet: fundEvmWallet } = useFundEvmWallet();
   const { sendTransaction } = useSendTransaction();
   const { createWallet } = useCreateWallet();
+  const { signAndSendTransaction } = useSignAndSendTransaction();
+  const { wallets: solWallets } = useSolanaWallets();
+  const { exportWallet: exportSol } = useExportSolanaWallet();
+  const { exportWallet: exportEth } = useExportEvmWallet();
 
   const userId = authenticated && user ? user.id : null;
   const label = user?.email?.address ?? user?.google?.email ?? null;
@@ -63,10 +75,27 @@ function Bridge({ onState }: { onState: (s: PrivyState) => void }) {
   const sendEvm = useCallback(async (tx: EvmTx) => {
     const { hash } = await sendTransaction(
       { to: tx.to, data: tx.data, value: BigInt(tx.value), chainId: tx.chainId, ...(tx.gas ? { gasLimit: BigInt(tx.gas) } : {}) },
-      { address: evmAddress ?? undefined, uiOptions: { description: 'Buy this NFT on OpenSea. Check the price before confirming.' } },
+      { address: evmAddress ?? undefined, uiOptions: { description: tx.description ?? 'Buy this NFT on OpenSea. Check the price before confirming.' } },
     );
     return hash;
   }, [sendTransaction, evmAddress]);
+
+  // A plain SOL transfer from the Privy wallet. The app passes a recent
+  // blockhash (from our API, which has the RPC); Privy shows it and signs.
+  const sendSolImpl = useCallback(async (t: SolTransfer) => {
+    const w = solWallets.find((x) => x.address === embeddedAddress);
+    if (!w) throw new Error("Your FloorFeed Solana wallet isn't ready yet. Try again in a moment.");
+    const signer = createNoopSigner(solAddress(w.address));
+    const message = pipe(
+      createTransactionMessage({ version: 0 }),
+      (m) => setTransactionMessageFeePayerSigner(signer, m),
+      (m) => setTransactionMessageLifetimeUsingBlockhash({ blockhash: solBlockhash(t.blockhash), lastValidBlockHeight: BigInt(t.lastValidBlockHeight) }, m),
+      (m) => appendTransactionMessageInstruction(getTransferSolInstruction({ source: signer, destination: solAddress(t.to), amount: BigInt(t.lamports) }), m),
+    );
+    const bytes = getTransactionEncoder().encode(compileTransaction(message));
+    const { signature } = await signAndSendTransaction({ transaction: new Uint8Array(bytes), wallet: w });
+    return getBase58Decoder().decode(signature);
+  }, [solWallets, embeddedAddress, signAndSendTransaction]);
 
   const fundEthImpl = useCallback(
     async (address: string, amountEth?: string, chainId?: number) => {
@@ -95,13 +124,16 @@ function Bridge({ onState }: { onState: (s: PrivyState) => void }) {
   const fund = userId ? fundSol : null;
   const fundEth = userId ? fundEthImpl : null;
   const send = userId && evmAddress ? sendEvm : null;
+  const sendSol = userId && embeddedAddress ? sendSolImpl : null;
+  const exportSolana = useMemo(() => (userId && embeddedAddress ? () => exportSol({ address: embeddedAddress }) : null), [userId, embeddedAddress, exportSol]);
+  const exportEvm = useMemo(() => (userId && evmAddress ? () => exportEth({ address: evmAddress }) : null), [userId, evmAddress, exportEth]);
 
   const state = useMemo<PrivyState>(
     () => ({
       ready, userId, label, embeddedAddress, login: () => login(), logout, getAccessToken, fund,
-      evmAddress, sendEvm: send, fundEth,
+      evmAddress, sendEvm: send, fundEth, sendSol, exportSolana, exportEvm,
     }),
-    [ready, userId, label, embeddedAddress, login, logout, getAccessToken, fund, evmAddress, send, fundEth],
+    [ready, userId, label, embeddedAddress, login, logout, getAccessToken, fund, evmAddress, send, fundEth, sendSol, exportSolana, exportEvm],
   );
   useEffect(() => onState(state), [state, onState]);
   return null;

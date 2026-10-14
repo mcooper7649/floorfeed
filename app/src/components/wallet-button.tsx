@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { DepositSheet } from '@/components/deposit-sheet';
+import { SendSheet } from '@/components/send-sheet';
 import { ModeChip, ModeToggle } from '@/components/mode-toggle';
 import { C } from '@/constants/brand';
 import { T } from '@/constants/type';
@@ -89,6 +90,8 @@ export function WalletSheet({ open, onClose }: { open: boolean; onClose: () => v
   const [ethDeposit, setEthDeposit] = useState(false);
   const openDeposit = () => { onClose(); setDeposit(true); };
   const openEthDeposit = () => { onClose(); setEthDeposit(true); };
+  const [sendOpen, setSendOpen] = useState(false);
+  const openSend = () => { onClose(); setSendOpen(true); };
 
   // Privy draws its own modal; close ours first so they don't stack.
   const signIn = () => { onClose(); auth.login(); };
@@ -127,6 +130,9 @@ export function WalletSheet({ open, onClose }: { open: boolean; onClose: () => v
               </Text>
               <Pressable accessibilityRole="button" onPress={openDeposit} style={s.primary}>
                 <Text style={s.primaryTxt}>Deposit SOL</Text>
+              </Pressable>
+              <Pressable accessibilityRole="button" onPress={openSend} style={s.secondary}>
+                <Text style={s.secondaryTxt}>Send or withdraw</Text>
               </Pressable>
               <EvmSection onDeposit={openEthDeposit} />
               {w.available.length > 0 && (
@@ -223,6 +229,7 @@ export function WalletSheet({ open, onClose }: { open: boolean; onClose: () => v
     </Modal>
     <DepositSheet open={deposit} onClose={() => setDeposit(false)} />
     <DepositSheet chain="ethereum" open={ethDeposit} onClose={() => setEthDeposit(false)} />
+    <SendSheet open={sendOpen} onClose={() => setSendOpen(false)} />
     </>
   );
 }
