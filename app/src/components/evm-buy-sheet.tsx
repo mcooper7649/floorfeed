@@ -55,7 +55,12 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
   const unit = q?.native ?? q?.currency ?? 'ETH';
   const priceUnit = q?.currency ?? unit; // listings show in the collection's currency (Axie: ETH on Ronin)
   const balance = q?.balance ?? q?.balanceEth ?? null;
-  const short = price != null && balance != null && q?.executable ? price - balance : null;
+  // Short = price + gas - balance (executable listings are priced in the gas token).
+  const short = price != null && balance != null && q?.executable ? price + (q.gasReserve ?? 0) - balance : null;
+  // Bridges take a little while and cheap listings sell fast, so move a cushion
+  // (10% of the price) on top: if the cheapest one goes, the next still fits.
+  // Whatever is left over stays in the wallet on that chain.
+  const bridgeAmount = short != null && price != null ? short + Math.max(price * 0.1, 0.0003) : null;
   const elsewhere = q?.elsewhere ?? [];
   const close = () => { setStep({ kind: 'idle' }); onClose(); };
 
@@ -145,7 +150,7 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
               {short != null && short > 0 ? (
                 <>
                   <Text style={s.err}>
-                    Not enough {unit} on {chainName(q.chain)}: you have {sol(balance ?? 0, 4, unit)} there and need about {sol(short, 3, unit)} more, plus gas.
+                    Not enough {unit} on {chainName(q.chain)}: you have {sol(balance ?? 0, 4, unit)} there and need about {sol(short, 4, unit)} more, including gas.
                   </Text>
                   {elsewhere.length > 0 && (
                     <Text style={s.meta}>
@@ -154,7 +159,7 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
                     </Text>
                   )}
                   {elsewhere.length > 0 ? (
-                    <Pressable accessibilityRole="button" onPress={() => { track('bridge_click', { chain: q.chain }); setBridging({ to: q.chain, amount: short + Math.max(short * 0.02, 0.0003) }); }} style={s.primary}>
+                    <Pressable accessibilityRole="button" onPress={() => { track('bridge_click', { chain: q.chain }); setBridging({ to: q.chain, amount: bridgeAmount ?? undefined }); }} style={s.primary}>
                       <Text style={s.primaryTxt}>Move {unit} to {chainName(q.chain)}</Text>
                     </Pressable>
                   ) : unit === 'ETH' && q.chain === 'ethereum' ? (
@@ -198,6 +203,7 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
       </Pressable>
     </Modal>
     <BridgeSheet open={!!bridging} to={bridging?.to} amount={bridging?.amount}
+      note="Includes a small cushion in case the cheapest listing sells while the funds move. Anything left over stays in your wallet."
       onDone={() => setNonce((n) => n + 1)} onClose={() => { setBridging(null); setNonce((n) => n + 1); }} />
     <DepositSheet chain="ethereum" open={deposit} suggest={short ?? undefined}
       onClose={() => { setDeposit(false); setNonce((n) => n + 1); }} />

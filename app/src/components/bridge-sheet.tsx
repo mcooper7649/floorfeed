@@ -27,6 +27,7 @@ type Props = {
   onDone?: () => void;
   to?: string;      // destination chain; the user picks one when omitted
   amount?: number;  // suggested amount to arrive, in the destination's token
+  note?: string;    // why that amount (shown under the input)
 };
 
 // Mounted only while open, so every opening starts from fresh state.
@@ -34,7 +35,7 @@ export function BridgeSheet(props: Props) {
   return props.open ? <Sheet {...props} /> : null;
 }
 
-function Sheet({ open, onClose, onDone, to: toProp, amount: amountProp }: Props) {
+function Sheet({ open, onClose, onDone, to: toProp, amount: amountProp, note }: Props) {
   const w = useEvmWallet();
   const [to, setTo] = useState(toProp ?? 'ink');
   const [from, setFrom] = useState<string | null>(null);
@@ -169,6 +170,7 @@ function Sheet({ open, onClose, onDone, to: toProp, amount: amountProp }: Props)
                       placeholderTextColor={C.muted} style={[s.input, { flex: 1 }]} />
                     <Text style={s.unit}>{toUnit}</Text>
                   </View>
+                  {note && <Text style={s.fine}>{note}</Text>}
                 </View>
               )}
 

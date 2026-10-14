@@ -285,6 +285,7 @@ export type EvmQuote = {
   native?: string | null;  // the chain's gas token, what a buy is paid in
   balance?: number | null; // buyer's balance in `native`
   elsewhere?: { chain: string; balance: number }[]; // the same token on other chains
+  gasReserve?: number | null; // estimated gas for the buy, in `native`
   listing: {
     mint: string; price: number; currency?: string; orderHash: string | null; protocolAddress: string | null; chain: string;
     name: string | null; image: string | null;

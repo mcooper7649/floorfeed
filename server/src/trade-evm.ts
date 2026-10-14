@@ -146,6 +146,13 @@ export async function evmQuote(symbol: string, buyer: string | undefined, id: st
   const balance = balances && isTradable(chain) && !read!.failed.has(chain) ? balances[chain] : null;
   // The same gas token on other chains (ETH on Ethereum while buying on Ink...):
   // the usual reason a "funded" wallet can't pay.
+  // What a Seaport fill costs in gas right now (~300k gas, plus headroom and a
+  // small allowance for the L1 data fee on rollups), so "can I afford it" counts gas too.
+  const gasReserve = isTradable(chain)
+    ? await (clients[chain] as unknown as PublicClient).getGasPrice()
+        .then((gp) => Number(formatEther(gp * 400_000n)) + (chain === "ethereum" ? 0 : 0.00002))
+        .catch(() => null)
+    : null;
   const elsewhere = balances && native
     ? TRADABLE.filter((c) => c !== chain && EVM_CHAINS[c].native === native && balances[c] > 0)
         .map((c) => ({ chain: c, balance: balances[c] })).sort((a, b) => b.balance - a.balance)
@@ -163,6 +170,7 @@ export async function evmQuote(symbol: string, buyer: string | undefined, id: st
     balance,
     balanceEth: balance, // older app builds
     elsewhere,
+    gasReserve,
     executable: tradable,
     reason: !listing ? `No ${unit} listing is live right now.`
       : !isTradable(chain) ? `Buying on ${chain} isn't supported yet.`
