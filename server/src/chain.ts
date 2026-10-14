@@ -143,3 +143,10 @@ export async function collectionOfMint(mint: string): Promise<string | null> {
   const addr = asset && collOf(asset);
   return (addr && byAddress.get(addr)) || null;
 }
+
+// A tracked Solana collection's on-chain collection address (DAS grouping), if known.
+export async function collectionAddressOf(symbol: string): Promise<string | null> {
+  if (!hasDas()) return null;
+  for (const [addr, sym] of await collectionAddresses()) if (sym === symbol) return addr;
+  return null;
+}

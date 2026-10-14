@@ -218,6 +218,7 @@ export type CollectionDetail = {
   listings: Listing[];
   topFlippers: { wallet: string; name?: string | null; avatar?: string | null; flips: number; wins: number; realizedSol: number }[];
   recentSales: { signature: string; mint: string; buyer: string; buyerName?: string | null; price: number; t: number; image: string | null }[];
+  about?: CollectionAbout;
 };
 
 // Signed-in (Privy) users send their access token; anonymous device ids don't.
@@ -303,6 +304,24 @@ export type HolderRow = {
   symbol: string; holders: number; items: number;
   wallets: { wallet: string; name: string | null; avatar: string | null; tier: Tier }[];
 };
+// Collection page: About panel, Holders and Sales tabs (server collection-tabs.ts).
+export type CollectionAbout = {
+  changes: { label: string; pct: number | null }[];
+  activity24h: { sales: number; volume: number; buyers: number; sellers: number; provenBuys: number; provenSells: number };
+  fees: { marketplacePct: number | null; royaltyPct: number | null; sellerFeesPct: number | null; buyTaker: number; sellTaker: number };
+  info: {
+    chain: Chain; supply: number | null; owners: number | null; listed: number | null; holdersTracked: number;
+    trackedSince: number | null; address: string | null; website: string | null; twitter: string | null; discord: string | null;
+  };
+};
+export type WalletRef = { wallet: string; name: string | null; avatar: string | null; tier: Tier };
+export type CollectionHolder = WalletRef & {
+  items: number; value: number | null; cost: number; pnl: number | null; pnlPct: number | null; avgEntry: number; avgHoldHours: number;
+};
+export type CollectionSale = {
+  signature: string; mint: string; image: string | null; price: number; t: number; vsFloorPct: number | null;
+  kind: 'listing' | 'bid'; buyer: WalletRef; seller: WalletRef;
+};
 export type GuideBlock = { p: string } | { list: { term: string; text: string }[] };
 export type GuideSection = { id: string; title: string; blocks: GuideBlock[] };
 export type TickerPrice = { symbol: string; usd: number; change24hPct: number | null };
@@ -354,6 +373,8 @@ export const api = {
     req<{ smart: HolderRow[]; following: HolderRow[] }>(`/discover/holders${userId ? `?userId=${encodeURIComponent(userId)}` : ''}`),
   prices: () => req<TickerPrice[]>('/prices'),
   guide: () => req<GuideSection[]>('/guide'),
+  collectionHolders: (symbol: string) => req<CollectionHolder[]>(`/collections/${encodeURIComponent(symbol)}/holders`),
+  collectionSales: (symbol: string) => req<CollectionSale[]>(`/collections/${encodeURIComponent(symbol)}/sales`),
   follows: (userId: string) => req<string[]>(`/follows/${userId}`),
   follow: (userId: string, wallet: string) => send('POST', '/follows', { userId, wallet }),
   unfollow: (userId: string, wallet: string) => send('DELETE', '/follows', { userId, wallet }),
@@ -364,8 +385,8 @@ export const api = {
       realizedSol: number;
       unrealizedSol: number;
     }>(`/paper/${userId}`),
-  buyFloor: (userId: string, collection: string, copiedFrom?: string) =>
-    send('POST', '/paper/buy', { userId, collection, copiedFrom }) as Promise<{ entryPrice: number }>,
+  buyFloor: (userId: string, collection: string, copiedFrom?: string, count = 1) =>
+    send('POST', '/paper/buy', { userId, collection, copiedFrom, count }) as Promise<{ entryPrice: number; entryPrices?: number[]; total?: number }>,
   resetPaper: (userId: string) => send('POST', '/paper/reset', { userId }) as Promise<{ deleted: number }>,
   sell: (userId: string, positionId: number) =>
     send('POST', '/paper/sell', { userId, positionId }) as Promise<{ exitPrice: number }>,

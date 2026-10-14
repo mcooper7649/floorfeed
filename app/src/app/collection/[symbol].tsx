@@ -1,50 +1,47 @@
-import { Image } from 'expo-image';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Link, Stack, router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { BuySheet } from '@/components/buy-sheet';
-import { EvmBuySheet } from '@/components/evm-buy-sheet';
 import { ChainBadge } from '@/components/chain-badge';
+import { AboutPanel, PositionsPanel, TradeBox } from '@/components/collection-side';
+import { HoldersTab, SalesTab, type TabFilter } from '@/components/collection-tabs';
 import { CollIcon } from '@/components/coll-icon';
 import { DepthChart } from '@/components/depth-chart';
 import { Avatar } from '@/components/event-card';
 import { FloorLine } from '@/components/floor-line';
-import { MODE_COLOR } from '@/components/mode-toggle';
 import { NftImage, Pill } from '@/components/nft-image';
 import { PriceChart } from '@/components/price-chart';
 import { Empty } from '@/components/screen';
 import { TopNav } from '@/components/top-nav';
-import { Chip, Stat as UiStat } from '@/components/ui';
+import { Chip } from '@/components/ui';
 import { chainName } from '@/constants/chains';
 import { C } from '@/constants/brand';
 import { T, display } from '@/constants/type';
 import { api, type CollectionDetail } from '@/lib/api';
-import { amt, shortAddr, signedSol, sol, timeAgo, usdCompact } from '@/lib/format';
-import { thumb } from '@/lib/img';
+import { amt, shortAddr, signedSol, sol, usdCompact } from '@/lib/format';
 import { columnsFor, useLayout } from '@/lib/layout';
-import { useTradeMode } from '@/lib/mode';
 import { fmtDay, fmtSol } from '@/lib/scale';
-import { useSession } from '@/lib/session';
 import { useTitle } from '@/lib/use-title';
-import { track } from '@/lib/analytics';
 
 const RANGES = [1, 7, 30] as const;
+type TabKey = 'holders' | 'sales' | 'listings' | 'flippers';
+const TABS: { key: TabKey; label: string }[] = [
+  { key: 'holders', label: 'Holders' }, { key: 'sales', label: 'Sales' },
+  { key: 'listings', label: 'Listings' }, { key: 'flippers', label: 'Top flippers' },
+];
 const web = Platform.OS === 'web';
 
 export default function CollectionScreen() {
   const { symbol } = useLocalSearchParams<{ symbol: string }>();
-  const { userId, bumpPortfolio } = useSession();
   const { wide, pad, maxWidth, contentWidth } = useLayout();
   const [range, setRange] = useState<number>(7);
   const [data, setData] = useState<CollectionDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [table, setTable] = useState(false);
-  const [buy, setBuy] = useState<string | null>(null);
-  const { mode } = useTradeMode();
-  const [buyOpen, setBuyOpen] = useState(false);
+  const [tab, setTab] = useState<TabKey>('holders');
+  const [filter, setFilter] = useState<TabFilter>({ proven: false, following: false });
+  const [holderCount, setHolderCount] = useState<number | null>(null);
   useTitle(data && `${data.name} floor price, chart & top flippers | FloorFeed`);
 
   const fetchData = useCallback(() => {
@@ -68,19 +65,6 @@ export default function CollectionScreen() {
   // Refetch keeps the frame: the old render stays (dimmed) until new data lands.
   const pickRange = (r: number) => { if (r !== range) { setLoading(true); setRange(r); } };
 
-  const paperBuy = async () => {
-    if (!userId || !data) return;
-    setBuy('Buying…');
-    try {
-      const r = await api.buyFloor(userId, data.symbol);
-      track('paper_buy', { from: 'collection' });
-      setBuy(`Bought floor @ ${sol(r.entryPrice, 2, data.currency)}`);
-      bumpPortfolio();
-    } catch (e) {
-      setBuy((e as Error).message);
-    }
-  };
-
   const shell = (body: ReactNode) => (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       {web && <TopNav back />}
@@ -95,15 +79,10 @@ export default function CollectionScreen() {
   const evm = data.chain !== 'solana';
   // EVM collections have OpenSea sales (in ETH) except the few that trade in other tokens.
   const floorOnly = evm && data.sales.length === 0 && data.historyStartsAt == null;
-  // Paper and real both work on SOL and ETH collections.
-  const showBuy = !evm || cur === 'ETH';
   const within5 = st.floor ? data.listings.filter((l) => l.price <= st.floor! * 1.05).length : 0;
   const rangeStart = data.asOf - data.rangeDays * 86_400;
   const partial = data.historyStartsAt != null && data.historyStartsAt > rangeStart + 86_400;
-  const itemCols = columnsFor(contentWidth, wide ? 190 : 150, 12, 7);
-  const itemW = (contentWidth - 12 * (itemCols - 1)) / itemCols;
   const market = data.source === 'opensea' ? 'OpenSea' : 'Magic Eden';
-  const avatar = wide ? 132 : 88;
 
   const priceCard = (
     <Card title="Price" right={
@@ -146,33 +125,139 @@ export default function CollectionScreen() {
     </Card>
   );
 
-  const depthCard = st.floor != null && data.listings.length > 0 && (
-    <Card title="Floor depth">
-      <Text style={s.desc}>
-        {within5} of the {data.listings.length} cheapest listings are within 5% of the floor
-        {within5 <= 3 ? ', a thin floor' : ''}.
-      </Text>
-      <DepthChart listings={data.listings} floor={st.floor} tall={wide} />
-    </Card>
+  const rightW = 360;
+  const centerW = wide ? contentWidth - rightW - 16 - 34 : contentWidth - 34; // minus the tabs card padding
+  const gridCols = columnsFor(centerW, wide ? 170 : 140, 12, 6);
+  const gridW = (centerW - 12 * (gridCols - 1)) / gridCols;
+  const about = data.about;
+  const ch24 = about?.changes.find((c) => c.label === '24H')?.pct ?? null;
+
+  const header = (
+    <View style={s.header}>
+      <View style={s.ident}>
+        <CollIcon name={data.name} uri={data.image} size={wide ? 56 : 48} radius={14} />
+        <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
+          <Text {...display} style={wide ? T.display : T.title} numberOfLines={1}>{data.name}</Text>
+          <View style={s.badgeRow}>
+            <ChainBadge chain={data.chain} />
+            <Text style={s.desc}>{chainName(data.chain)} · {data.category} · data from {market}</Text>
+          </View>
+        </View>
+      </View>
+      <View style={s.tiles}>
+        <Tile label="Floor" value={st.floor != null ? amt(st.floor, cur) : '—'} sub={st.floorUsd != null ? usdCompact(st.floorUsd) : undefined} />
+        <Tile label="24h change" value={ch24 == null ? '—' : `${ch24 >= 0 ? '▲' : '▼'} ${Math.abs(ch24).toFixed(1)}%`} color={ch24 == null ? undefined : ch24 >= 0 ? C.up : C.down} />
+        <Tile label="24h volume" value={st.volume24h ? amt(st.volume24h, cur, st.volume24h >= 10 ? 0 : 2) : '—'} sub={`${st.sales24h.toLocaleString()} sales`} />
+        <Tile label="7d volume" value={st.volume7d != null ? amt(st.volume7d, cur, st.volume7d >= 10 ? 0 : 2) : '—'} />
+        {evm
+          ? <Tile label="Owners" value={st.owners != null ? st.owners.toLocaleString() : '—'} sub={st.supply ? `of ${st.supply.toLocaleString()}` : undefined} />
+          : <Tile label="Listed" value={st.listed != null ? st.listed.toLocaleString() : '—'} />}
+        {about && <Tile label="Holders tracked" value={about.info.holdersTracked.toLocaleString()} />}
+      </View>
+    </View>
   );
 
-  const flippersCard = (
-    <Card title="Top flippers">
-      {data.topFlippers.length === 0 ? <Text style={s.desc}>No completed flips tracked yet.</Text> :
-        data.topFlippers.map((f, i) => (
-          <Link key={f.wallet} href={{ pathname: '/wallet/[address]', params: { address: f.wallet } }} asChild>
-            <Pressable style={s.listRow}>
-              <Text style={s.rank}>{i + 1}</Text>
-              <Avatar t={f} size={32} />
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={T.bodyStrong} numberOfLines={1}>{f.name ?? shortAddr(f.wallet)}</Text>
-                <Text style={T.metaNum}>{f.wins} of {f.flips} flips profitable</Text>
-              </View>
-              <Text style={[T.num, { color: f.realizedSol >= 0 ? C.up : C.down }]}>{signedSol(f.realizedSol, 2, cur)}</Text>
-            </Pressable>
-          </Link>
-        ))}
+  const chartBlock = floorOnly ? (
+    <Card title="Floor history">
+      {data.floorHistory.filter((f) => f.floor != null).length >= 2 ? (
+        <FloorLine points={data.floorHistory.filter((f) => f.floor != null) as { ts: number; floor: number }[]}
+          currency={cur} tall={wide} />
+      ) : (
+        <Text style={s.desc}>{"FloorFeed records this collection's floor every 10 minutes; the chart fills in as snapshots build up."}</Text>
+      )}
+      <Text style={s.desc}>
+        This collection trades in a token other than ETH, so FloorFeed tracks its floor but not individual sales.
+      </Text>
     </Card>
+  ) : (
+    <View style={{ gap: 10 }}>
+      <View style={s.filters}>
+        {RANGES.map((r) => <Chip key={r} label={r === 1 ? '24H' : `${r}D`} on={range === r} onPress={() => pickRange(r)} />)}
+        {partial && <Text style={s.note}>Tracking since {fmtDay(data.historyStartsAt!)}</Text>}
+      </View>
+      {priceCard}
+    </View>
+  );
+
+  const tabs = (
+    <View style={s.card}>
+      <View style={s.tabHead}>
+        <View style={s.tabRow}>
+          {TABS.map((t) => (
+            <Pressable key={t.key} onPress={() => setTab(t.key)} accessibilityRole="tab" accessibilityState={{ selected: tab === t.key }}>
+              <Text style={[s.tab, tab === t.key && s.tabOn]}>
+                {t.label}{t.key === 'holders' && (about?.info.holdersTracked ?? holderCount) != null ? ` (${(about?.info.holdersTracked ?? holderCount)!.toLocaleString()})` : ''}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+        {(tab === 'holders' || tab === 'sales') && (
+          <View style={s.tabRow}>
+            <Toggle label="Proven only" on={filter.proven} onPress={() => setFilter((f) => ({ ...f, proven: !f.proven }))} />
+            <Toggle label="Following only" on={filter.following} onPress={() => setFilter((f) => ({ ...f, following: !f.following }))} />
+          </View>
+        )}
+      </View>
+      {tab === 'holders' && <HoldersTab symbol={data.symbol} currency={cur} filter={filter} onCount={setHolderCount} />}
+      {tab === 'sales' && <SalesTab symbol={data.symbol} currency={cur} filter={filter} />}
+      {tab === 'listings' && (
+        <View style={{ gap: 14 }}>
+          {st.floor != null && data.listings.length > 0 && (
+            <View style={{ gap: 6 }}>
+              <Text style={s.desc}>
+                {within5} of the {data.listings.length} cheapest listings are within 5% of the floor{within5 <= 3 ? ', a thin floor' : ''}. Live from {market}.
+              </Text>
+              <DepthChart listings={data.listings} floor={st.floor} tall={false} />
+            </View>
+          )}
+          {data.listings.length === 0 ? <Text style={s.desc}>No listings loaded.</Text> : (
+            <View style={s.grid}>
+              {data.listings.map((l, i) => (
+                <Pressable key={`${i}:${l.mint}`} style={[s.item, { width: gridW }]}
+                  onPress={() => router.push({ pathname: '/item/[symbol]/[id]', params: { symbol: data.symbol, id: l.mint } })}>
+                  <NftImage uri={l.image} name={l.name ?? data.name} px={gridW}>
+                    {l.rank != null && <Pill text={`Rank ${l.rank.toLocaleString()}`} style={{ top: 8, left: 8 }} />}
+                  </NftImage>
+                  <View style={s.itemBody}>
+                    <Text style={s.itemName} numberOfLines={1}>{l.name ?? shortAddr(l.mint)}</Text>
+                    <Text style={s.itemPrice}>{sol(l.price, 3, cur)}</Text>
+                    {st.floor != null && (
+                      <Text style={s.rowMeta}>
+                        {l.price <= st.floor * 1.0005 ? 'at floor' : `+${(((l.price - st.floor) / st.floor) * 100).toFixed(1)}% over floor`}
+                      </Text>
+                    )}
+                  </View>
+                </Pressable>
+              ))}
+            </View>
+          )}
+        </View>
+      )}
+      {tab === 'flippers' && (
+        data.topFlippers.length === 0 ? <Text style={s.desc}>No completed flips tracked yet.</Text> :
+          data.topFlippers.map((f, i) => (
+            <Link key={f.wallet} href={{ pathname: '/wallet/[address]', params: { address: f.wallet } }} asChild>
+              <Pressable style={s.listRow}>
+                <Text style={s.rank}>{i + 1}</Text>
+                <Avatar t={f} size={32} />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={T.bodyStrong} numberOfLines={1}>{f.name ?? shortAddr(f.wallet)}</Text>
+                  <Text style={T.metaNum}>{f.wins} of {f.flips} flips profitable</Text>
+                </View>
+                <Text style={[T.num, { color: f.realizedSol >= 0 ? C.up : C.down }]}>{signedSol(f.realizedSol, 2, cur)}</Text>
+              </Pressable>
+            </Link>
+          ))
+      )}
+    </View>
+  );
+
+  const side = (
+    <>
+      <TradeBox data={data} />
+      {about && <AboutPanel data={data} about={about} />}
+      <PositionsPanel data={data} />
+    </>
   );
 
   return (
@@ -180,134 +265,20 @@ export default function CollectionScreen() {
       <Stack.Screen options={{ title: data.name }} />
       {web && <TopNav back />}
       <ScrollView contentContainerStyle={{ paddingBottom: 80 }}>
-        {/* Banner: the collection art, blurred and faded into the page */}
-        <View style={[s.banner, { height: wide ? 280 : 170 }]}>
-          {data.image && <Image source={thumb(data.image, 256)} style={StyleSheet.absoluteFill} contentFit="cover" blurRadius={wide ? 60 : 40} />}
-          <LinearGradient colors={['#0B0B1033', '#0B0B10AA', C.bg]} locations={[0, 0.6, 1]} style={StyleSheet.absoluteFill} />
-        </View>
-
-        <View style={[s.page, { maxWidth, paddingHorizontal: pad }]}>
-          <View style={[s.hero, { marginTop: -avatar * 0.6 }]}>
-            <View style={[s.avatarRing, { borderRadius: avatar * 0.22 + 4 }]}>
-              <CollIcon name={data.name} uri={data.image} size={avatar} radius={avatar * 0.22} />
+        <View style={[s.page, { maxWidth, paddingHorizontal: pad, paddingTop: wide ? 24 : 12 }]}>
+          {header}
+          {wide ? (
+            <View style={s.cols}>
+              <View style={{ flex: 1, minWidth: 0, gap: 16 }}>{chartBlock}{tabs}</View>
+              <View style={{ width: rightW, gap: 16 }}>{side}</View>
             </View>
-            <View style={s.titleRow}>
-              <Text {...display} style={wide ? T.displayL : T.display}>{data.name}</Text>
-              <View style={s.badgeRow}>
-                <ChainBadge chain={data.chain} />
-                <Text style={s.desc}>{chainName(data.chain)} · {data.category} · data from {market}</Text>
-              </View>
-            </View>
-          </View>
-
-          {data.description ? (
-            <Text style={[s.desc, s.about, wide && { maxWidth: 820 }]} numberOfLines={wide ? 3 : 2}>{data.description}</Text>
-          ) : null}
-
-          {/* Stat strip, with the actions beside it on wide screens */}
-          <View style={wide ? s.statsWide : { gap: 16 }}>
-          <View style={[s.stats, wide && { gap: 40 }]}>
-            <Stat label="Floor" value={st.floor != null ? amt(st.floor, cur) : '—'}
-              sub={st.floorUsd != null ? usdCompact(st.floorUsd) : undefined} />
-            <Stat label="24h volume" value={st.volume24h ? amt(st.volume24h, cur, st.volume24h >= 10 ? 0 : 2) : '—'}
-              sub={`${st.sales24h.toLocaleString()} sales`} />
-            <Stat label="7d volume" value={st.volume7d != null ? amt(st.volume7d, cur, st.volume7d >= 10 ? 0 : 2) : '—'} />
-            {evm && st.volume30d != null && <Stat label="30d volume" value={amt(st.volume30d, cur, 0)} />}
-            {evm
-              ? <Stat label="Owners" value={st.owners != null ? st.owners.toLocaleString() : '—'}
-                  sub={st.supply ? `${st.supply.toLocaleString()} supply` : undefined} />
-              : <Stat label="Listed" value={st.listed != null ? st.listed.toLocaleString() : '—'} />}
-          </View>
-
-          <View style={[s.actions, !wide && { flexDirection: 'column' }]}>
-            {showBuy && (
-              <Pressable onPress={() => (mode === 'real' ? setBuyOpen(true) : paperBuy())}
-                style={({ pressed }) => [s.cta, { backgroundColor: MODE_COLOR[mode] }, pressed && { opacity: 0.85 }]}>
-                <Text style={s.ctaTxt}>
-                  {mode === 'real' ? `Buy floor${st.floor ? ` · ${sol(st.floor, 2, cur)}` : ''}`
-                    : buy ?? `Paper buy floor${st.floor ? ` · ${sol(st.floor, 2, cur)}` : ''}`}
-                </Text>
-              </Pressable>
-            )}
-            <Pressable onPress={() => Linking.openURL(data.externalUrl)} style={({ pressed }) => [s.ctaAlt, pressed && { opacity: 0.85 }]}>
-              <Text style={s.ctaAltTxt}>View on {market} ↗</Text>
-            </Pressable>
-            {!evm && <BuySheet symbol={data.symbol} open={buyOpen} onClose={() => setBuyOpen(false)} onPaper={paperBuy} />}
-            {evm && <EvmBuySheet symbol={data.symbol} open={buyOpen} onClose={() => setBuyOpen(false)} onPaper={paperBuy} />}
-          </View>
-          </View>
-
-          {floorOnly ? (
-            <Card title="Floor history">
-              {data.floorHistory.filter((f) => f.floor != null).length >= 2 ? (
-                <FloorLine points={data.floorHistory.filter((f) => f.floor != null) as { ts: number; floor: number }[]}
-                  currency={cur} tall={wide} />
-              ) : (
-                <Text style={s.desc}>{"FloorFeed records this collection's floor every 10 minutes; the chart fills in as snapshots build up."}</Text>
-              )}
-              <Text style={s.desc}>
-                This collection trades in a token other than ETH, so FloorFeed tracks its floor but not individual sales.
-              </Text>
-            </Card>
           ) : (
             <>
-              {/* One filter row, above everything it scopes */}
-              <View style={s.filters}>
-                {RANGES.map((r) => <Chip key={r} label={r === 1 ? '24H' : `${r}D`} on={range === r} onPress={() => pickRange(r)} />)}
-                {partial && <Text style={s.note}>Tracking since {fmtDay(data.historyStartsAt!)}</Text>}
-              </View>
-
-              {wide ? (
-                <View style={s.cols}>
-                  <View style={{ flex: 2, gap: 16 }}>{priceCard}</View>
-                  <View style={{ flex: 1, gap: 16 }}>{depthCard}{flippersCard}</View>
-                </View>
-              ) : (
-                <>{priceCard}{depthCard}{flippersCard}</>
-              )}
-
-              {data.listings.length > 0 && (
-                <Section title="Cheapest listings" sub={`Live from ${market}`}>
-                  <View style={s.grid}>
-                    {data.listings.map((l, i) => (
-                      <Pressable key={`${i}:${l.mint}`} style={[s.item, { width: itemW }]}
-                        onPress={() => router.push({ pathname: '/item/[symbol]/[id]', params: { symbol: data.symbol, id: l.mint } })}>
-                        <NftImage uri={l.image} name={l.name ?? data.name} px={itemW}>
-                          {l.rank != null && <Pill text={`Rank ${l.rank.toLocaleString()}`} style={{ top: 8, left: 8 }} />}
-                        </NftImage>
-                        <View style={s.itemBody}>
-                          <Text style={s.itemName} numberOfLines={1}>{l.name ?? shortAddr(l.mint)}</Text>
-                          <Text style={s.itemPrice}>{sol(l.price, 3, cur)}</Text>
-                          {st.floor != null && (
-                            <Text style={s.rowMeta}>
-                              {l.price <= st.floor * 1.0005 ? 'at floor' : `+${(((l.price - st.floor) / st.floor) * 100).toFixed(1)}% over floor`}
-                            </Text>
-                          )}
-                        </View>
-                      </Pressable>
-                    ))}
-                  </View>
-                </Section>
-              )}
-
-              {data.recentSales.length > 0 && (
-                <Section title="Recent sales" sub="Tap an NFT for its traits, rarity and sale history">
-                  <View style={s.grid}>
-                    {data.recentSales.map((r) => (
-                      <Pressable key={r.signature} style={[s.item, { width: itemW }]}
-                        onPress={() => router.push({ pathname: '/item/[symbol]/[id]', params: { symbol: data.symbol, id: r.mint } })}>
-                        <NftImage uri={r.image} name={data.name} px={itemW}>
-                          <Pill text={`${timeAgo(r.t)} ago`} style={{ top: 8, left: 8 }} />
-                        </NftImage>
-                        <View style={s.itemBody}>
-                          <Text style={s.itemPrice}>{sol(r.price, 3, cur)}</Text>
-                          <Text style={s.rowMeta} numberOfLines={1}>bought by {r.buyerName ?? shortAddr(r.buyer)}</Text>
-                        </View>
-                      </Pressable>
-                    ))}
-                  </View>
-                </Section>
-              )}
+              <TradeBox data={data} />
+              {chartBlock}
+              {tabs}
+              {about && <AboutPanel data={data} about={about} />}
+              <PositionsPanel data={data} />
             </>
           )}
         </View>
@@ -326,45 +297,47 @@ const Card = ({ title, right, children }: { title: string; right?: ReactNode; ch
   </View>
 );
 
-const Section = ({ title, sub, children }: { title: string; sub?: string; children: ReactNode }) => (
-  <View style={{ gap: 12, marginTop: 8 }}>
-    <View>
-      <Text style={s.sectionTitle}>{title}</Text>
-      {sub ? <Text style={s.desc}>{sub}</Text> : null}
-    </View>
-    {children}
+// Header stat tiles (FOMO-style boxes).
+const Tile = ({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) => (
+  <View style={s.tile}>
+    <Text style={s.tileLabel}>{label}</Text>
+    <Text style={[s.tileValue, color ? { color } : null]} numberOfLines={1}>{value}</Text>
+    {sub ? <Text style={s.tileSub} numberOfLines={1}>{sub}</Text> : null}
   </View>
 );
 
-// Header stats: label over value, on the page background (no tiles).
-const Stat = ({ label, value, sub }: { label: string; value: string; sub?: string }) => (
-  <UiStat tone="plain" label={label} value={value} sub={sub} style={!useLayout().wide ? { flexBasis: '42%' } : undefined} />
+const Toggle = ({ label, on, onPress }: { label: string; on: boolean; onPress: () => void }) => (
+  <Pressable onPress={onPress} accessibilityRole="checkbox" accessibilityState={{ checked: on }} style={s.toggle}>
+    <View style={[s.box, on && { backgroundColor: C.accent, borderColor: C.accent }]}>{on && <Text style={s.tick}>✓</Text>}</View>
+    <Text style={[s.toggleTxt, on && { color: C.text }]}>{label}</Text>
+  </Pressable>
 );
 
 const s = StyleSheet.create({
-  banner: { width: '100%', backgroundColor: C.card, overflow: 'hidden' },
   page: { width: '100%', alignSelf: 'center', gap: 16 },
-  hero: { flexDirection: 'row', alignItems: 'flex-end', gap: 16 },
-  avatarRing: { borderWidth: 4, borderColor: C.bg, backgroundColor: C.bg },
-  titleRow: { flex: 1, gap: 6, paddingBottom: 6 },
-  title: { color: C.text, fontSize: 28, fontWeight: '600', letterSpacing: -0.5 },
+  header: { gap: 14 },
+  ident: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  tile: { flexGrow: 1, flexBasis: 100, borderRadius: 12, borderWidth: 1, borderColor: C.border, backgroundColor: C.card, paddingHorizontal: 12, paddingVertical: 9, gap: 1 },
+  tileLabel: { ...T.caption, color: C.dim },
+  tileValue: { color: C.text, fontSize: 17, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  tileSub: { ...T.caption },
+  tabHead: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  tabRow: { flexDirection: 'row', alignItems: 'center', gap: 16, flexWrap: 'wrap' },
+  tab: { color: C.dim, fontSize: 15, fontWeight: '600' },
+  tabOn: { color: C.text },
+  toggle: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  box: { width: 16, height: 16, borderRadius: 4, borderWidth: 1, borderColor: C.muted, alignItems: 'center', justifyContent: 'center' },
+  tick: { color: C.accentInk, fontSize: 11, fontWeight: '700', lineHeight: 13 },
+  toggleTxt: { ...T.caption, color: C.dim, fontWeight: '500' },
   badgeRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   desc: T.meta,
-  about: { ...T.body, color: C.dim },
-  stats: { flexDirection: 'row', flexWrap: 'wrap', gap: 24, rowGap: 16, paddingVertical: 4 },
-  actions: { flexDirection: 'row', gap: 10 },
-  statsWide: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' },
-  cta: { backgroundColor: C.accent, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 24, alignItems: 'center' },
-  ctaTxt: { ...T.button, color: C.accentInk },
-  ctaAlt: { borderRadius: 12, paddingVertical: 12, paddingHorizontal: 24, alignItems: 'center', borderWidth: 1, borderColor: C.border, backgroundColor: C.cardHi },
-  ctaAltTxt: { ...T.button, color: C.text },
   filters: { flexDirection: 'row', gap: 8, alignItems: 'center', marginTop: 4 },
   note: { ...T.caption, marginLeft: 4 },
   cols: { flexDirection: 'row', gap: 16, alignItems: 'flex-start' },
   card: { backgroundColor: C.card, borderRadius: 16, padding: 16, gap: 10, borderWidth: 1, borderColor: C.border },
   cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   cardTitle: T.bodyStrong,
-  sectionTitle: T.title,
   link: { ...T.label, color: C.accent },
   tRow: { flexDirection: 'row', paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
   tHead: { ...T.caption, fontWeight: '500', color: C.dim },

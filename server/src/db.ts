@@ -160,6 +160,8 @@ for (const col of [
   "sale_currency TEXT",
   // fees.ts: Solana royalty measured from listing buys; EVM required seller fees (OpenSea)
   "royalty_bps INTEGER", "seller_fee_bps INTEGER",
+  // collection page links (OpenSea info for EVM)
+  "website TEXT", "twitter TEXT", "discord TEXT", "contract TEXT",
 ]) {
   try { db.exec(`ALTER TABLE collections ADD COLUMN ${col}`); } catch {}
 }

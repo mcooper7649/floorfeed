@@ -292,3 +292,9 @@ export async function collectionDetail(symbol: string, rangeDays: number) {
     recentSales: sales.slice(-24).reverse(),
   };
 }
+
+// Cheapest live listings for either chain (cached), cheapest first.
+export async function listingLadder(symbol: string) {
+  const l = isEvm(symbol) ? await evmListings(symbol) : await cheapestListings(symbol);
+  return [...l].sort((a, b) => a.price - b.price);
+}

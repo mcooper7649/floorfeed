@@ -10,7 +10,8 @@ import { dashboard, record, startAnalytics, summary, type Hit } from "./analytic
 import { checkAlerts, hasPush, inbox, markRead, pushKey, startAlerts, subscribe, syncWebhook, unreadCount, unsubscribe } from "./alerts.ts";
 import { adoptDevice, authorize, privyUser } from "./auth.ts";
 import { ADDRESS_RE, capabilities, collectionOfMint, hasDas, holdings, solBalance } from "./chain.ts";
-import { cheapestListings, collectionDetail, listCollections } from "./collections.ts";
+import { cheapestListings, collectionDetail, listCollections, listingLadder } from "./collections.ts";
+import { collectionAbout, collectionHolders, collectionSales } from "./collection-tabs.ts";
 import { COLLECTIONS, UNITS, collectionName, config, isEvm } from "./config.ts";
 import { db } from "./db.ts";
 import { feedEvents, traders } from "./feed.ts";
@@ -126,13 +127,26 @@ app.get("/collections/:symbol", async (req, reply) => {
     .parse(req.query);
   const detail = await collectionDetail(symbol, range);
   if (!detail) return reply.code(404).send({ error: "unknown collection" });
+  const about = await collectionAbout(symbol);
   // .sol names / avatars for the wallets on the page.
   const ids = traders([...detail.topFlippers.map((f) => f.wallet), ...detail.recentSales.map((r) => r.buyer)]);
   return {
     ...detail,
+    about,
     topFlippers: detail.topFlippers.map((f) => ({ ...f, name: ids.get(f.wallet)?.name ?? null, avatar: ids.get(f.wallet)?.avatar ?? null })),
     recentSales: detail.recentSales.map((r) => ({ ...r, buyerName: ids.get(r.buyer)?.name ?? null })),
   };
+});
+
+// Collection page tabs (collection-tabs.ts).
+app.get("/collections/:symbol/holders", async (req) => {
+  const { symbol } = req.params as { symbol: string };
+  return collectionHolders(symbol);
+});
+app.get("/collections/:symbol/sales", async (req) => {
+  const { symbol } = req.params as { symbol: string };
+  const { limit } = z.object({ limit: z.coerce.number().int().min(1).max(200).default(100) }).parse(req.query);
+  return collectionSales(symbol, limit);
 });
 
 // Feed of recent buys. `following=<userId>` limits it to wallets that user follows;
@@ -317,6 +331,7 @@ app.post("/paper/buy", async (req, reply) => {
     userId: z.string().min(1),
     collection: z.string(),
     copiedFrom: z.string().optional(),
+    count: z.number().int().min(1).max(10).default(1), // a sweep: the N cheapest listings
   }).parse(req.body);
   if (!(await authorize(req, reply, b.userId))) return;
   // Paper positions are kept in the collection's own unit (SOL or ETH) and
@@ -326,11 +341,16 @@ app.post("/paper/buy", async (req, reply) => {
   }
   const floor = floorOf(b.collection);
   if (!floor) return reply.code(409).send({ error: "no floor price yet" });
-  const r = db.prepare(
+  // One item fills at the floor; a sweep walks up the live listings (the
+  // floor again where we have fewer listings than asked for).
+  const ladder = b.count > 1 ? (await listingLadder(b.collection).catch(() => [])).map((l) => l.price) : [];
+  const prices = Array.from({ length: b.count }, (_, i) => Math.max(floor, ladder[i] ?? ladder.at(-1) ?? floor));
+  const insert = db.prepare(
     `INSERT INTO paper_positions (user_id, collection, entry_price, opened_at, copied_from)
      VALUES (?, ?, ?, ?, ?)`,
-  ).run(b.userId, b.collection, floor, Date.now(), b.copiedFrom ?? null);
-  return { id: r.lastInsertRowid, entryPrice: floor };
+  );
+  const ids = db.transaction(() => prices.map((p) => insert.run(b.userId, b.collection, p, Date.now(), b.copiedFrom ?? null).lastInsertRowid))();
+  return { id: ids[0], ids, entryPrice: floor, entryPrices: prices, total: prices.reduce((a, p) => a + p, 0) };
 });
 
 app.post("/paper/sell", async (req, reply) => {
