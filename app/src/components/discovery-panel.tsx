@@ -26,7 +26,7 @@ type Tab = 'alerts' | 'collections' | 'thesis' | 'leaders' | 'feed';
 type List = 'watch' | 'blue' | 'trending' | 'smart' | 'new' | 'minting' | 'breakouts' | 'following';
 
 const TABS: { key: Tab; label: string }[] = [
-  { key: 'alerts', label: 'Alerts' }, { key: 'collections', label: 'Collections' }, { key: 'thesis', label: 'Thesis' },
+  { key: 'alerts', label: 'Alerts' }, { key: 'collections', label: 'Discover' }, { key: 'thesis', label: 'Thesis' },
   { key: 'leaders', label: 'Leaders' }, { key: 'feed', label: 'Feed' },
 ];
 const LISTS: { key: List; label: string }[] = [
@@ -59,7 +59,7 @@ export function DiscoveryPanel() {
   return (
     <View style={s.panel}>
       <View style={s.tabs}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14, alignItems: 'center' }} style={{ flex: 1 }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, alignItems: 'center' }} style={{ flex: 1 }}>
           {TABS.map((t) => (
             <Pressable key={t.key} onPress={() => setTab(t.key)} accessibilityRole="tab" accessibilityState={{ selected: tab === t.key }}>
               <Text style={[s.tab, tab === t.key && s.tabOn]}>
@@ -85,14 +85,15 @@ export function DiscoveryPanel() {
 
 function Chips<K extends string>({ items, value, onChange }: { items: { key: K; label: string }[]; value: K; onChange: (k: K) => void }) {
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.chipScroll} contentContainerStyle={s.chips}>
+    // Wraps onto more lines rather than scrolling sideways, so every list is visible.
+    <View style={s.chips}>
       {items.map((c) => (
         <Pressable key={c.key} onPress={() => onChange(c.key)} style={[s.chip, value === c.key && s.chipOn]}
           accessibilityRole="button" accessibilityState={{ selected: value === c.key }}>
           <Text style={[s.chipTxt, value === c.key && { color: C.text }]}>{c.label}</Text>
         </Pressable>
       ))}
-    </ScrollView>
+    </View>
   );
 }
 
@@ -486,13 +487,12 @@ const s = StyleSheet.create({
   rail: { width: 44, alignItems: 'center', paddingTop: 16 },
   railBtn: { width: 28, height: 28, borderRadius: 8, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center' },
   railTxt: { color: C.dim, fontSize: 16, lineHeight: 18 },
-  tabs: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingTop: 12, paddingBottom: 8 },
+  tabs: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingTop: 12, paddingBottom: 8 },
   tab: { color: C.dim, fontSize: 14, fontWeight: '500' },
   tabOn: { color: C.text },
   dot: { color: C.accent, fontSize: 10 },
   collapse: { color: C.dim, fontSize: 18, lineHeight: 20 },
-  chipScroll: { flexGrow: 0 },
-  chips: { gap: 6, paddingHorizontal: 12, paddingBottom: 8 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 12, paddingBottom: 8 },
   chipPair: { gap: 0 },
   chip: { height: 24, paddingHorizontal: 8, borderRadius: 6, borderWidth: 1, borderColor: C.card, justifyContent: 'center' },
   chipOn: { backgroundColor: C.card },
