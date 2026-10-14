@@ -105,6 +105,12 @@ export function EvmWalletProvider({ children }: { children: ReactNode }) {
     return String(hash);
   }, [wallet, address]);
 
+  const signExtension = useCallback(async (message: string) => {
+    if (!wallet || !address) throw new Error('No wallet connected.');
+    const hexMsg = '0x' + Array.from(new TextEncoder().encode(message), (b) => b.toString(16).padStart(2, '0')).join('');
+    return String(await wallet.provider.request({ method: 'personal_sign', params: [hexMsg, address] }));
+  }, [wallet, address]);
+
   // A connected extension wins; otherwise the signed-in user's Privy wallet.
   const embedded = !address && auth.evmAddress ? auth.evmAddress.toLowerCase() : null;
   const value: EvmWalletState = {
@@ -119,6 +125,7 @@ export function EvmWalletProvider({ children }: { children: ReactNode }) {
     connect,
     disconnect,
     send: address ? sendExtension : embedded ? auth.sendEvm : null,
+    signMessage: address ? signExtension : null,
   };
   return <Ctx value={value}>{children}</Ctx>;
 }

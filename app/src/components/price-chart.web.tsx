@@ -290,24 +290,27 @@ export function PriceChart({ sales, buckets, bucketSec, floor, rangeDays, asOf, 
 
         {placed.map((p, i) => (
           <Pressable key={`${p.m.wallet}:${p.m.t}:${p.m.side}:${i}`}
-            onPress={() => router.push({ pathname: '/wallet/[address]', params: { address: p.m.wallet } })}
+            onPress={() => p.m.wallet && router.push({ pathname: '/wallet/[address]', params: { address: p.m.wallet } })}
             onHoverIn={() => setHoverMark(p)} onHoverOut={() => setHoverMark((h) => (h === p ? null : h))}
-            accessibilityLabel={`${p.m.name ?? shortAddr(p.m.wallet)} ${p.m.side === 'buy' ? 'bought' : 'sold'} at ${fmtSol(p.m.price)} ${unit}`}
-            style={[s.mark, { left: p.x - AV / 2, top: p.y - AV / 2, borderColor: p.m.side === 'buy' ? C.up : C.down }]}>
+            accessibilityLabel={p.m.side === 'take' ? `Take: ${p.m.text ?? ''}` : `${p.m.name ?? shortAddr(p.m.wallet)} ${p.m.side === 'buy' ? 'bought' : 'sold'} at ${fmtSol(p.m.price)} ${unit}`}
+            style={[s.mark, { left: p.x - AV / 2, top: p.y - AV / 2, borderColor: p.m.side === 'buy' ? C.up : p.m.side === 'take' ? C.ai : C.down }]}>
             {p.m.avatar
               ? <Image source={thumb(p.m.avatar, AV * 2)} style={s.markImg} contentFit="cover" />
-              : <Text style={s.markTxt}>{(p.m.name ?? p.m.wallet).slice(0, 1).toUpperCase()}</Text>}
+              : <Text style={s.markTxt}>{p.m.side === 'take' && !p.m.wallet ? '✎' : (p.m.name ?? p.m.wallet).slice(0, 1).toUpperCase()}</Text>}
           </Pressable>
         ))}
         {hoverMark && (
           <View pointerEvents="none" style={[s.markTip, {
-            left: Math.min(Math.max(0, hoverMark.x - 90), Math.max(0, width - 240)), top: Math.max(0, hoverMark.y - AV / 2 - 46),
+            left: Math.min(Math.max(0, hoverMark.x - 90), Math.max(0, width - 240)), top: Math.max(0, hoverMark.y - AV / 2 - (hoverMark.m.side === 'take' ? 96 : 46)),
           }]}>
             <Text style={s.tipWhen} numberOfLines={1}>
-              {hoverMark.m.name ?? shortAddr(hoverMark.m.wallet)}{' '}
-              <Text style={{ color: hoverMark.m.side === 'buy' ? C.up : C.down }}>{hoverMark.m.side === 'buy' ? 'bought' : 'sold'}</Text>
+              {hoverMark.m.side === 'take' && !hoverMark.m.wallet ? 'Take' : hoverMark.m.name ?? shortAddr(hoverMark.m.wallet)}{' '}
+              <Text style={{ color: hoverMark.m.side === 'buy' ? C.up : hoverMark.m.side === 'take' ? C.ai : C.down }}>
+                {hoverMark.m.side === 'buy' ? 'bought' : hoverMark.m.side === 'take' ? 'posted a take' : 'sold'}
+              </Text>
             </Text>
-            <Text style={s.tipLabel}>{fmtSol(hoverMark.m.price)} {unit} · {new Date(hoverMark.m.t * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</Text>
+            {hoverMark.m.side === 'take' && hoverMark.m.text ? <Text style={s.tipLabel} numberOfLines={3}>“{hoverMark.m.text}”</Text> : null}
+            <Text style={s.tipLabel}>{hoverMark.m.side === 'take' ? 'floor ' : ''}{fmtSol(hoverMark.m.price)} {unit} · {new Date(hoverMark.m.t * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</Text>
           </View>
         )}
 

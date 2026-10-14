@@ -5,6 +5,7 @@ import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, V
 import { ChainBadge } from '@/components/chain-badge';
 import { AboutPanel, PositionsPanel, TradeBox } from '@/components/collection-side';
 import { HoldersTab, SalesTab, type TabFilter } from '@/components/collection-tabs';
+import { TakesTab } from '@/components/takes-tab';
 import { CollIcon } from '@/components/coll-icon';
 import { DepthChart } from '@/components/depth-chart';
 import { Avatar } from '@/components/event-card';
@@ -27,10 +28,10 @@ import { useTitle } from '@/lib/use-title';
 
 const RANGES = [{ d: 1, label: '1D' }, { d: 7, label: '1W' }, { d: 30, label: '1M' }, { d: 90, label: '3M' }] as const;
 const SCALES = [{ key: 'pct', label: '%' }, { key: 'log', label: 'log' }, { key: 'auto', label: 'auto' }] as const;
-type Overlays = { proven: boolean; mine: boolean; following: boolean; minSize: boolean };
-type TabKey = 'holders' | 'sales' | 'listings' | 'flippers';
+type Overlays = { proven: boolean; mine: boolean; following: boolean; minSize: boolean; takes: boolean };
+type TabKey = 'holders' | 'sales' | 'takes' | 'listings' | 'flippers';
 const TABS: { key: TabKey; label: string }[] = [
-  { key: 'holders', label: 'Holders' }, { key: 'sales', label: 'Sales' },
+  { key: 'holders', label: 'Holders' }, { key: 'sales', label: 'Sales' }, { key: 'takes', label: 'Takes' },
   { key: 'listings', label: 'Listings' }, { key: 'flippers', label: 'Top flippers' },
 ];
 const web = Platform.OS === 'web';
@@ -47,7 +48,8 @@ export default function CollectionScreen() {
   const [filter, setFilter] = useState<TabFilter>({ proven: false, following: false });
   const [holderCount, setHolderCount] = useState<number | null>(null);
   const [scale, setScale] = useState<'auto' | 'pct' | 'log'>('auto');
-  const [overlays, setOverlays] = useState<Overlays>({ proven: true, mine: true, following: false, minSize: false });
+  const [overlays, setOverlays] = useState<Overlays>({ proven: true, mine: true, following: false, minSize: false, takes: true });
+  const [takeCount, setTakeCount] = useState<number | null>(null);
   const [markerState, setMarkerState] = useState<{ key: string; list: ChartMarker[] } | null>(null);
   const { following } = useSession();
   const solAddr = useWallet().address;
@@ -59,12 +61,12 @@ export default function CollectionScreen() {
   const mine = overlays.mine ? [solAddr, evmAddr].filter((a): a is string => !!a) : [];
   const markerWallets = [...mine, ...(overlays.following ? followKey.split(',').filter(Boolean) : [])];
   const markerProven = overlays.proven && !overlays.following;
-  const markerKey = `${symbol}|${range}|${markerProven}|${markerWallets.join(',')}`;
+  const markerKey = `${symbol}|${range}|${markerProven}|${markerWallets.join(',')}|${overlays.takes}`;
   useEffect(() => {
-    const [sym, r, proven, wallets] = markerKey.split('|');
-    if (proven !== 'true' && !wallets) return;
+    const [sym, r, proven, wallets, takes] = markerKey.split('|');
+    if (proven !== 'true' && !wallets && takes !== 'true') return;
     let alive = true;
-    api.collectionMarkers(sym, Number(r), proven === 'true', wallets ? wallets.split(',') : [])
+    api.collectionMarkers(sym, Number(r), proven === 'true', wallets ? wallets.split(',') : [], takes === 'true')
       .then((list) => alive && setMarkerState({ key: markerKey, list }))
       .catch(() => alive && setMarkerState({ key: markerKey, list: [] }));
     return () => { alive = false; };
@@ -226,6 +228,7 @@ export default function CollectionScreen() {
           <Text style={s.overlayLabel}>Chart overlays</Text>
           <Toggle label="Proven traders" on={overlays.proven} onPress={() => setOverlays((o) => ({ ...o, proven: !o.proven }))} />
           <Toggle label="My trades" on={overlays.mine} onPress={() => setOverlays((o) => ({ ...o, mine: !o.mine }))} />
+          <Toggle label="Takes" on={overlays.takes} onPress={() => setOverlays((o) => ({ ...o, takes: !o.takes }))} />
           <Toggle label="Following only" on={overlays.following} onPress={() => setOverlays((o) => ({ ...o, following: !o.following }))} />
           {usdRate != null && <Toggle label="Min size (>$1K)" on={overlays.minSize} onPress={() => setOverlays((o) => ({ ...o, minSize: !o.minSize }))} />}
           {partial && <Text style={s.note}>Tracking since {fmtDay(data.historyStartsAt!)}</Text>}
@@ -243,6 +246,7 @@ export default function CollectionScreen() {
             <Pressable key={t.key} onPress={() => setTab(t.key)} accessibilityRole="tab" accessibilityState={{ selected: tab === t.key }}>
               <Text style={[s.tab, tab === t.key && s.tabOn]}>
                 {t.label}{t.key === 'holders' && (about?.info.holdersTracked ?? holderCount) != null ? ` (${(about?.info.holdersTracked ?? holderCount)!.toLocaleString()})` : ''}
+                {t.key === 'takes' && takeCount ? ` (${takeCount})` : ''}
               </Text>
             </Pressable>
           ))}
@@ -256,6 +260,7 @@ export default function CollectionScreen() {
       </View>
       {tab === 'holders' && <HoldersTab symbol={data.symbol} currency={cur} filter={filter} onCount={setHolderCount} />}
       {tab === 'sales' && <SalesTab symbol={data.symbol} currency={cur} filter={filter} />}
+      {tab === 'takes' && <TakesTab symbol={data.symbol} name={data.name} currency={cur} chain={data.chain} onCount={setTakeCount} />}
       {tab === 'listings' && (
         <View style={{ gap: 14 }}>
           {st.floor != null && data.listings.length > 0 && (

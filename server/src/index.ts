@@ -12,6 +12,7 @@ import { adoptDevice, authorize, privyUser } from "./auth.ts";
 import { ADDRESS_RE, capabilities, collectionOfMint, hasDas, holdings, solBalance } from "./chain.ts";
 import { cheapestListings, collectionDetail, listCollections, listingLadder } from "./collections.ts";
 import { collectionAbout, collectionHolders, collectionMarkers, collectionSales } from "./collection-tabs.ts";
+import { TakeError, collectionTakes, deleteTake, postTake, reportTake, signedMessage, takeMarkers, toggleLike } from "./takes.ts";
 import { COLLECTIONS, UNITS, collectionName, config, isEvm } from "./config.ts";
 import { db } from "./db.ts";
 import { feedEvents, traders } from "./feed.ts";
@@ -138,6 +139,55 @@ app.get("/collections/:symbol", async (req, reply) => {
   };
 });
 
+// --- Takes (takes.ts): posting needs a signed-in account ---
+const takeReply = (reply: FastifyReply, err: unknown) => {
+  if (err instanceof TakeError) return reply.code(err.status).send({ error: err.message });
+  throw err;
+};
+app.get("/collections/:symbol/takes", async (req) => {
+  const { symbol } = req.params as { symbol: string };
+  const { userId } = z.object({ userId: z.string().optional() }).parse(req.query);
+  return collectionTakes(symbol, userId ?? null);
+});
+app.get("/takes/message", async (req) => {
+  const q = z.object({ collection: z.string(), text: z.string().max(2000), ts: z.coerce.number().int() }).parse(req.query);
+  return { message: signedMessage(q.collection, q.text.trim(), q.ts) };
+});
+app.post("/takes", async (req, reply) => {
+  const userId = await privyUser(req);
+  if (!userId) return reply.code(401).send({ error: "Sign in to post a take." });
+  const b = z.object({
+    collection: z.string().min(1).max(120), text: z.string().max(2000),
+    wallet: z.string().max(64).optional(), signature: z.string().max(400).optional(), ts: z.number().int().optional(),
+  }).parse(req.body);
+  try { return await postTake(userId, b); } catch (err) { return takeReply(reply, err); }
+});
+app.post("/takes/:id/like", async (req, reply) => {
+  const { id } = z.object({ id: z.coerce.number().int() }).parse(req.params);
+  const { userId } = z.object({ userId: z.string().min(1) }).parse(req.body);
+  if (!(await authorize(req, reply, userId))) return;
+  try { return toggleLike(id, userId); } catch (err) { return takeReply(reply, err); }
+});
+app.post("/takes/:id/report", async (req, reply) => {
+  const { id } = z.object({ id: z.coerce.number().int() }).parse(req.params);
+  const { userId } = z.object({ userId: z.string().min(1) }).parse(req.body);
+  if (!(await authorize(req, reply, userId))) return;
+  try { return await reportTake(id, userId); } catch (err) { return takeReply(reply, err); }
+});
+app.delete("/takes/:id", async (req, reply) => {
+  const { id } = z.object({ id: z.coerce.number().int() }).parse(req.params);
+  const userId = await privyUser(req);
+  if (!userId) return reply.code(401).send({ error: "Sign in again." });
+  try { return deleteTake(id, userId); } catch (err) { return takeReply(reply, err); }
+});
+app.delete("/admin/takes/:id", async (req, reply) => {
+  const { id } = z.object({ id: z.coerce.number().int() }).parse(req.params);
+  const given = Buffer.from(/^Bearer (.+)$/.exec(req.headers.authorization ?? "")?.[1] ?? "");
+  const want = Buffer.from(config.adminToken);
+  if (!config.adminToken || given.length !== want.length || !timingSafeEqual(given, want)) return reply.code(404).send();
+  try { return deleteTake(id, null); } catch (err) { return takeReply(reply, err); }
+});
+
 // Collection page tabs (collection-tabs.ts).
 app.get("/collections/:symbol/holders", async (req) => {
   const { symbol } = req.params as { symbol: string };
@@ -150,9 +200,19 @@ app.get("/collections/:symbol/markers", async (req) => {
     range: z.coerce.number().int().refine((d) => [1, 7, 30, 90].includes(d)).default(7),
     proven: z.enum(["0", "1"]).default("1"),
     wallets: z.string().max(4000).optional(), // comma-separated
+    takes: z.enum(["0", "1"]).default("0"),
   }).parse(req.query);
   const wallets = (q.wallets ?? "").split(",").map((w) => w.trim()).filter(Boolean).slice(0, 100);
-  return collectionMarkers(symbol, q.range, { proven: q.proven === "1", wallets });
+  const trades = q.proven === "1" || wallets.length ? collectionMarkers(symbol, q.range, { proven: q.proven === "1", wallets }) : [];
+  if (q.takes !== "1") return trades;
+  // Takes sit on the chart at the floor when they were posted.
+  const rows = takeMarkers(symbol, Math.floor(Date.now() / 1000) - q.range * 86_400);
+  const who = traders(rows.flatMap((r) => (r.wallet ? [r.wallet] : [])));
+  return [...trades, ...rows.map((r) => ({
+    t: Math.floor(r.created_at / 1000), price: r.floor!, side: "take" as const, wallet: r.wallet ?? "", mint: "",
+    name: r.wallet ? who.get(r.wallet)?.name ?? null : null, avatar: r.wallet ? who.get(r.wallet)?.avatar ?? null : null,
+    tier: r.wallet ? who.get(r.wallet)?.tier ?? null : null, text: r.text, takeId: r.id,
+  }))];
 });
 app.get("/collections/:symbol/sales", async (req) => {
   const { symbol } = req.params as { symbol: string };

@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { SolanaSignAndSendTransaction, SolanaSignTransaction } from '@solana/wallet-standard-features';
+import { SolanaSignAndSendTransaction, SolanaSignMessage, SolanaSignTransaction, type SolanaSignMessageFeature } from '@solana/wallet-standard-features';
 import { getWallets } from '@wallet-standard/app';
 import type { Wallet, WalletAccount } from '@wallet-standard/base';
 import {
@@ -33,7 +33,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const auth = useAuth();
   const [wallets, setWallets] = useState<Wallet[]>(solanaWallets);
   const [wallet, setWallet] = useState<Wallet | null>(null);
-  const [address, setAddress] = useState<string | null>(null);
+  const [account, setAccount] = useState<WalletAccount | null>(null);
+  const address = account?.address ?? null;
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,7 +52,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     const acct = mainnetAccount(accounts);
     if (!acct) throw new Error('The wallet returned no Solana account.');
     setWallet(w);
-    setAddress(acct.address);
+    setAccount(acct);
     await AsyncStorage.setItem(LAST_KEY, w.name).catch(() => {});
   }, []);
 
@@ -71,7 +72,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     return (wallet.features[StandardEvents] as StandardEventsFeature[typeof StandardEvents])
       .on('change', ({ accounts }) => {
         if (!accounts) return;
-        setAddress(mainnetAccount(accounts)?.address ?? null);
+        setAccount(mainnetAccount(accounts));
       });
   }, [wallet]);
 
@@ -95,9 +96,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         .disconnect().catch(() => {});
     }
     setWallet(null);
-    setAddress(null);
+    setAccount(null);
     await AsyncStorage.removeItem(LAST_KEY).catch(() => {});
   }, [wallet]);
+
+  const signMessage = useCallback(async (message: string) => {
+    if (!wallet || !account || !(SolanaSignMessage in wallet.features)) throw new Error('This wallet can’t sign messages.');
+    const [out] = await (wallet.features[SolanaSignMessage] as SolanaSignMessageFeature[typeof SolanaSignMessage])
+      .signMessage({ account, message: new TextEncoder().encode(message) });
+    let bin = '';
+    for (const b of out.signature) bin += String.fromCharCode(b);
+    return btoa(bin);
+  }, [wallet, account]);
 
   // A connected extension wins; otherwise the signed-in user's Privy wallet.
   const embedded = !address && auth.embeddedAddress ? auth.embeddedAddress : null;
@@ -112,6 +122,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     error,
     connect,
     disconnect,
+    signMessage: address && wallet && SolanaSignMessage in wallet.features ? signMessage : null,
   };
   return <Ctx value={value}>{children}</Ctx>;
 }

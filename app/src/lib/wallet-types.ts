@@ -17,6 +17,9 @@ export type WalletState = {
   error: string | null;
   connect: (name: string) => Promise<void>;
   disconnect: () => Promise<void>;
+  // Signs a text message with the connected extension (base64 signature), to
+  // prove the address is the user's. null when the wallet can't.
+  signMessage: ((message: string) => Promise<string>) | null;
 };
 
 // Ethereum/Base side: a browser wallet found through EIP-6963 (MetaMask,
@@ -35,4 +38,5 @@ export type EvmWalletState = {
   connect: (name: string) => Promise<void>;
   disconnect: () => Promise<void>;
   send: ((tx: import('./auth-types').EvmTx) => Promise<string>) | null;
+  signMessage: ((message: string) => Promise<string>) | null; // personal_sign, hex signature
 };

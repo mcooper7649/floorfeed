@@ -324,9 +324,20 @@ export type CollectionSale = {
 };
 // A trade drawn on the price chart as the trader's avatar.
 export type ChartMarker = {
-  t: number; price: number; side: 'buy' | 'sell'; wallet: string; mint: string;
+  t: number; price: number; side: 'buy' | 'sell' | 'take'; wallet: string; mint: string;
   name: string | null; avatar: string | null; tier: Tier;
+  text?: string; takeId?: number; // takes: posted when the floor was at `price`
 };
+
+// Takes on a collection (server takes.ts): users' posts, plus FloorFeed's AI takes on notable buys.
+export type UserTake = {
+  kind: 'user'; id: number; text: string; t: number;
+  author: { name: string; avatar: string | null; wallet: string | null; tier: Tier };
+  holder: { items: number; pnlPct: number | null } | null; verified: boolean;
+  floor: number | null; likes: number; liked: boolean; mine: boolean;
+};
+export type AiTake = { kind: 'ai'; id: string; text: string; t: number; trade: { buyer: string; buyerName: string | null; price: number; mint: string } };
+export type TakeItem = UserTake | AiTake;
 export type GuideBlock = { p: string } | { list: { term: string; text: string }[] };
 export type GuideSection = { id: string; title: string; blocks: GuideBlock[] };
 export type TickerPrice = { symbol: string; usd: number; change24hPct: number | null };
@@ -371,6 +382,15 @@ export const api = {
   alerts: (userId: string) => req<{ unread: number; push: boolean; alerts: Alert[] }>(`/alerts/${encodeURIComponent(userId)}`),
   unread: (userId: string) => req<{ unread: number; push: boolean }>(`/alerts/${encodeURIComponent(userId)}/unread`),
   markRead: (userId: string) => send('POST', `/alerts/${encodeURIComponent(userId)}/read`, {}),
+  takes: (symbol: string, userId?: string | null) =>
+    req<TakeItem[]>(`/collections/${encodeURIComponent(symbol)}/takes${userId ? `?userId=${encodeURIComponent(userId)}` : ''}`),
+  takeMessage: (collection: string, text: string, ts: number) =>
+    req<{ message: string }>(`/takes/message?${new URLSearchParams({ collection, text, ts: String(ts) })}`),
+  postTake: (b: { collection: string; text: string; wallet?: string; signature?: string; ts?: number }) =>
+    send('POST', '/takes', b) as Promise<{ id: number }>,
+  likeTake: (id: number, userId: string) => send('POST', `/takes/${id}/like`, { userId }) as Promise<{ liked: boolean; likes: number }>,
+  reportTake: (id: number, userId: string) => send('POST', `/takes/${id}/report`, { userId }),
+  deleteTake: (id: number) => req<{ ok: boolean }>(`/takes/${id}`, { method: 'DELETE' }),
   pushKey: () => req<{ key: string }>('/push/key'),
   subscribePush: (userId: string, subscription: PushSubscriptionBody) => send('POST', '/push/subscribe', { userId, subscription }),
   unsubscribePush: (endpoint: string) => send('POST', '/push/unsubscribe', { endpoint }),
@@ -380,8 +400,8 @@ export const api = {
   guide: () => req<GuideSection[]>('/guide'),
   collectionHolders: (symbol: string) => req<CollectionHolder[]>(`/collections/${encodeURIComponent(symbol)}/holders`),
   collectionSales: (symbol: string) => req<CollectionSale[]>(`/collections/${encodeURIComponent(symbol)}/sales`),
-  collectionMarkers: (symbol: string, range: number, proven: boolean, wallets: string[]) => {
-    const q = new URLSearchParams({ range: String(range), proven: proven ? '1' : '0' });
+  collectionMarkers: (symbol: string, range: number, proven: boolean, wallets: string[], takes = false) => {
+    const q = new URLSearchParams({ range: String(range), proven: proven ? '1' : '0', takes: takes ? '1' : '0' });
     if (wallets.length) q.set('wallets', wallets.join(','));
     return req<ChartMarker[]>(`/collections/${encodeURIComponent(symbol)}/markers?${q}`);
   },
