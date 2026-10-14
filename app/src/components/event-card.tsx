@@ -19,6 +19,7 @@ import { holdTime, pct, shortAddr, signedSol, sol, timeAgo, unitFor } from '@/li
 import { thumb } from '@/lib/img';
 import { useTradeMode } from '@/lib/mode';
 import { useSession } from '@/lib/session';
+import { track } from '@/lib/analytics';
 
 // One card per feed event. `tile` is the desktop grid card: artwork on top,
 // details below; otherwise a compact list card for phones.
@@ -122,6 +123,7 @@ function CopyCta({ coll, copiedFrom }: { coll: FeedEvent['collection']; copiedFr
     setState('busy');
     try {
       const r = await api.buyFloor(userId, symbol, copiedFrom);
+      track('paper_buy', { from: 'feed' });
       setState(`Bought floor @ ${sol(r.entryPrice, 2, coll.currency)}`);
       bumpPortfolio();
     } catch (err) {
@@ -131,7 +133,7 @@ function CopyCta({ coll, copiedFrom }: { coll: FeedEvent['collection']; copiedFr
   const f = floor ? ` · ${sol(floor, 2, coll.currency)}` : '';
   return (
     <>
-      <Pressable onPress={() => (mode === 'real' ? (tap(), setOpen(true)) : paperBuy())}
+      <Pressable onPress={() => { track('copy_tap', { mode }); if (mode === 'real') { tap(); setOpen(true); } else void paperBuy(); }}
         style={({ pressed }) => [s.cta, { backgroundColor: MODE_COLOR[mode] }, pressed && { opacity: 0.8 }]}>
         <Text style={s.ctaTxt}>
           {mode === 'real' ? `Copy · buy floor${f}`

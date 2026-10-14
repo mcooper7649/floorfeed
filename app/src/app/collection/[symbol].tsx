@@ -28,6 +28,7 @@ import { useTradeMode } from '@/lib/mode';
 import { fmtDay, fmtSol } from '@/lib/scale';
 import { useSession } from '@/lib/session';
 import { useTitle } from '@/lib/use-title';
+import { track } from '@/lib/analytics';
 
 const RANGES = [1, 7, 30] as const;
 const web = Platform.OS === 'web';
@@ -72,6 +73,7 @@ export default function CollectionScreen() {
     setBuy('Buying…');
     try {
       const r = await api.buyFloor(userId, data.symbol);
+      track('paper_buy', { from: 'collection' });
       setBuy(`Bought floor @ ${sol(r.entryPrice, 2, data.currency)}`);
       bumpPortfolio();
     } catch (e) {

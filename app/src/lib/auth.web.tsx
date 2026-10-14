@@ -5,6 +5,7 @@ import { C } from '@/constants/brand';
 
 import { setTokenGetter } from './api';
 import type { AuthState, PrivyMountOptions, PrivyState } from './auth-types';
+import { track } from '@/lib/analytics';
 
 // Privy sign-in (email or Google). New users get an embedded Solana wallet:
 // Privy holds the key in split shares, FloorFeed only learns the address.
@@ -48,6 +49,7 @@ function PrivyLoader({ children }: { children: ReactNode }) {
   const [wasSignedIn, setWasSignedIn] = useState<boolean | null>(null);
   const mounting = useRef<Promise<void> | null>(null);
   const loginWhenReady = useRef(false);
+  const storedSignedIn = useRef<boolean | null>(null);
 
   const load = useCallback(() => {
     // The token getter is set before React re-renders: effects run child-first,
@@ -67,6 +69,7 @@ function PrivyLoader({ children }: { children: ReactNode }) {
     const oauthReturn = typeof window !== 'undefined' && window.location.search.includes('privy_oauth_code');
     AsyncStorage.getItem(SIGNED_IN_KEY)
       .then((v) => {
+        storedSignedIn.current = v === '1';
         const resume = v === '1' || oauthReturn;
         setWasSignedIn(resume);
         if (resume) load().catch(() => setWasSignedIn(false));
@@ -78,6 +81,8 @@ function PrivyLoader({ children }: { children: ReactNode }) {
   // the Privy modal once it's ready if Sign in was tapped while it loaded.
   useEffect(() => {
     if (!privy?.ready) return;
+    // A sign-in on this browser (not a returning signed-in visit) counts once.
+    if (privy.userId && storedSignedIn.current === false) { storedSignedIn.current = true; track('sign_in'); }
     AsyncStorage.setItem(SIGNED_IN_KEY, privy.userId ? '1' : '0').catch(() => {});
     if (loginWhenReady.current && !privy.userId) {
       loginWhenReady.current = false;

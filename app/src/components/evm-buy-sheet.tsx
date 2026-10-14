@@ -11,6 +11,7 @@ import { api, type EvmQuote } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useEvmWallet } from '@/lib/evm-wallet';
 import { sol } from '@/lib/format';
+import { track } from '@/lib/analytics';
 
 // Real-mode buy on an EVM chain (Ethereum, its L2s, HyperEVM, Ronin, ApeChain, Monad): the cheapest OpenSea listing (or one NFT's
 // listing when `id` is given). FloorFeed builds the Seaport transaction and
@@ -31,6 +32,7 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
   const auth = useAuth();
   const [quote, setQuote] = useState<{ key: string; q: EvmQuote } | { key: string; error: string } | null>(null);
   const [step, setStep] = useState<Step>({ kind: 'idle' });
+  useEffect(() => { if (open) track('buy_open', { chain: 'evm' }); }, [open]);
   const [deposit, setDeposit] = useState(false);
   const [nonce, setNonce] = useState(0);
   const key = `${symbol}:${id ?? ''}:${w.address}:${nonce}`;
@@ -63,6 +65,7 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
       });
       setStep({ kind: 'confirm' });
       const hash = await w.send(tx);
+      track('buy_signed', { chain: q.chain });
       setStep({ kind: 'sent', hash, url: `${tx.explorerTx ?? `${chainById(tx.chainId)?.[1].explorer ?? 'https://etherscan.io'}/tx/`}${hash}` });
     } catch (e) {
       const msg = (e as Error).message || 'The purchase did not go through.';
@@ -157,7 +160,7 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
               <Text style={s.fine}>
                 FloorFeed checks the purchase against the chain first. Your wallet shows the exact amount and asks you to confirm; nothing is sent until you do.
               </Text>
-              <Pressable accessibilityRole="link" onPress={() => Linking.openURL(q.marketUrl)}>
+              <Pressable accessibilityRole="link" onPress={() => { track('buy_click', { chain: q.chain }); void Linking.openURL(q.marketUrl); }}>
                 <Text style={s.link}>View on OpenSea ↗</Text>
               </Pressable>
             </>

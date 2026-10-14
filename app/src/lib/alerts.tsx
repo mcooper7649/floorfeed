@@ -1,6 +1,7 @@
 import { createContext, use, useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Platform } from 'react-native';
 
+import { track } from './analytics';
 import { api, type PushSubscriptionBody } from './api';
 import { useSession } from './session';
 
@@ -75,6 +76,7 @@ export function AlertsProvider({ children }: { children: ReactNode }) {
       ?? (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(key) }));
     await api.subscribePush(userId, sub.toJSON() as PushSubscriptionBody);
     setPush('on');
+    track('alerts_on');
   }, [userId]);
 
   const disablePush = useCallback(async () => {
@@ -85,6 +87,7 @@ export function AlertsProvider({ children }: { children: ReactNode }) {
       await sub.unsubscribe();
     }
     setPush('off');
+    track('alerts_off');
   }, []);
 
   const markAllRead = useCallback(async () => {

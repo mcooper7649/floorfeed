@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { C } from '@/constants/brand';
 import { T } from '@/constants/type';
 import { useTradeMode, type TradeMode } from '@/lib/mode';
+import { track } from '@/lib/analytics';
 
 // Paper is tinted with the AI/practice purple, Real with the brand accent, so
 // the current mode reads at a glance wherever it shows up.
@@ -25,7 +26,7 @@ export function ModeToggle({ describe = true }: { describe?: boolean }) {
         accessibilityState={{ selected: on, disabled }}
         accessibilityLabel={`${label} mode`}
         disabled={disabled}
-        onPress={() => setMode(m)}
+        onPress={() => { setMode(m); if (m === 'real' && !on) track('mode_real'); }}
         style={[s.seg, on && { backgroundColor: MODE_COLOR[m] }, disabled && { opacity: 0.4 }]}>
         <Text style={[s.segTxt, on && { color: C.accentInk }]}>{label}</Text>
       </Pressable>

@@ -31,6 +31,8 @@ export const config = {
   vapidSubject: process.env.VAPID_SUBJECT ?? "https://floorfeed.io",
   // Public URL Helius posts wallet activity to; the webhook is created/updated by alerts.ts.
   heliusWebhookUrl: process.env.HELIUS_WEBHOOK_URL ?? "",
+  // Opens /admin/stats (analytics.ts): https://floorfeed.io/api/admin/stats?key=<ADMIN_TOKEN>
+  adminToken: process.env.ADMIN_TOKEN ?? "",
   socialAutoApprove: (process.env.SOCIAL_AUTO_APPROVE ?? "").split(",").map((s) => s.trim()).filter(Boolean),
   socialMinGapMs: 90 * 60_000, // at most one post per 90 minutes
   // How often to pull fresh trades / floor prices from Magic Eden.

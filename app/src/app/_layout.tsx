@@ -1,4 +1,5 @@
-import { DarkTheme, Stack, ThemeProvider } from 'expo-router';
+import { DarkTheme, Stack, ThemeProvider, usePathname } from 'expo-router';
+import { useEffect } from 'react';
 import * as SplashScreen from 'expo-splash-screen';
 import { Platform } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
@@ -6,6 +7,7 @@ import { StatusBar } from 'expo-status-bar';
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { C } from '@/constants/brand';
 import { AlertsProvider } from '@/lib/alerts';
+import { pageview } from '@/lib/analytics';
 import { AuthProvider } from '@/lib/auth';
 import { EvmWalletProvider } from '@/lib/evm-wallet';
 import { TradeModeProvider } from '@/lib/mode';
@@ -31,6 +33,7 @@ export default function RootLayout() {
       <EvmWalletProvider>
       <TradeModeProvider>
         <StatusBar style="light" />
+        <Pageviews />
         <AnimatedSplashOverlay />
         <Stack screenOptions={{ contentStyle: { backgroundColor: C.bg } }}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -48,4 +51,11 @@ export default function RootLayout() {
       </AuthProvider>
     </ThemeProvider>
   );
+}
+
+// One page view per route change (web; see lib/analytics.ts).
+function Pageviews() {
+  const path = usePathname();
+  useEffect(() => pageview(path), [path]);
+  return null;
 }

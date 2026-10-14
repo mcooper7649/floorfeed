@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, use, useCallback, useEffect, useState, type ReactNode } from 'react';
 
+import { setAnalyticsSignedIn, track } from './analytics';
 import { api } from './api';
 import { useAuth } from './auth';
 
@@ -77,10 +78,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         else next.add(wallet);
         return next;
       });
+      track(isFollowing ? 'unfollow' : 'follow');
       await (isFollowing ? api.unfollow(userId, wallet) : api.follow(userId, wallet));
     },
     [userId, following],
   );
+
+  useEffect(() => setAnalyticsSignedIn(!!accountId), [accountId]);
 
   const bumpPortfolio = useCallback(() => setPortfolioVersion((v) => v + 1), []);
 

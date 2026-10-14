@@ -3,6 +3,7 @@ import cors from "@fastify/cors";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import { z } from "zod";
 import { cachedTake, getTake } from "./ai.ts";
+import { dashboard, record, startAnalytics, summary, type Hit } from "./analytics.ts";
 import { checkAlerts, hasPush, inbox, markRead, pushKey, startAlerts, subscribe, syncWebhook, unreadCount, unsubscribe } from "./alerts.ts";
 import { adoptDevice, authorize, privyUser } from "./auth.ts";
 import { ADDRESS_RE, capabilities, collectionOfMint, hasDas, holdings, solBalance } from "./chain.ts";
@@ -429,6 +430,36 @@ app.post("/webhooks/helius", async (req, reply) => {
   return { added };
 });
 
+// --- First-party analytics (analytics.ts). The app sends beacons as
+// text/plain so browsers skip the CORS preflight. ---
+app.post("/a", async (req, reply) => {
+  try {
+    const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+    const hits = (Array.isArray(body) ? body : [body]).slice(0, 20) as Hit[];
+    for (const h of hits) if (h && typeof h.n === "string") record(req, h);
+  } catch { /* malformed beacon: ignore */ }
+  return reply.code(204).send();
+});
+
+// Admin dashboard. ?key=<ADMIN_TOKEN> once; a cookie keeps it for 30 days.
+app.get("/admin/stats", async (req, reply) => {
+  const q = z.object({ days: z.coerce.number().int().min(1).max(90).default(7), key: z.string().optional() }).parse(req.query);
+  const cookie = /(?:^|;\s*)ff_admin=([^;]+)/.exec(req.headers.cookie ?? "")?.[1];
+  const given = Buffer.from(q.key ?? cookie ?? "");
+  const want = Buffer.from(config.adminToken);
+  if (!config.adminToken || given.length !== want.length || !timingSafeEqual(given, want)) return reply.code(404).send();
+  if (q.key) reply.header("set-cookie", `ff_admin=${q.key}; Path=/api/admin; Max-Age=2592000; HttpOnly; Secure; SameSite=Strict`);
+  return reply.type("text/html; charset=utf-8").header("cache-control", "no-store").send(dashboard(q.days));
+});
+app.get("/admin/stats.json", async (req, reply) => {
+  const q = z.object({ days: z.coerce.number().int().min(1).max(90).default(7) }).parse(req.query);
+  const cookie = /(?:^|;\s*)ff_admin=([^;]+)/.exec(req.headers.cookie ?? "")?.[1] ?? /^Bearer (.+)$/.exec(req.headers.authorization ?? "")?.[1];
+  const given = Buffer.from(cookie ?? "");
+  const want = Buffer.from(config.adminToken);
+  if (!config.adminToken || given.length !== want.length || !timingSafeEqual(given, want)) return reply.code(404).send();
+  return summary(q.days);
+});
+
 // --- Wallet alerts: inbox and web push (alerts.ts) ---
 app.get("/alerts/:userId", async (req, reply) => {
   const { userId } = req.params as { userId: string };
@@ -598,4 +629,5 @@ if (process.env.INGEST !== "0") {
 startSocial();
 startNames();
 startAlerts();
+startAnalytics();
 await app.listen({ host: "0.0.0.0", port: config.port });

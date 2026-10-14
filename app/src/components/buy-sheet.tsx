@@ -9,6 +9,7 @@ import { T } from '@/constants/type';
 import { api, type BuyQuote } from '@/lib/api';
 import { sol } from '@/lib/format';
 import { useWallet } from '@/lib/wallet';
+import { track } from '@/lib/analytics';
 
 // Real-mode "buy floor": shows the live cheapest listing, what it costs and
 // whether the wallet can cover it. Until FloorFeed can build marketplace
@@ -22,6 +23,7 @@ export function BuySheet({ symbol, open, onClose, onPaper }: {
   const w = useWallet();
   const [quote, setQuote] = useState<{ key: string; q: BuyQuote } | { key: string; error: string } | null>(null);
   const [deposit, setDeposit] = useState(false);
+  useEffect(() => { if (open) track('buy_open', { chain: 'solana' }); }, [open]);
   const [nonce, setNonce] = useState(0); // refetch the quote (and balance) after a deposit
   const key = `${symbol}:${w.address}:${nonce}`;
 
@@ -87,7 +89,7 @@ export function BuySheet({ symbol, open, onClose, onPaper }: {
               )}
 
               {q.reason && <Text style={s.meta}>{q.reason}</Text>}
-              <Pressable accessibilityRole="link" onPress={() => Linking.openURL(q.marketUrl)} style={short != null && short > 0 ? s.secondary : s.primary}>
+              <Pressable accessibilityRole="link" onPress={() => { track('buy_click', { chain: 'solana' }); void Linking.openURL(q.marketUrl); }} style={short != null && short > 0 ? s.secondary : s.primary}>
                 <Text style={short != null && short > 0 ? s.secondaryTxt : s.primaryTxt}>Buy on Magic Eden ↗</Text>
               </Pressable>
             </>

@@ -12,6 +12,7 @@ import { shortAddr } from '@/lib/format';
 import { useEvmWallet } from '@/lib/evm-wallet';
 import { useTradeMode } from '@/lib/mode';
 import { useWallet } from '@/lib/wallet';
+import { track } from '@/lib/analytics';
 
 // SOL balance for the connected address, refreshed when the address changes.
 export function useBalance(address: string | null) {
@@ -95,6 +96,7 @@ export function WalletSheet({ open, onClose }: { open: boolean; onClose: () => v
 
   const pick = async (name: string) => {
     await w.connect(name);
+    track('wallet_connect', { wallet: name });
     onClose();
   };
 

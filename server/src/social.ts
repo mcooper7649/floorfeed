@@ -307,7 +307,7 @@ export async function reportResult(id: number, ok: boolean, url: string | null, 
 
 const tgOn = () => !!(config.telegramBotToken && config.telegramChatId);
 
-async function tg<T = unknown>(method: string, body: object, timeoutMs = 15_000): Promise<T> {
+export async function tg<T = unknown>(method: string, body: object, timeoutMs = 15_000): Promise<T> {
   const res = await fetch(`https://api.telegram.org/bot${config.telegramBotToken}/${method}`, {
     method: "POST",
     headers: { "content-type": "application/json" },

@@ -9,6 +9,7 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useEvmWallet } from '@/lib/evm-wallet';
 import { useWallet } from '@/lib/wallet';
+import { track } from '@/lib/analytics';
 
 // "Deposit": get SOL (or ETH) into the active wallet, two ways. Buy with a card or
 // Apple Pay through Privy's funding flow (MoonPay / Coinbase do the payment
@@ -45,6 +46,7 @@ function Body({ onClose, suggest, setFunding, chain }: {
   setFunding: (v: boolean) => void;
   chain: DepositChain;
 }) {
+  useEffect(() => { track('deposit_open', { chain }); }, [chain]);
   const sw = useWallet();
   const ew = useEvmWallet();
   const w = chain === 'ethereum' ? ew : sw;

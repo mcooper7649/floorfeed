@@ -21,6 +21,7 @@ import { useTradeMode } from '@/lib/mode';
 import { useSession } from '@/lib/session';
 import { useTitle } from '@/lib/use-title';
 import { useWallet } from '@/lib/wallet';
+import { track } from '@/lib/analytics';
 
 // Portfolio: two separate accounts behind one switch. Paper is simulated
 // trades at live prices; Real is what the user's wallets hold. Both share one
@@ -109,7 +110,7 @@ function PaperPortfolio() {
 
   const sell = async (id: number) => {
     if (!userId) return;
-    await api.sell(userId, id).catch(() => {});
+    await api.sell(userId, id).then(() => track('paper_sell')).catch(() => {});
     bumpPortfolio();
   };
 
