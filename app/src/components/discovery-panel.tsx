@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { CollIcon } from '@/components/coll-icon';
 import { PushCard } from '@/components/push-card';
@@ -297,7 +297,7 @@ function MintingList() {
     <Scroll loading={!drops} empty={<Empty text="No live or upcoming mints right now." />}>
       {drops?.length ? (
         <>
-          <Notice tone="caution" title="Mints happen on OpenSea" text="Live and upcoming drops across chains. Check the collection and contract before minting: most new NFTs lose value." />
+          <Notice tone="caution" title="Mint here, carefully" text="Live and upcoming drops across chains. Open one to see its stages and mint in FloorFeed. Most new NFTs lose value, so check the collection first." />
           {drops.map((d) => {
             const soon = !d.minting && d.startsAt != null && d.startsAt > now;
             const when = d.minting
@@ -310,7 +310,7 @@ function MintingList() {
                 sub={`${d.chain === 'robinhood' ? 'Robinhood Chain' : CHAINS[d.chain as Chain]?.name ?? d.chain} · ${d.stage ? `${d.stage} · ` : ''}${when}`}
                 value={d.price == null ? '—' : d.price === 0 ? 'Free' : `${trimNum(d.price)} ${d.currency}`}
                 change={d.priceUsd ? `$${d.priceUsd >= 100 ? d.priceUsd.toFixed(0) : d.priceUsd.toFixed(2)}` : undefined}
-                onPress={() => Linking.openURL(d.url)} />
+                onPress={() => go({ pathname: '/drop/[slug]', params: { slug: d.slug } })} />
             );
           })}
         </>

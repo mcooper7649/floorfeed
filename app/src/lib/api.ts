@@ -186,6 +186,18 @@ export type Drop = {
   stage: string | null; price: number | null; currency: string; priceUsd: number | null; startsAt: number | null; endsAt: number | null;
 };
 
+export type DropStage = {
+  id: string | null; label: string; kind: string | null; price: number | null; nativePriced: boolean;
+  startsAt: number | null; endsAt: number | null; maxPerWallet: number | null; allowlist: boolean;
+};
+export type DropDetail = {
+  slug: string; name: string; chain: string; chainName: string; native: string; contract: string; dropType: string | null;
+  image: string | null; banner: string | null; description: string | null; verified: boolean;
+  website: string | null; twitter: string | null; discord: string | null;
+  minting: boolean; active: DropStage | null; next: DropStage | null; stages: DropStage[];
+  minted: number | null; max: number | null; soldOut: boolean; creatorFeeBps: number | null;
+  supported: boolean; url: string; balance: number | null;
+};
 export type Listing = { mint: string; price: number; name: string | null; image: string | null; rank: number | null };
 
 // One chart bucket (hour, 6 hours or day; see CollectionDetail.bucketSec). `day` is the bucket start.
@@ -323,7 +335,7 @@ export type EvmNetwork = {
   chain: string; name: string; chainId: number; native: string; balance: number | null;
   tokens: { address: string; symbol: string; unit: string; unwrappable: boolean; balance: number | null }[];
 };
-export type ActivityKind = 'buy' | 'sell' | 'approve' | 'bridge' | 'send' | 'unwrap';
+export type ActivityKind = 'buy' | 'sell' | 'approve' | 'bridge' | 'send' | 'unwrap' | 'mint';
 export type ActivityItem = {
   hash: string; chain: string; kind: ActivityKind; title: string; amount: number | null; unit: string | null;
   symbol: string | null; mint: string | null; toChain: string | null;
@@ -405,6 +417,10 @@ export const api = {
   },
   evmBuyTx: (b: { orderHash: string; protocolAddress: string; chain: string; buyer: string }) =>
     send('POST', '/trade/evm/buy-tx', b) as Promise<EvmBuyTx>,
+  drop: (slug: string, minter?: string) =>
+    req<DropDetail>(`/drops/${encodeURIComponent(slug)}${minter ? `?minter=${minter}` : ''}`),
+  dropMintTx: (slug: string, b: { minter: string; quantity: number }) =>
+    send('POST', `/drops/${encodeURIComponent(slug)}/mint-tx`, b) as Promise<EvmTxOut & { total: number; unit: string }>,
   evmNetworks: (address: string) => req<EvmNetwork[]>(`/chain/evm/networks/${address}`),
   evmUnwrapTx: (b: { chain: string; owner: string; token: string; amount?: number }) =>
     send('POST', '/chain/evm/unwrap-tx', b) as Promise<EvmTxOut & { amount: number; symbol: string; unit: string }>,

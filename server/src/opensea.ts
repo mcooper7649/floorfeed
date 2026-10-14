@@ -84,6 +84,7 @@ export async function getOsInfo(slug: string) {
     project_url?: string; twitter_username?: string; discord_url?: string;
     contracts?: { address: string; chain: string }[];
     created_date?: string;
+    banner_image_url?: string; safelist_status?: string;
   }>(`/collections/${slug}`);
   return {
     // Fees a seller can't avoid (OpenSea's own plus enforced creator fees), in basis points.
@@ -97,6 +98,8 @@ export async function getOsInfo(slug: string) {
     description: c.description || null,
     supply: c.total_supply ?? null,
     url: c.opensea_url ?? `https://opensea.io/collection/${slug}`,
+    banner: c.banner_image_url || null,
+    verified: c.safelist_status === "verified" || c.safelist_status === "approved",
   };
 }
 
@@ -348,6 +351,19 @@ type OsDrop = {
   active_stage: { label?: string; stage_type?: string; price?: string; start_time?: string; end_time?: string } | null;
   next_stage: { label?: string; stage_type?: string; price?: string; start_time?: string } | null;
 };
+export type OsStage = {
+  uuid?: string; stage_type?: string; label?: string; price?: string; price_currency_address?: string;
+  start_time?: string; end_time?: string; max_per_wallet?: string; allowlist_wallet_count?: number | null;
+};
+export async function getOsDrop(slug: string) {
+  return get<OsDrop & { drop_type?: string; stages?: OsStage[]; total_supply?: string; max_supply?: string; fee_bps?: number }>(
+    `/drops/${encodeURIComponent(slug)}`);
+}
+// A ready-to-sign mint for `minter` (OpenSea checks stage eligibility and balance).
+export async function getOsMintTx(slug: string, minter: string, quantity: number) {
+  return post<{ to: string; data: string; value: string; chain: string }>(
+    `/drops/${encodeURIComponent(slug)}/mint`, { minter, quantity });
+}
 export async function getOsDrops(type: "featured" | "upcoming" | "recently_minted", limit = 30) {
   const r = await get<{ drops: OsDrop[] }>(`/drops?type=${type}&limit=${limit}`);
   return r.drops ?? [];

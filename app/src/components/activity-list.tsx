@@ -22,7 +22,7 @@ const STATUS: Record<ActivityItem['status'], { label: string; color: string }> =
   dropped: { label: 'Not sent', color: C.down },
   refunded: { label: 'Refunded', color: C.dim },
 };
-const ICON: Record<ActivityItem['kind'], string> = { buy: '↓', sell: '↑', approve: '✓', bridge: '⇄', send: '→', unwrap: '◎' };
+const ICON: Record<ActivityItem['kind'], string> = { buy: '↓', sell: '↑', approve: '✓', bridge: '⇄', send: '→', unwrap: '◎', mint: '✦' };
 
 export function ActivityList({ wallet, onSettled, limit = 8 }: {
   wallet: string;

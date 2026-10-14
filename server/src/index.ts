@@ -20,6 +20,7 @@ import { loadDiscovered } from "./discovery.ts";
 import { itemDetail, warmRarity } from "./items.ts";
 import { ACTIVITY_KINDS, recordActivity, walletActivity } from "./activity.ts";
 import { bridgeQuote, bridgeStatus } from "./bridge.ts";
+import { dropDetail, dropMintTx } from "./drops.ts";
 import { EVM_ADDRESS_RE, evmApproveTx, evmBalances, evmBuyTx, evmHoldings, evmNetworks, evmNftTransferTx, evmQuote, evmSellQuote, evmSellTx, evmTransferFee, evmUnwrapTx, totalEth } from "./trade-evm.ts";
 import { startIngest } from "./ingest.ts";
 import { KINDS, generate, nextPost, postedSince, reportResult, startSocial, submitExternal, xLength } from "./social.ts";
@@ -784,6 +785,19 @@ app.get("/activity/:wallet", async (req, reply) => {
   const { wallet } = req.params as { wallet: string };
   if (!EVM_ADDRESS_RE.test(wallet)) return reply.code(400).send({ error: "Not an EVM address" });
   return walletActivity(wallet);
+});
+
+// One drop (stages, supply, links) and an in-app mint transaction for it.
+app.get("/drops/:slug", async (req, reply) => {
+  const { slug } = req.params as { slug: string };
+  const q = z.object({ minter: z.string().regex(EVM_ADDRESS_RE).optional() }).parse(req.query);
+  if (!/^[a-z0-9-_.]{1,120}$/i.test(slug)) return reply.code(400).send({ error: "bad slug" });
+  try { return await dropDetail(slug, q.minter); } catch (err) { req.log.warn({ err }, "drop"); return reply.code(404).send({ error: "Drop not found" }); }
+});
+app.post("/drops/:slug/mint-tx", async (req, reply) => {
+  const { slug } = req.params as { slug: string };
+  const b = z.object({ minter: z.string().regex(EVM_ADDRESS_RE), quantity: z.number().int().min(1).max(100) }).parse(req.body);
+  try { return await dropMintTx({ slug, ...b }); } catch (err) { return reply.code(409).send({ error: (err as Error).message }); }
 });
 
 // --- Withdrawals from the Privy wallets (the user's wallet signs every one) ---

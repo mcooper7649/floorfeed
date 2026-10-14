@@ -498,3 +498,5 @@ export async function evmTxInfo(chain: string, hash: string) {
   const tx = await c.getTransaction({ hash: hash as Hex }).catch(() => null);
   return tx ? { state: "pending" as const, from: tx.from.toLowerCase(), block: null } : { state: "missing" as const, from: null, block: null };
 }
+
+export const isTradableChain = (c: string) => isTradable(c);

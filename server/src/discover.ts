@@ -1,6 +1,6 @@
 import { db } from "./db.ts";
 import { EVM_CHAINS } from "./config.ts";
-import { getOsDrops, hasOsKey } from "./opensea.ts";
+import { fromOsChain, getOsDrops, hasOsKey } from "./opensea.ts";
 import { usdPrice } from "./prices.ts";
 import { provenWallets, traders } from "./feed.ts";
 
@@ -77,12 +77,12 @@ async function loadDrops(): Promise<Drop[]> {
       if (seen.has(d.collection_slug)) continue;
       seen.add(d.collection_slug);
       const stage = d.active_stage ?? d.next_stage;
-      const native = (EVM_CHAINS as Record<string, { native: string }>)[d.chain]?.native ?? "ETH";
+      const native = (EVM_CHAINS as Record<string, { native: string }>)[fromOsChain(d.chain)]?.native ?? "ETH";
       const price = stage?.price != null ? Number(BigInt(stage.price)) / 1e18 : null;
       const start = stage?.start_time ? Date.parse(stage.start_time) / 1000 : null;
       const end = d.active_stage?.end_time ? Date.parse(d.active_stage.end_time) / 1000 : null;
       out.push({
-        slug: d.collection_slug, name: d.collection_name, chain: d.chain, image: d.image_url, url: d.opensea_url,
+        slug: d.collection_slug, name: d.collection_name, chain: fromOsChain(d.chain), image: d.image_url, url: d.opensea_url,
         minting: d.is_minting, featured: src === "featured",
         stage: stage?.label ?? stage?.stage_type ?? null, price, currency: native, priceUsd: price != null ? (usdPrice(native) ?? 0) * price || null : null,
         startsAt: start, endsAt: end,

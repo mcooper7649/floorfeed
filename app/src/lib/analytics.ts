@@ -9,7 +9,7 @@ import { Platform } from 'react-native';
 export type EventName =
   | 'sign_in' | 'follow' | 'unfollow' | 'alerts_on' | 'alerts_off'
   | 'paper_buy' | 'paper_sell' | 'copy_tap'
-  | 'buy_open' | 'buy_click' | 'buy_signed' | 'sell_open' | 'sell_approved' | 'sell_signed' | 'bridge_click' | 'bridge_open' | 'bridge_signed' | 'unwrap_signed' | 'deposit_open'
+  | 'buy_open' | 'buy_click' | 'buy_signed' | 'sell_open' | 'sell_approved' | 'sell_signed' | 'bridge_click' | 'bridge_open' | 'bridge_signed' | 'unwrap_signed' | 'mint_signed' | 'mint_out' | 'deposit_open'
   | 'wallet_connect' | 'mode_real'
   | 'welcome_shown' | 'welcome_cta' | 'welcome_dismiss' | 'suggested_follow' | 'guide_open' | 'take_post';
 

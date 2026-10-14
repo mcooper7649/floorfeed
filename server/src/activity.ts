@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS wallet_activity (
   hash TEXT PRIMARY KEY,
   wallet TEXT NOT NULL,
   chain TEXT NOT NULL,
-  kind TEXT NOT NULL,          -- buy | sell | approve | bridge | send | unwrap
+  kind TEXT NOT NULL,          -- buy | sell | approve | bridge | send | unwrap | mint
   title TEXT NOT NULL,
   amount REAL, unit TEXT,      -- the headline amount (paid, received, moved)
   symbol TEXT, mint TEXT,      -- the NFT, for buys and sells
@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS wallet_activity (
 CREATE INDEX IF NOT EXISTS wallet_activity_wallet ON wallet_activity (wallet, created_at DESC);
 `);
 
-export const ACTIVITY_KINDS = ["buy", "sell", "approve", "bridge", "send", "unwrap"] as const;
+export const ACTIVITY_KINDS = ["buy", "sell", "approve", "bridge", "send", "unwrap", "mint"] as const;
 type Row = {
   hash: string; wallet: string; chain: string; kind: string; title: string; amount: number | null; unit: string | null;
   symbol: string | null; mint: string | null; request_id: string | null; to_chain: string | null;
