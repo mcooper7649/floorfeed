@@ -18,6 +18,7 @@ import { db } from "./db.ts";
 import { feedEvents, traders } from "./feed.ts";
 import { loadDiscovered } from "./discovery.ts";
 import { itemDetail, warmRarity } from "./items.ts";
+import { bridgeQuote, bridgeStatus } from "./bridge.ts";
 import { EVM_ADDRESS_RE, evmApproveTx, evmBalances, evmBuyTx, evmHoldings, evmNftTransferTx, evmQuote, evmSellQuote, evmSellTx, evmTransferFee, totalEth } from "./trade-evm.ts";
 import { startIngest } from "./ingest.ts";
 import { KINDS, generate, nextPost, postedSince, reportResult, startSocial, submitExternal, xLength } from "./social.ts";
@@ -742,6 +743,17 @@ app.post("/trade/evm/sell-tx", async (req, reply) => {
     mint: z.string().regex(MINT_RE),
   }).parse(req.body);
   try { return await evmSellTx(b); } catch (err) { return reply.code(409).send({ error: (err as Error).message }); }
+});
+
+// Moving native tokens between EVM chains in-app (Relay). The user's wallet signs the deposit.
+app.post("/bridge/quote", async (req, reply) => {
+  const b = z.object({ user: z.string().regex(EVM_ADDRESS_RE), from: z.string(), to: z.string(), amount: z.number().positive() }).parse(req.body);
+  try { return await bridgeQuote(b); } catch (err) { return reply.code(409).send({ error: (err as Error).message }); }
+});
+app.get("/bridge/status/:id", async (req, reply) => {
+  const { id } = req.params as { id: string };
+  if (!/^0x[0-9a-fA-F]{64}$/.test(id)) return reply.code(400).send({ error: "bad request id" });
+  try { return await bridgeStatus(id); } catch (err) { return reply.code(502).send({ error: (err as Error).message }); }
 });
 
 // --- Withdrawals from the Privy wallets (the user's wallet signs every one) ---

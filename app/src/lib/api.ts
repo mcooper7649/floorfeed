@@ -310,6 +310,14 @@ export type EvmSellQuote = {
   marketUrl: string;
 };
 export type EvmTxOut = { chainId: number; to: string; data: string; value: string; gas: string; explorerTx?: string };
+export type BridgeQuote = {
+  requestId: string | null; from: string; to: string;
+  send: number; sendUnit: string; sendUsd: number | null;
+  receive: number; receiveUnit: string;
+  feeUsd: number | null; gasUsd: number | null; seconds: number | null;
+  balance: number | null; problem: string | null;
+  tx: EvmTxOut | null;
+};
 export type EvmBuyTx = {
   chainId: number; to: string; data: string; value: string; valueEth: number; gas: string; gasCostEth: number | null;
   explorerTx?: string;
@@ -385,6 +393,9 @@ export const api = {
   },
   evmBuyTx: (b: { orderHash: string; protocolAddress: string; chain: string; buyer: string }) =>
     send('POST', '/trade/evm/buy-tx', b) as Promise<EvmBuyTx>,
+  bridgeQuote: (b: { user: string; from: string; to: string; amount: number }) =>
+    send('POST', '/bridge/quote', b) as Promise<BridgeQuote>,
+  bridgeStatus: (requestId: string) => req<{ status: string; outTx: string | null }>(`/bridge/status/${requestId}`),
   evmSellQuote: (symbol: string, seller: string, id: string) =>
     req<EvmSellQuote>(`/trade/evm/sell-quote/${encodeURIComponent(symbol)}?${new URLSearchParams({ seller, id })}`),
   evmApproveTx: (b: { chain: string; contract: string; owner: string; operator: string }) =>

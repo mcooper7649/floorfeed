@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Linking, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { BridgeSheet } from '@/components/bridge-sheet';
 import { DepositSheet } from '@/components/deposit-sheet';
 import { ModeChip } from '@/components/mode-toggle';
 import { NftImage } from '@/components/nft-image';
@@ -34,6 +35,7 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
   const [step, setStep] = useState<Step>({ kind: 'idle' });
   useEffect(() => { if (open) track('buy_open', { chain: 'evm' }); }, [open]);
   const [deposit, setDeposit] = useState(false);
+  const [bridging, setBridging] = useState(false);
   const [nonce, setNonce] = useState(0);
   const key = `${symbol}:${id ?? ''}:${w.address}:${nonce}`;
 
@@ -76,7 +78,7 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
   };
 
   return (
-    <Modal visible={open && !deposit} transparent animationType="fade" onRequestClose={close}>
+    <Modal visible={open && !deposit && !bridging} transparent animationType="fade" onRequestClose={close}>
       <Pressable style={s.backdrop} onPress={close}>
         <Pressable style={s.sheet} onPress={() => {}}>
           <View style={s.head}>
@@ -145,12 +147,12 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
                   {elsewhere.length > 0 && (
                     <Text style={s.meta}>
                       Your {unit} is on {elsewhere.map((e) => `${chainName(e.chain)} (${sol(e.balance, 4, unit)})`).join(', ')}.
-                      Each network keeps its own balance, so NFTs on {chainName(q.chain)} need {unit} on {chainName(q.chain)}. A bridge moves it over, usually in under a minute.
+                      Each network keeps its own balance, so NFTs on {chainName(q.chain)} need {unit} on {chainName(q.chain)}. You can move it here in a few seconds.
                     </Text>
                   )}
-                  {elsewhere.length > 0 && unit === 'ETH' && q.chain !== 'ethereum' ? (
-                    <Pressable accessibilityRole="link" onPress={() => { track('bridge_click', { chain: q.chain }); void Linking.openURL(`https://relay.link/bridge/${q.chain}`); }} style={s.primary}>
-                      <Text style={s.primaryTxt}>Bridge ETH to {chainName(q.chain)} ↗</Text>
+                  {elsewhere.length > 0 ? (
+                    <Pressable accessibilityRole="button" onPress={() => { track('bridge_click', { chain: q.chain }); setBridging(true); }} style={s.primary}>
+                      <Text style={s.primaryTxt}>Move {unit} to {chainName(q.chain)}</Text>
                     </Pressable>
                   ) : unit === 'ETH' && q.chain === 'ethereum' ? (
                     <Pressable accessibilityRole="button" onPress={() => setDeposit(true)} style={s.primary}>
@@ -191,6 +193,10 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
           </View>
         </Pressable>
       </Pressable>
+      {q && (
+        <BridgeSheet open={bridging} to={q.chain} amount={short != null && short > 0 ? short + Math.max(short * 0.02, 0.0003) : undefined}
+          onDone={() => setNonce((n) => n + 1)} onClose={() => { setBridging(false); setNonce((n) => n + 1); }} />
+      )}
       <DepositSheet chain="ethereum" open={deposit} suggest={short ?? undefined}
         onClose={() => { setDeposit(false); setNonce((n) => n + 1); }} />
     </Modal>

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { BridgeSheet } from '@/components/bridge-sheet';
 import { ChainBadge } from '@/components/chain-badge';
 import { DepositSheet } from '@/components/deposit-sheet';
 import { SendSheet } from '@/components/send-sheet';
@@ -13,7 +14,8 @@ import { shortAddr } from '@/lib/format';
 import { useWallet } from '@/lib/wallet';
 
 // Real mode: the user's wallets, one row each (Solana, Ethereum) with the
-// balance and the two things you do with a wallet here: deposit, manage.
+// balance and what you do with a wallet here: deposit, send, move between
+// networks (Ethereum), manage.
 export function WalletsCard() {
   const w = useWallet();
   const ew = useEvmWallet();
@@ -23,6 +25,7 @@ export function WalletsCard() {
   const [manage, setManage] = useState(false);
   const [deposit, setDeposit] = useState<'solana' | 'ethereum' | null>(null);
   const [sendOpen, setSendOpen] = useState(false);
+  const [bridgeOpen, setBridgeOpen] = useState(false);
   // Withdrawals are for the FloorFeed (Privy) wallets; extensions send from their own app.
   const embedded = (chain: 'solana' | 'ethereum') => (chain === 'solana' ? w.kind : ew.kind) === 'embedded';
 
@@ -34,6 +37,7 @@ export function WalletsCard() {
         <Text style={T.metaNum} numberOfLines={1}>{shortAddr(address)}{name ? ` · ${name}` : ''}</Text>
       </View>
       {embedded(chain) && <RowAction label="Send" onPress={() => setSendOpen(true)} />}
+      {chain === 'ethereum' && <RowAction label="Move" onPress={() => setBridgeOpen(true)} />}
       <RowAction label="Deposit" onPress={() => setDeposit(chain)} />
     </View>
   );
@@ -57,6 +61,7 @@ export function WalletsCard() {
       <DepositSheet open={deposit === 'solana'} onClose={() => setDeposit(null)} />
       <DepositSheet chain="ethereum" open={deposit === 'ethereum'} onClose={() => setDeposit(null)} />
       <SendSheet open={sendOpen} onClose={() => setSendOpen(false)} />
+      <BridgeSheet open={bridgeOpen} onClose={() => setBridgeOpen(false)} />
     </Card>
   );
 }

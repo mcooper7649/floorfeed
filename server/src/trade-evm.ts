@@ -380,3 +380,11 @@ export async function evmNftTransferTx(b: { chain: string; contract: string; tok
   });
   return { chainId: c.chain!.id, to: contract, data, value: "0", gas: ((gas * 12n) / 10n).toString(), standard: is1155 ? "erc1155" : "erc721" };
 }
+
+// --- shared helpers for other modules (bridge) ---
+export const evmChainOf = (id: number) => TRADABLE.find((c) => EVM_CHAINS[c].id === id) ?? null;
+export async function simulateEvm(chain: string, tx: { from: string; to: string; data: string; value: bigint }) {
+  if (!isTradable(chain)) throw new Error("Unsupported chain");
+  const c = clients[chain] as unknown as PublicClient;
+  return c.estimateGas({ account: tx.from as Hex, to: tx.to as Hex, data: tx.data as Hex, value: tx.value });
+}
