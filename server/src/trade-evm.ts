@@ -396,3 +396,14 @@ export async function simulateEvm(chain: string, tx: { from: string; to: string;
   const c = clients[chain] as unknown as PublicClient;
   return c.estimateGas({ account: tx.from as Hex, to: tx.to as Hex, data: tx.data as Hex, value: tx.value });
 }
+
+// Did a transaction the wallet reported actually reach the chain?
+// mined | failed | pending (in the mempool) | missing (never broadcast or dropped)
+export async function evmTxState(chain: string, hash: string) {
+  if (!isTradable(chain)) throw new Error("Unsupported chain");
+  const c = clients[chain] as unknown as PublicClient;
+  const receipt = await c.getTransactionReceipt({ hash: hash as Hex }).catch(() => null);
+  if (receipt) return receipt.status === "success" ? "mined" : "failed";
+  const tx = await c.getTransaction({ hash: hash as Hex }).catch(() => null);
+  return tx ? "pending" : "missing";
+}

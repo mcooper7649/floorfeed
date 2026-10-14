@@ -18,7 +18,8 @@ const EVM = ['ethereum', 'base', 'abstract', 'ink', 'arbitrum', 'hyperevm', 'ron
 const unitOf = (c: string) => CHAINS[c as keyof typeof CHAINS]?.symbol ?? 'ETH';
 const usd = (n: number | null) => (n == null ? '—' : n < 0.01 ? '< $0.01' : `$${n.toFixed(2)}`);
 
-type Step = { kind: 'idle' } | { kind: 'confirm' } | { kind: 'moving'; hash: string; url: string; status: string; since: number }
+type Step = { kind: 'idle' } | { kind: 'confirm' }
+  | { kind: 'moving'; hash: string; url: string; status: string; deposit: string | null; since: number }
   | { kind: 'done'; url: string } | { kind: 'error'; message: string };
 
 type Props = {
@@ -43,6 +44,7 @@ function Sheet({ open, onClose, onDone, to: toProp, amount: amountProp, note }: 
   const [balances, setBalances] = useState<{ address: string; b: Record<string, number> } | null>(null);
   const [quote, setQuote] = useState<{ key: string; q?: BridgeQuote; error?: string } | null>(null);
   const [step, setStep] = useState<Step>({ kind: 'idle' });
+  const [nonce, setNonce] = useState(0); // bump to re-quote after a failed attempt
   const poll = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => { track('bridge_open', { to: toProp ?? 'any' }); }, [toProp]);
@@ -60,7 +62,7 @@ function Sheet({ open, onClose, onDone, to: toProp, amount: amountProp, note }: 
   const origin = from && origins.includes(from as (typeof EVM)[number]) ? from : origins[0] ?? null;
 
   const value = Number(amount);
-  const key = `${origin}:${to}:${amount}:${w.address}`;
+  const key = `${origin}:${to}:${amount}:${w.address}:${nonce}`;
   useEffect(() => {
     if (!open || !origin || !w.address || !(value > 0)) return;
     let alive = true;
@@ -86,11 +88,24 @@ function Sheet({ open, onClose, onDone, to: toProp, amount: amountProp, note }: 
       const hash = await w.send({ ...q.tx, description: `Bridge ${sol(q.send, 5, q.sendUnit)} from ${chainName(q.from)} to ${chainName(q.to)}` });
       track('bridge_signed', { from: q.from, to: q.to });
       const url = `${q.tx.explorerTx ?? 'https://etherscan.io/tx/'}${hash}`;
-      setStep({ kind: 'moving', hash, url, status: 'waiting', since: Date.now() });
+      setStep({ kind: 'moving', hash, url, status: 'waiting', deposit: null, since: Date.now() });
       if (!q.requestId) return;
       const started = Date.now();
       poll.current = setInterval(async () => {
-        const r = await api.bridgeStatus(q.requestId!).catch(() => null);
+        const r = await api.bridgeStatus(q.requestId!, { chain: q.from, tx: hash }).catch(() => null);
+        const stop = (next: Step) => { clearInterval(poll.current!); poll.current = null; setStep(next); };
+        if (r?.status !== 'success' && r?.deposit === 'failed') {
+          stop({ kind: 'error', message: `The deposit failed on ${chainName(q.from)}, so nothing was bridged. Only the network fee was spent. Try again.` });
+          setNonce((n) => n + 1);
+          return;
+        }
+        // The wallet returned a hash, but the transaction never showed up on the chain (dropped
+        // or never broadcast). Relay would wait forever; nothing left the wallet.
+        if (r?.status === 'waiting' && r.deposit === 'missing' && Date.now() - started > 90_000) {
+          stop({ kind: 'error', message: `Your wallet reported the deposit, but it never reached ${chainName(q.from)}. Nothing was sent. Try again.` });
+          setNonce((n) => n + 1);
+          return;
+        }
         if (r?.status === 'success') {
           clearInterval(poll.current!); poll.current = null;
           setStep({ kind: 'done', url });
@@ -103,7 +118,7 @@ function Sheet({ open, onClose, onDone, to: toProp, amount: amountProp, note }: 
           clearInterval(poll.current!); poll.current = null;
           setStep({ kind: 'error', message: r.status === 'refund' ? `The bridge was refunded to your wallet on ${chainName(q.from)}.` : 'The bridge failed. Check the transaction for details.' });
         } else if (r) {
-          setStep((s) => (s.kind === 'moving' ? { ...s, status: r.status } : s));
+          setStep((s) => (s.kind === 'moving' ? { ...s, status: r.status, deposit: r.deposit ?? s.deposit } : s));
         }
         if (Date.now() - started > 10 * 60_000 && poll.current) { clearInterval(poll.current); poll.current = null; }
       }, 3_000);
@@ -130,7 +145,9 @@ function Sheet({ open, onClose, onDone, to: toProp, amount: amountProp, note }: 
               ) : (
                 <View style={s.loadingRow}>
                   <ActivityIndicator color={C.accent} />
-                  <Text style={[s.bodyStrong, { flex: 1 }]}>{step.status === 'pending' ? `Delivering on ${chainName(to)}…` : `Waiting for your deposit to confirm on ${chainName(q?.from ?? 'ethereum')}…`}</Text>
+                  <Text style={[s.bodyStrong, { flex: 1 }]}>{step.status === 'pending' || step.deposit === 'mined' ? `Deposit confirmed. Delivering on ${chainName(to)}…`
+                    : step.deposit === 'missing' ? 'Waiting for your wallet to send the deposit…'
+                    : `Waiting for your deposit to confirm on ${chainName(q?.from ?? 'ethereum')}…`}</Text>
                   <Elapsed since={step.since} />
                 </View>
               )}

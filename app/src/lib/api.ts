@@ -396,7 +396,10 @@ export const api = {
     send('POST', '/trade/evm/buy-tx', b) as Promise<EvmBuyTx>,
   bridgeQuote: (b: { user: string; from: string; to: string; amount: number }) =>
     send('POST', '/bridge/quote', b) as Promise<BridgeQuote>,
-  bridgeStatus: (requestId: string) => req<{ status: string; outTx: string | null }>(`/bridge/status/${requestId}`),
+  // `deposit`: mined | failed | pending | missing (the wallet's tx never reached the chain).
+  bridgeStatus: (requestId: string, deposit?: { chain: string; tx: string }) =>
+    req<{ status: string; outTx: string | null; deposit?: 'mined' | 'failed' | 'pending' | 'missing' | null }>(
+      `/bridge/status/${requestId}${deposit ? `?${new URLSearchParams(deposit)}` : ''}`),
   evmSellQuote: (symbol: string, seller: string, id: string) =>
     req<EvmSellQuote>(`/trade/evm/sell-quote/${encodeURIComponent(symbol)}?${new URLSearchParams({ seller, id })}`),
   evmApproveTx: (b: { chain: string; contract: string; owner: string; operator: string }) =>

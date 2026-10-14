@@ -753,7 +753,8 @@ app.post("/bridge/quote", async (req, reply) => {
 app.get("/bridge/status/:id", async (req, reply) => {
   const { id } = req.params as { id: string };
   if (!/^0x[0-9a-fA-F]{64}$/.test(id)) return reply.code(400).send({ error: "bad request id" });
-  try { return await bridgeStatus(id); } catch (err) { return reply.code(502).send({ error: (err as Error).message }); }
+  const q = z.object({ chain: z.string().optional(), tx: z.string().regex(/^0x[0-9a-fA-F]{64}$/).optional() }).parse(req.query);
+  try { return await bridgeStatus(id, q.chain && q.tx ? { chain: q.chain, tx: q.tx } : undefined); } catch (err) { return reply.code(502).send({ error: (err as Error).message }); }
 });
 
 // --- Withdrawals from the Privy wallets (the user's wallet signs every one) ---

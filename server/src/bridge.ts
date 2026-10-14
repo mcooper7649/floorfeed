@@ -1,6 +1,6 @@
 import { formatEther, parseEther } from "viem";
 import { EVM_CHAINS } from "./config.ts";
-import { evmBalances, evmChainOf, simulateEvm } from "./trade-evm.ts";
+import { evmBalances, evmChainOf, evmTxState, simulateEvm } from "./trade-evm.ts";
 
 // Moving funds between chains without leaving FloorFeed, via Relay
 // (https://relay.link): Relay quotes a route, the user's wallet signs one
@@ -95,9 +95,13 @@ export async function bridgeQuote(p: { user: string; from: string; to: string; a
 }
 
 // waiting -> pending -> success | failure | refund
-export async function bridgeStatus(requestId: string) {
-  const r = await relay<{ status?: string; txHashes?: string[]; inTxHashes?: string[] }>(
-    `/intents/status/v2?requestId=${encodeURIComponent(requestId)}`,
-  );
-  return { status: r.status ?? "unknown", outTx: r.txHashes?.[0] ?? null };
+// With `deposit` (origin chain + tx hash), also reports whether the deposit
+// itself reached the chain: a wallet can return a hash for a transaction that
+// never gets broadcast, and Relay then just says "waiting" forever.
+export async function bridgeStatus(requestId: string, deposit?: { chain: string; tx: string }) {
+  const [r, dep] = await Promise.all([
+    relay<{ status?: string; txHashes?: string[]; inTxHashes?: string[] }>(`/intents/status/v2?requestId=${encodeURIComponent(requestId)}`),
+    deposit ? evmTxState(deposit.chain, deposit.tx).catch(() => null) : null,
+  ]);
+  return { status: r.status ?? "unknown", outTx: r.txHashes?.[0] ?? null, deposit: dep };
 }
