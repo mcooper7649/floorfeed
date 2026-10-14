@@ -36,6 +36,7 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
   useEffect(() => { if (open) track('buy_open', { chain: 'evm' }); }, [open]);
   const [deposit, setDeposit] = useState(false);
   const [bridging, setBridging] = useState<{ to: string; amount?: number } | null>(null);
+  const [arrived, setArrived] = useState<{ amount: number; unit: string; chain: string } | null>(null);
   const [nonce, setNonce] = useState(0);
   const key = `${symbol}:${id ?? ''}:${w.address}:${nonce}`;
 
@@ -62,7 +63,7 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
   // Whatever is left over stays in the wallet on that chain.
   const bridgeAmount = short != null && price != null ? short + Math.max(price * 0.1, 0.0003) : null;
   const elsewhere = q?.elsewhere ?? [];
-  const close = () => { setStep({ kind: 'idle' }); onClose(); };
+  const close = () => { setStep({ kind: 'idle' }); setArrived(null); onClose(); };
 
   const buy = async () => {
     if (!q?.listing?.orderHash || !q.listing.protocolAddress || !w.address || !w.send) return;
@@ -144,6 +145,7 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
                 <Row label="Wallet" value={w.walletName ?? '—'} />
               </View>
 
+              {arrived && <Text style={s.okLine}>✓ {sol(arrived.amount, 4, arrived.unit)} arrived on {chainName(arrived.chain)}. Prices are refreshed below.</Text>}
               {q.reason && <Text style={s.meta}>{q.reason}</Text>}
               {step.kind === 'error' && <Text style={s.err}>{step.message}</Text>}
 
@@ -155,7 +157,7 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
                   {elsewhere.length > 0 && (
                     <Text style={s.meta}>
                       Your {unit} is on {elsewhere.map((e) => `${chainName(e.chain)} (${sol(e.balance, 4, unit)})`).join(', ')}.
-                      Each network keeps its own balance, so NFTs on {chainName(q.chain)} need {unit} on {chainName(q.chain)}. You can move it here in a few seconds.
+                      Each network keeps its own balance, so NFTs on {chainName(q.chain)} need {unit} on {chainName(q.chain)}. You can move it here without leaving FloorFeed.
                     </Text>
                   )}
                   {elsewhere.length > 0 ? (
@@ -204,7 +206,7 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
     </Modal>
     <BridgeSheet open={!!bridging} to={bridging?.to} amount={bridging?.amount}
       note="Includes a small cushion in case the cheapest listing sells while the funds move. Anything left over stays in your wallet."
-      onDone={() => setNonce((n) => n + 1)} onClose={() => { setBridging(null); setNonce((n) => n + 1); }} />
+      onDone={(a) => { setArrived(a); setNonce((n) => n + 1); }} onClose={() => { setBridging(null); setNonce((n) => n + 1); }} />
     <DepositSheet chain="ethereum" open={deposit} suggest={short ?? undefined}
       onClose={() => { setDeposit(false); setNonce((n) => n + 1); }} />
     </>
@@ -236,6 +238,7 @@ const s = StyleSheet.create({
   val: { ...T.metaNum, color: C.text },
   err: { ...T.meta, color: C.down },
   ok: { ...T.title, color: C.up },
+  okLine: { ...T.meta, color: C.up },
   link: { ...T.label, textAlign: 'center' },
   primary: { backgroundColor: C.accent, borderRadius: 12, paddingVertical: 13, alignItems: 'center' },
   primaryTxt: { ...T.button, color: C.accentInk },

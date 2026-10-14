@@ -18,13 +18,13 @@ const EVM = ['ethereum', 'base', 'abstract', 'ink', 'arbitrum', 'hyperevm', 'ron
 const unitOf = (c: string) => CHAINS[c as keyof typeof CHAINS]?.symbol ?? 'ETH';
 const usd = (n: number | null) => (n == null ? '—' : n < 0.01 ? '< $0.01' : `$${n.toFixed(2)}`);
 
-type Step = { kind: 'idle' } | { kind: 'confirm' } | { kind: 'moving'; hash: string; url: string; status: string }
+type Step = { kind: 'idle' } | { kind: 'confirm' } | { kind: 'moving'; hash: string; url: string; status: string; since: number }
   | { kind: 'done'; url: string } | { kind: 'error'; message: string };
 
 type Props = {
   open: boolean;
   onClose: () => void;
-  onDone?: () => void;
+  onDone?: (arrived: { amount: number; unit: string; chain: string }) => void; // funds landed; the sheet then closes itself
   to?: string;      // destination chain; the user picks one when omitted
   amount?: number;  // suggested amount to arrive, in the destination's token
   note?: string;    // why that amount (shown under the input)
@@ -86,7 +86,7 @@ function Sheet({ open, onClose, onDone, to: toProp, amount: amountProp, note }: 
       const hash = await w.send({ ...q.tx, description: `Bridge ${sol(q.send, 5, q.sendUnit)} from ${chainName(q.from)} to ${chainName(q.to)}` });
       track('bridge_signed', { from: q.from, to: q.to });
       const url = `${q.tx.explorerTx ?? 'https://etherscan.io/tx/'}${hash}`;
-      setStep({ kind: 'moving', hash, url, status: 'waiting' });
+      setStep({ kind: 'moving', hash, url, status: 'waiting', since: Date.now() });
       if (!q.requestId) return;
       const started = Date.now();
       poll.current = setInterval(async () => {
@@ -94,7 +94,11 @@ function Sheet({ open, onClose, onDone, to: toProp, amount: amountProp, note }: 
         if (r?.status === 'success') {
           clearInterval(poll.current!); poll.current = null;
           setStep({ kind: 'done', url });
-          onDone?.();
+          // Opened from a buy: show the tick briefly, then hand back to the buy sheet.
+          if (onDone) {
+            onDone({ amount: q.receive, unit: q.receiveUnit, chain: q.to });
+            setTimeout(onClose, 1_200);
+          }
         } else if (r?.status === 'failure' || r?.status === 'refund') {
           clearInterval(poll.current!); poll.current = null;
           setStep({ kind: 'error', message: r.status === 'refund' ? `The bridge was refunded to your wallet on ${chainName(q.from)}.` : 'The bridge failed. Check the transaction for details.' });
@@ -110,6 +114,7 @@ function Sheet({ open, onClose, onDone, to: toProp, amount: amountProp, note }: 
   };
 
   const toUnit = unitOf(to);
+  const fromMainnet = (q?.from ?? origin) === 'ethereum';
   return (
     <Modal visible={open} transparent animationType="fade" onRequestClose={close}>
       <Pressable style={s.backdrop} onPress={close}>
@@ -125,13 +130,14 @@ function Sheet({ open, onClose, onDone, to: toProp, amount: amountProp, note }: 
               ) : (
                 <View style={s.loadingRow}>
                   <ActivityIndicator color={C.accent} />
-                  <Text style={s.bodyStrong}>{step.status === 'pending' ? `Delivering on ${chainName(to)}…` : 'Waiting for your deposit to land…'}</Text>
+                  <Text style={[s.bodyStrong, { flex: 1 }]}>{step.status === 'pending' ? `Delivering on ${chainName(to)}…` : `Waiting for your deposit to confirm on ${chainName(q?.from ?? 'ethereum')}…`}</Text>
+                  <Elapsed since={step.since} />
                 </View>
               )}
               <Text style={s.meta}>
                 {step.kind === 'done'
                   ? `${q ? sol(q.receive, 5, q.receiveUnit) : 'Your funds'} ${q ? 'is' : 'are'} in your wallet on ${chainName(to)}.`
-                  : 'This usually takes a few seconds once your transaction confirms. You can close this; the funds still arrive.'}
+                  : `${fromMainnet ? 'From Ethereum this usually takes 1–3 minutes: Relay waits for the deposit to confirm on mainnet first.' : 'This usually takes a few seconds.'} You can close this; the funds still arrive.`}
               </Text>
               <Pressable accessibilityRole="link" onPress={() => Linking.openURL(step.url)}>
                 <Text style={s.link}>View deposit transaction ↗</Text>
@@ -185,7 +191,7 @@ function Sheet({ open, onClose, onDone, to: toProp, amount: amountProp, note }: 
                     <Row label="You receive" value={`${sol(q.receive, 5, q.receiveUnit)} on ${chainName(q.to)}`} strong />
                     <Row label="Bridge fee" value={usd(q.feeUsd)} />
                     <Row label="Network fee" value={`≈ ${usd(q.gasUsd)}`} />
-                    <Row label="Time" value={q.seconds != null && q.seconds <= 60 ? 'Seconds' : q.seconds != null ? `About ${Math.ceil(q.seconds / 60)} min` : '—'} />
+                    <Row label="Time" value={q.from === 'ethereum' ? '1–3 minutes' : q.seconds != null && q.seconds <= 60 ? 'Seconds' : q.seconds != null ? `About ${Math.ceil(q.seconds / 60)} min` : '—'} />
                   </View>
                 )
               )}
@@ -209,6 +215,17 @@ function Sheet({ open, onClose, onDone, to: toProp, amount: amountProp, note }: 
       </Pressable>
     </Modal>
   );
+}
+
+// m:ss since the deposit was sent, so a mainnet wait reads as progress, not a hang.
+function Elapsed({ since }: { since: number }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1_000);
+    return () => clearInterval(t);
+  }, []);
+  const sec = Math.max(0, Math.floor((now - since) / 1000));
+  return <Text style={s.val}>{Math.floor(sec / 60)}:{String(sec % 60).padStart(2, '0')}</Text>;
 }
 
 function Row({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
