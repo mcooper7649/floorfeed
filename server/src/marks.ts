@@ -12,6 +12,7 @@ import { unitOf } from "./units.ts";
 const row = db.prepare("SELECT floor, updated_at FROM collections WHERE symbol = ?");
 const dayAgo = db.prepare("SELECT floor FROM collection_snapshots WHERE symbol = ? AND ts <= ? AND floor IS NOT NULL ORDER BY ts DESC LIMIT 1");
 const lastSale = db.prepare("SELECT price, block_time FROM trades WHERE collection = ? ORDER BY block_time DESC LIMIT 1");
+const salesSince = db.prepare("SELECT COUNT(*) n FROM trades WHERE collection = ? AND block_time >= ?");
 
 export type Mark = {
   unit: string;
@@ -20,6 +21,7 @@ export type Mark = {
   change24h: number | null;  // floor vs 24h ago, percent
   updatedAt: number | null;  // when the floor was last read (ms)
   lastSale: { price: number; at: number } | null; // latest sale in the collection (at: unix seconds)
+  sales24h: number;          // sales in the last 24h (the panel pulses when it grows)
 };
 
 export function marks(symbols: string[]): Record<string, Mark> {
@@ -39,6 +41,7 @@ export function marks(symbols: string[]): Record<string, Mark> {
       change24h: c.floor != null && before ? ((c.floor - before) / before) * 100 : null,
       updatedAt: c.updated_at,
       lastSale: sale ? { price: sale.price, at: sale.block_time } : null,
+      sales24h: (salesSince.get(s, Math.floor(now / 1000) - 86_400) as { n: number }).n,
     };
   }
   return out;

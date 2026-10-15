@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { CollIcon } from '@/components/coll-icon';
+import { FlashBg, SalePulse, TickArrow, useBump, useTick } from '@/components/flash';
 import { PushCard } from '@/components/push-card';
 import { ThesisFeedRow } from '@/components/thesis';
 import { C } from '@/constants/brand';
@@ -14,6 +15,7 @@ import {
 } from '@/lib/api';
 import { shortAddr, signedSol, sol, timeAgo } from '@/lib/format';
 import { thumb } from '@/lib/img';
+import { useTradeMode } from '@/lib/mode';
 import { PANEL_GAP, PANEL_WIDTH, usePanel } from '@/lib/panel';
 import { useSession } from '@/lib/session';
 
@@ -116,22 +118,28 @@ function Art({ uri, name, chain, round = true }: { uri: string | null; name: str
   );
 }
 
-function Row({ left, title, extra, sub, value, change, changeColor, onPress }: {
+function Row({ left, title, extra, sub, value, change, changeColor, onPress, watch, count }: {
   left: ReactNode; title: string; extra?: ReactNode; sub?: string; value?: string; change?: string; changeColor?: string; onPress?: () => void;
+  watch?: number | null; // flash the row when this moves (e.g. the floor)
+  count?: number | null; // pulse "+N sales" when this grows
 }) {
+  const { tick, at } = useTick(watch);
+  const bump = useBump(count);
   return (
     <Pressable onPress={onPress} style={({ hovered, pressed }: { hovered?: boolean; pressed: boolean }) => [s.row, (hovered || pressed) && { backgroundColor: C.card }]}>
+      <FlashBg tick={tick} at={at} />
       {left}
       <View style={s.rowMid}>
         <View style={s.titleLine}>
           <Text style={s.name} numberOfLines={1}>{title}</Text>
           {extra}
+          <SalePulse by={bump.by} at={bump.at} />
         </View>
         {sub ? <Text style={s.sub} numberOfLines={1}>{sub}</Text> : null}
       </View>
       {(value || change) ? (
         <View style={s.rowEnd}>
-          {value ? <Text style={s.value} numberOfLines={1}>{value}</Text> : null}
+          {value ? <Text style={s.value} numberOfLines={1}><TickArrow tick={tick} />{value}</Text> : null}
           {change ? <Text style={[s.change, { color: changeColor ?? C.dim }]} numberOfLines={1}>{change}</Text> : null}
         </View>
       ) : null}
@@ -173,7 +181,7 @@ const Empty = ({ text, cta, onPress }: { text: string; cta?: string; onPress?: (
   </View>
 );
 
-// --- Data, shared by tabs and refreshed every minute -------------------------------
+// --- Data, shared by tabs and refreshed every 30s ----------------------------------
 
 function useCollections() {
   const [rows, setRows] = useState<CollectionSummary[] | null>(null);
@@ -181,7 +189,8 @@ function useCollections() {
     let alive = true;
     const load = () => api.collections().then((r) => alive && setRows(r)).catch(() => {});
     load();
-    const t = setInterval(load, 60_000);
+    // Every 30s (the server caches the list), so floor flashes and sale pulses land close to when ingest sees them.
+    const t = setInterval(() => { if (typeof document === 'undefined' || document.visibilityState === 'visible') load(); }, 30_000);
     return () => { alive = false; clearInterval(t); };
   }, []);
   return rows;
@@ -226,7 +235,8 @@ export function CollectionsTab() {
   const collRow = (c: CollectionSummary, sub: string, extra?: ReactNode) => (
     <Row key={c.symbol} left={<Art uri={c.image} name={c.name} chain={c.chain} />} title={c.name} extra={extra} sub={sub}
       value={c.floor != null ? amount(c.floor, c.currency) : '—'}
-      change={pctText(c.change24hPct)} changeColor={pctColor(c.change24hPct)} onPress={() => toColl(c.symbol)} />
+      change={pctText(c.change24hPct)} changeColor={pctColor(c.change24hPct)} onPress={() => toColl(c.symbol)}
+      watch={c.floor} count={c.sales24h} />
   );
   const holderRows = (hs: HolderRow[], what: string) => hs.flatMap((h) => {
     const c = bySymbol.get(h.symbol);
@@ -284,6 +294,7 @@ function inWords(sec: number) {
 }
 
 function MintingList() {
+  const { mode, canReal, setMode } = useTradeMode();
   const [loaded, setLoaded] = useState<{ drops: Drop[]; now: number } | null>(null);
   useEffect(() => {
     let alive = true;
@@ -297,7 +308,17 @@ function MintingList() {
     <Scroll loading={!drops} empty={<Empty text="No live or upcoming mints right now." />}>
       {drops?.length ? (
         <>
-          <Notice tone="caution" title="Mint here, carefully" text="Live and upcoming drops across chains. Open one to see its stages and mint in FloorFeed. Most new NFTs lose value, so check the collection first." />
+          {mode === 'paper' ? (
+            // Paper trading can't mint: a mint makes a new NFT on chain and is paid in real coins.
+            <View style={s.paperNote}>
+              <Notice title="Minting uses real money" text="You're in Paper mode, which can't mint: a mint creates a new NFT on chain and is paid in real coins. Browse drops here; switch to Real to mint one." />
+              {canReal
+                ? <Pressable onPress={() => setMode('real')} style={s.emptyBtn}><Text style={s.emptyBtnTxt}>Switch to Real</Text></Pressable>
+                : <Text style={s.emptyTxt}>Connect a wallet or sign in to switch to Real.</Text>}
+            </View>
+          ) : (
+            <Notice tone="caution" title="Mint here, carefully" text="Live and upcoming drops across chains. Open one to see its stages and mint in FloorFeed. Most new NFTs lose value, so check the collection first." />
+          )}
           {drops.map((d) => {
             const soon = !d.minting && d.startsAt != null && d.startsAt > now;
             const when = d.minting
@@ -520,6 +541,7 @@ const s = StyleSheet.create({
   noticeTxt: { color: C.dim, fontSize: 12, lineHeight: 16 },
   empty: { padding: 20, gap: 12, alignItems: 'center' },
   emptyTxt: { color: C.dim, fontSize: 13, lineHeight: 18, textAlign: 'center' },
+  paperNote: { gap: 8, paddingBottom: 8, alignItems: 'flex-start' },
   emptyBtn: { borderRadius: 8, backgroundColor: C.accent, paddingHorizontal: 12, paddingVertical: 8 },
   emptyBtnTxt: { color: C.accentInk, fontSize: 13, fontWeight: '600' },
   more: { padding: 10, alignItems: 'center' },

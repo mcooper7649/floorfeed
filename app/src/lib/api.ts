@@ -274,7 +274,7 @@ export type Holding = {
 // A collection's live value for the portfolio panel (server/src/marks.ts).
 export type Mark = {
   unit: string; floor: number | null; value: number | null; change24h: number | null;
-  updatedAt: number | null; lastSale: { price: number; at: number } | null;
+  updatedAt: number | null; lastSale: { price: number; at: number } | null; sales24h?: number;
 };
 export type Holdings = { address: string; sol: number; nftValue: number; totalValue: number; nfts: Holding[]; untracked: number };
 

@@ -15,6 +15,7 @@ import { useAuth } from '@/lib/auth';
 import { useEvmWallet } from '@/lib/evm-wallet';
 import { amt, usd } from '@/lib/format';
 import { useLayout } from '@/lib/layout';
+import { useTradeMode } from '@/lib/mode';
 import { usePrices } from '@/lib/prices';
 import { track } from '@/lib/analytics';
 import { useTitle } from '@/lib/use-title';
@@ -43,6 +44,7 @@ export default function DropScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const w = useEvmWallet();
   const auth = useAuth();
+  const { mode, canReal, setMode } = useTradeMode();
   const { toUsd } = usePrices();
   const { wide, pad, maxWidth } = useLayout();
   const [loaded, setLoaded] = useState<{ key: string; d?: DropDetail; error?: string } | null>(null);
@@ -140,6 +142,13 @@ export default function DropScreen() {
           <Text style={T.meta}>It usually confirms within a minute. The NFT{step.quantity > 1 ? 's' : ''} then show{step.quantity > 1 ? '' : 's'} up in your Real portfolio, and Activity there shows when it confirms.</Text>
           <Pressable accessibilityRole="link" onPress={() => Linking.openURL(step.url)}><Text style={s.link}>View transaction ↗</Text></Pressable>
           <Pressable accessibilityRole="button" onPress={() => setStep({ kind: 'idle' })} style={s.secondary}><Text style={s.secondaryTxt}>Mint more</Text></Pressable>
+        </View>
+      ) : canMintHere && mode === 'paper' && canReal ? (
+        // Paper trading has no mints: a mint is a real, on-chain purchase.
+        <View style={s.paperBox}>
+          <Text style={T.bodyStrong}>You&apos;re in Paper mode</Text>
+          <Text style={T.meta}>Minting uses real money, so it isn&apos;t part of paper trading. Switch to Real to mint this one with your wallet, or keep paper trading the collections that already trade.</Text>
+          <Pressable accessibilityRole="button" onPress={() => setMode('real')} style={s.primary}><Text style={s.primaryTxt}>Switch to Real to mint</Text></Pressable>
         </View>
       ) : canMintHere ? (
         !w.address ? (
@@ -306,6 +315,7 @@ function LinkOut({ label, url }: { label: string; url: string }) {
 }
 
 const s = StyleSheet.create({
+  paperBox: { gap: 8, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: C.ai, backgroundColor: C.cardHi },
   fill: { flex: 1, backgroundColor: C.bg },
   banner: { width: '100%', height: 120, borderRadius: 16 },
   bannerWide: { width: '100%', height: 200, borderRadius: 20 },

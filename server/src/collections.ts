@@ -90,7 +90,13 @@ function changePct(symbol: string, floor: number | null, hoursAgo: number) {
 
 // Markets list: Solana (Magic Eden) + EVM (OpenSea) collections in one shape.
 // Amounts are in each collection's native currency, with USD for ranking.
+// Panels poll this every 30s; it's the same for everyone, so compute it at most every 15s.
+let listCache: { at: number; v: ReturnType<typeof buildCollections> } | null = null;
 export function listCollections() {
+  if (!listCache || Date.now() - listCache.at > 15_000) listCache = { at: Date.now(), v: buildCollections() };
+  return listCache.v;
+}
+function buildCollections() {
   const now = Math.floor(Date.now() / 1000);
   const live = new Set(liveSymbols());
   const sol = COLLECTIONS.map(({ symbol, category }) => {

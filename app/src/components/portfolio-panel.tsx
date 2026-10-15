@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 
 import { ChainBadge } from '@/components/chain-badge';
 import { CollIcon } from '@/components/coll-icon';
+import { FlashBg, SalePulse, TickArrow, useBump, useTick } from '@/components/flash';
 import { C } from '@/constants/brand';
 import { T } from '@/constants/type';
 import { api, type Chain, type Holding, type Mark } from '@/lib/api';
@@ -85,8 +86,6 @@ function Panel({ onCollapse }: { onCollapse: () => void }) {
   // --- values: fast, from our DB ---
   const [marks, setMarks] = useState<Record<string, Mark>>({});
   const [checkedAt, setCheckedAt] = useState<number | null>(null);
-  const [flash, setFlash] = useState<Record<string, 'up' | 'down'>>({});
-  const prev = useRef<Record<string, number | null>>({});
   useEffect(() => {
     if (!symbols) return;
     let alive = true;
@@ -94,19 +93,8 @@ function Panel({ onCollapse }: { onCollapse: () => void }) {
       if (!visible()) return;
       api.marks(symbols.split(',')).then((m) => {
         if (!alive) return;
-        // Briefly tint the values that just moved.
-        const moved: Record<string, 'up' | 'down'> = {};
-        for (const [k, v] of Object.entries(m)) {
-          const was = prev.current[k];
-          if (was != null && v.value != null && v.value !== was) moved[k] = v.value > was ? 'up' : 'down';
-          prev.current[k] = v.value;
-        }
         setMarks(m);
         setCheckedAt(Date.now());
-        if (Object.keys(moved).length) {
-          setFlash(moved);
-          setTimeout(() => alive && setFlash({}), 2_500);
-        }
       }).catch(() => {});
     };
     load();
@@ -121,7 +109,7 @@ function Panel({ onCollapse }: { onCollapse: () => void }) {
     const m = marks[n.collection.symbol];
     const unit = m?.unit ?? n.unit ?? (n.chain === 'solana' ? 'SOL' : 'ETH');
     const value = m?.value ?? n.estValue;
-    return { n, unit, value, usd: value != null ? toUsd(value, unit) : null, change: m?.change24h ?? null };
+    return { n, unit, value, usd: value != null ? toUsd(value, unit) : null, change: m?.change24h ?? null, sales: m?.sales24h ?? null };
   }).sort((a, b) => (b.usd ?? -1) - (a.usd ?? -1)), [list, marks, toUsd]);
 
   const totalUsd = rows.reduce((a, r) => a + (r.usd ?? 0), 0);
@@ -159,39 +147,50 @@ function Panel({ onCollapse }: { onCollapse: () => void }) {
             <Text style={[T.meta, s.empty]}>No NFTs from collections FloorFeed tracks in your wallets yet.</Text>
           ) : (
             <ScrollView contentContainerStyle={s.list}>
-              {rows.map(({ n, unit, value, usd: dollars, change }) => {
-                const f = flash[n.collection.symbol];
-                return (
-                  <Pressable key={`${n.chain}:${n.mint}`} style={({ hovered }) => [s.row, hovered && { backgroundColor: C.card }]}
-                    onPress={() => router.push({ pathname: '/item/[symbol]/[id]', params: { symbol: n.collection.symbol, id: n.mint } })}>
-                    <View style={{ width: 40, height: 40 }}>
-                      <CollIcon uri={n.image} name={n.name ?? n.collection.name} size={40} radius={8} />
-                    </View>
-                    <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-                      <Text style={s.name} numberOfLines={1}>{n.name ?? n.collection.name}</Text>
-                      <View style={s.sub}>
-                        <ChainBadge chain={n.chain as Chain} />
-                        <Text style={s.coll} numberOfLines={1}>{n.collection.name}</Text>
-                      </View>
-                    </View>
-                    <View style={{ alignItems: 'flex-end', gap: 2 }}>
-                      <Text style={[s.value, f === 'up' && { color: C.up }, f === 'down' && { color: C.down }]}>
-                        {value != null ? amt(value, unit, 3) : '—'}
-                      </Text>
-                      <Text style={s.small}>
-                        {dollars != null ? usd(dollars) : ''}
-                        {change != null && <Text style={{ color: change >= 0 ? C.up : C.down }}> {pct(change)}</Text>}
-                      </Text>
-                    </View>
-                  </Pressable>
-                );
-              })}
+              {rows.map((r) => <NftRow key={`${r.n.chain}:${r.n.mint}`} {...r} />)}
             </ScrollView>
           )}
           <Text style={s.foot}>Valued at the estimated bid (floor −3%). Prices update every 30s.</Text>
         </>
       )}
     </View>
+  );
+}
+
+// One NFT. Flashes green/red when its value moves, and pulses "+N sales" when
+// its collection trades (a quick read on volume).
+function NftRow({ n, unit, value, usd: dollars, change, sales }: {
+  n: Item; unit: string; value: number | null; usd: number | null; change: number | null; sales: number | null;
+}) {
+  const { tick, at } = useTick(value);
+  const bump = useBump(sales);
+  return (
+    <Pressable style={({ hovered }: { hovered?: boolean }) => [s.row, hovered && { backgroundColor: C.card }]}
+      onPress={() => router.push({ pathname: '/item/[symbol]/[id]', params: { symbol: n.collection.symbol, id: n.mint } })}>
+      <FlashBg tick={tick} at={at} />
+      <View style={{ width: 40, height: 40 }}>
+        <CollIcon uri={n.image} name={n.name ?? n.collection.name} size={40} radius={8} />
+      </View>
+      <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+        <View style={s.sub}>
+          <Text style={[s.name, { flexShrink: 1 }]} numberOfLines={1}>{n.name ?? n.collection.name}</Text>
+          <SalePulse by={bump.by} at={bump.at} />
+        </View>
+        <View style={s.sub}>
+          <ChainBadge chain={n.chain as Chain} />
+          <Text style={s.coll} numberOfLines={1}>{n.collection.name}</Text>
+        </View>
+      </View>
+      <View style={{ alignItems: 'flex-end', gap: 2 }}>
+        <Text style={[s.value, tick === 'up' && { color: C.up }, tick === 'down' && { color: C.down }]}>
+          <TickArrow tick={tick} />{value != null ? amt(value, unit, 3) : '—'}
+        </Text>
+        <Text style={s.small}>
+          {dollars != null ? usd(dollars) : ''}
+          {change != null && <Text style={{ color: change >= 0 ? C.up : C.down }}> {pct(change)}</Text>}
+        </Text>
+      </View>
+    </Pressable>
   );
 }
 
