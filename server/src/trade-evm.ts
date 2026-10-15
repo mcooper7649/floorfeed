@@ -81,6 +81,8 @@ export async function evmHoldings(address: string) {
 
 const floorOf = db.prepare("SELECT floor FROM collections WHERE symbol = ?");
 const lastBuy = db.prepare("SELECT price FROM trades WHERE buyer = ? AND mint = ? ORDER BY block_time DESC LIMIT 1");
+// Fallback cost basis: a buy made in FloorFeed (activity log), for sales our ingest didn't see.
+const appBuy = db.prepare("SELECT amount FROM wallet_activity WHERE wallet = ? AND mint = ? AND kind = 'buy' AND status = 'confirmed' ORDER BY created_at DESC LIMIT 1");
 
 async function loadEvmHoldings(address: string) {
   const tracked = new Map(EVM_SALES.map((c) => [c.slug, c]));
@@ -101,7 +103,8 @@ async function loadEvmHoldings(address: string) {
       image: n.image,
       collection: { symbol: n.collection, name: tracked.get(n.collection)!.name, floor },
       estValue: floor != null ? floor * (1 - config.paperSellHaircut) : null,
-      boughtAt: (lastBuy.get(address, mint) as { price: number } | undefined)?.price ?? null,
+      boughtAt: (lastBuy.get(address, mint) as { price: number } | undefined)?.price
+        ?? (appBuy.get(address, mint) as { amount: number | null } | undefined)?.amount ?? null,
     };
   }).sort((x, y) => (y.estValue ?? 0) - (x.estValue ?? 0));
   // One value per currency: native balances plus NFTs marked in their collection's unit.

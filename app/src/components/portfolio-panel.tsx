@@ -9,7 +9,7 @@ import { C } from '@/constants/brand';
 import { T } from '@/constants/type';
 import { api, type Chain, type Holding, type Mark } from '@/lib/api';
 import { useEvmWallet } from '@/lib/evm-wallet';
-import { amt, pct, usd } from '@/lib/format';
+import { amt, pct, signedSol, signedUsd, usd } from '@/lib/format';
 import { PANEL_GAP, PANEL_WIDTH, usePanel } from '@/lib/panel';
 import { usePrices } from '@/lib/prices';
 import { useWallet } from '@/lib/wallet';
@@ -109,10 +109,20 @@ function Panel({ onCollapse }: { onCollapse: () => void }) {
     const m = marks[n.collection.symbol];
     const unit = m?.unit ?? n.unit ?? (n.chain === 'solana' ? 'SOL' : 'ETH');
     const value = m?.value ?? n.estValue;
-    return { n, unit, value, usd: value != null ? toUsd(value, unit) : null, change: m?.change24h ?? null, sales: m?.sales24h ?? null };
+    // Since purchase, when we know what this wallet paid (its on-chain buy, or a FloorFeed buy).
+    const cost = n.boughtAt;
+    const pl = value != null && cost != null && cost > 0 ? { pct: ((value - cost) / cost) * 100, amt: value - cost } : null;
+    return {
+      n, unit, value, usd: value != null ? toUsd(value, unit) : null, change: m?.change24h ?? null, sales: m?.sales24h ?? null,
+      pl, plUsd: pl ? toUsd(pl.amt, unit) : null, costUsd: cost != null ? toUsd(cost, unit) : null,
+    };
   }).sort((a, b) => (b.usd ?? -1) - (a.usd ?? -1)), [list, marks, toUsd]);
 
   const totalUsd = rows.reduce((a, r) => a + (r.usd ?? 0), 0);
+  // Since purchase, over the NFTs with a known cost (in USD at today's prices).
+  const based = rows.filter((r) => r.plUsd != null && r.costUsd != null && r.costUsd > 0);
+  const plUsd = based.reduce((a, r) => a + r.plUsd!, 0);
+  const plPct = based.length ? (plUsd / based.reduce((a, r) => a + r.costUsd!, 0)) * 100 : null;
   // 24h change of the whole bag: today's value vs the same NFTs at yesterday's floors.
   const before = rows.reduce((a, r) => a + (r.usd != null && r.change != null ? r.usd / (1 + r.change / 100) : r.usd ?? 0), 0);
   const totalChange = before > 0 && rows.some((r) => r.change != null) ? ((totalUsd - before) / before) * 100 : null;
@@ -140,7 +150,9 @@ function Panel({ onCollapse }: { onCollapse: () => void }) {
             <Text style={s.totalNum}>{usd(totalUsd)}</Text>
             <Text style={T.metaNum}>
               {rows.length} NFT{rows.length === 1 ? '' : 's'}
-              {totalChange != null && <Text style={{ color: totalChange >= 0 ? C.up : C.down }}> · {pct(totalChange)} 24h</Text>}
+              {plPct != null
+                ? <Text style={{ color: plUsd >= 0 ? C.up : C.down }}> · {signedUsd(plUsd)} ({pct(plPct)}) since bought</Text>
+                : totalChange != null && <Text style={{ color: totalChange >= 0 ? C.up : C.down }}> · {pct(totalChange)} 24h</Text>}
             </Text>
           </View>
           {rows.length === 0 ? (
@@ -159,8 +171,9 @@ function Panel({ onCollapse }: { onCollapse: () => void }) {
 
 // One NFT. Flashes green/red when its value moves, and pulses "+N sales" when
 // its collection trades (a quick read on volume).
-function NftRow({ n, unit, value, usd: dollars, change, sales }: {
+function NftRow({ n, unit, value, usd: dollars, change, sales, pl, plUsd }: {
   n: Item; unit: string; value: number | null; usd: number | null; change: number | null; sales: number | null;
+  pl: { pct: number; amt: number } | null; plUsd: number | null;
 }) {
   const { tick, at } = useTick(value);
   const bump = useBump(sales);
@@ -185,10 +198,17 @@ function NftRow({ n, unit, value, usd: dollars, change, sales }: {
         <Text style={[s.value, tick === 'up' && { color: C.up }, tick === 'down' && { color: C.down }]}>
           <TickArrow tick={tick} />{value != null ? amt(value, unit, 3) : '—'}
         </Text>
-        <Text style={s.small}>
-          {dollars != null ? usd(dollars) : ''}
-          {change != null && <Text style={{ color: change >= 0 ? C.up : C.down }}> {pct(change)}</Text>}
-        </Text>
+        {pl ? (
+          // Since purchase: % and the gain or loss in dollars (or the coin when there's no USD price).
+          <Text style={[s.small, { color: pl.amt >= 0 ? C.up : C.down }]}>
+            {pct(pl.pct)} · {plUsd != null ? signedUsd(plUsd) : signedSol(pl.amt, 4, unit)}
+          </Text>
+        ) : (
+          <Text style={s.small}>
+            {dollars != null ? usd(dollars) : ''}
+            {change != null && <Text style={{ color: change >= 0 ? C.up : C.down }}> {pct(change)} 24h</Text>}
+          </Text>
+        )}
       </View>
     </Pressable>
   );
