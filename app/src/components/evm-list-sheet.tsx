@@ -9,7 +9,7 @@ import { T } from '@/constants/type';
 import { recordTx } from '@/lib/activity';
 import { track } from '@/lib/analytics';
 import { api, type EvmListQuote } from '@/lib/api';
-import { cancelEvmListing, daysLeft } from '@/lib/evm-listing';
+import { announceListing, cancelEvmListing, daysLeft } from '@/lib/evm-listing';
 import { useEvmWallet } from '@/lib/evm-wallet';
 import { signedSol, signedUsd, sol, timeAgo, usd } from '@/lib/format';
 import { usePrices } from '@/lib/prices';
@@ -101,8 +101,9 @@ export function EvmListSheet({ symbol, id, open, onClose, onDone }: {
     } catch (e) { fail(e, 'The approval did not go through.'); }
   };
 
-  const cancelListing = async (orderHash: string) => {
-    if (q) await cancelEvmListing(w, { chain: q.chain, orderHash, name: q.name });
+  // `replaced`: cancelling the old listing after a new price went up, so the NFT stays listed.
+  const cancelListing = async (orderHash: string, replaced = false) => {
+    if (q) await cancelEvmListing(w, { chain: q.chain, orderHash, name: q.name, mint: replaced ? undefined : q.mint });
   };
 
   const list = async () => {
@@ -111,12 +112,13 @@ export function EvmListSheet({ symbol, id, open, onClose, onDone }: {
     try {
       const b = await api.evmListBuild({ symbol, id, seller: w.address, price: value, days });
       const signature = await w.signTypedData(b.typedData);
-      await api.evmListSubmit({ chain: b.chain, parameters: b.parameters, signature });
+      const r = await api.evmListSubmit({ chain: b.chain, parameters: b.parameters, signature });
+      announceListing(q.mint, { price: value, expiresAt: Math.floor(Date.now() / 1000) + days * 86_400, orderHash: r.orderHash ?? '' });
       track('list_signed', { chain: q.chain, days });
       // Changing the price: the old listing would still sell at its price, so cancel it now.
       if (old) {
         setStep({ kind: 'cancelOld' });
-        try { await cancelListing(old.orderHash); } catch (e) {
+        try { await cancelListing(old.orderHash, true); } catch (e) {
           setStep({ kind: 'error', message: `Your new listing is live, but the old one at ${sol(old.price, 4, unit)} is still up: ${(e as Error).message}. Cancel it from here.` });
           setNonce((n) => n + 1);
           onDone?.();

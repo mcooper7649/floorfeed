@@ -246,7 +246,6 @@ function RealPortfolio({ solAddress, evmAddress }: { solAddress: string | null; 
   const [selling, setSelling] = useState<Row | null>(null);
   const [listing, setListing] = useState<Row | null>(null);
   const [nets, setNets] = useState<{ address: string; n: EvmNetwork[] } | null>(null);
-  const [listedKey, setListedKey] = useState(0); // bumps when a list / cancel happens on this page
 
   const fetchData = useCallback(() => {
     const jobs: Promise<unknown>[] = [];
@@ -262,6 +261,11 @@ function RealPortfolio({ solAddress, evmAddress }: { solAddress: string | null; 
     Promise.all(jobs).finally(() => setRefreshing(false));
   }, [solAddress, evmAddress]);
   useEffect(fetchData, [fetchData]);
+  useEffect(() => {
+    const onListing = () => { setTimeout(fetchData, 5_000); setTimeout(fetchData, 20_000); };
+    window.addEventListener?.('floorfeed:listing', onListing);
+    return () => window.removeEventListener?.('floorfeed:listing', onListing);
+  }, [fetchData]);
   const refresh = () => { setRefreshing(true); fetchData(); };
 
   const sh = solData?.address === solAddress && solData && 'h' in solData ? solData.h : null;
@@ -296,7 +300,7 @@ function RealPortfolio({ solAddress, evmAddress }: { solAddress: string | null; 
     <>
     {listing && (
       <EvmListSheet symbol={listing.collection.symbol} id={listing.mint} open onClose={() => setListing(null)}
-        onDone={() => { setTimeout(fetchData, 3_000); setTimeout(() => setListedKey((k) => k + 1), 3_000); }} />
+        onDone={() => setTimeout(fetchData, 3_000)} />
     )}
     {selling && (
       <EvmSellSheet symbol={selling.collection.symbol} id={selling.mint} open onClose={() => setSelling(null)}
@@ -312,7 +316,7 @@ function RealPortfolio({ solAddress, evmAddress }: { solAddress: string | null; 
           <MoneyTotal loading={moneyLoading} cash={cashUsd} nfts={nftUsd} nftCount={rows.length} networks={cashLines.length} units={unitTotals} />
           <WalletsCard />
           <NetworksCard sol={solAddress ? sh?.sol ?? null : null} networks={evmAddress ? en : []} onChanged={fetchData} />
-          {evmAddress && <MyListings address={evmAddress} refreshKey={listedKey} onChanged={() => setTimeout(fetchData, 3_000)} />}
+          {evmAddress && <MyListings address={evmAddress} onChanged={() => setTimeout(fetchData, 3_000)} />}
           <SectionHeader title="Holdings" count={rows.length || undefined} />
         </View>
       }

@@ -8,6 +8,7 @@ import { FlashBg, SalePulse, TickArrow, useBump, useTick } from '@/components/fl
 import { C } from '@/constants/brand';
 import { T } from '@/constants/type';
 import { api, type Chain, type Holding, type Mark } from '@/lib/api';
+import { type ListingChange } from '@/lib/evm-listing';
 import { useEvmWallet } from '@/lib/evm-wallet';
 import { amt, pct, signedSol, signedUsd, usd } from '@/lib/format';
 import { PANEL_GAP, PANEL_WIDTH, usePanel } from '@/lib/panel';
@@ -51,6 +52,8 @@ function Panel({ onCollapse }: { onCollapse: () => void }) {
   const [items, setItems] = useState<{ wallets: string; list: Item[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const loadedAt = useRef(0);
+  // Listings changed on this page, applied over holdings for a minute (until OpenSea shows them).
+  const [listingOverrides, setListingOverrides] = useState<Record<string, ListingChange>>({});
   const loadHoldings = useCallback(() => {
     if (!wallets) return;
     loadedAt.current = Date.now();
@@ -62,6 +65,9 @@ function Panel({ onCollapse }: { onCollapse: () => void }) {
       if (a == null && b == null) { setError('Couldn’t load your NFTs. Retrying soon.'); return; }
       setError(null);
       setItems({ wallets, list: [...(a ?? []), ...(b ?? [])] });
+      // OpenSea has had 15s+ to index a listing change by now: its data wins again.
+      const cutoff = Date.now() - 15_000;
+      setListingOverrides((o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v.at > cutoff)));
     });
   }, [wallets, sw.address, ew.address]);
 
@@ -70,17 +76,33 @@ function Panel({ onCollapse }: { onCollapse: () => void }) {
     const t = setInterval(() => { if (visible()) loadHoldings(); }, HOLDINGS_EVERY);
     // A trade changes what you own; give the chain a moment to settle first.
     const onTrade = () => setTimeout(loadHoldings, 20_000);
+    // A listing / cancel: shown at once (below), then confirmed from OpenSea, which can take a few seconds to index it.
+    const onListing = (e: Event) => {
+      const d = (e as CustomEvent<ListingChange>).detail;
+      setListingOverrides((o) => ({ ...o, [d.mint]: d }));
+      setTimeout(loadHoldings, 5_000);
+      setTimeout(loadHoldings, 20_000);
+    };
+    window.addEventListener?.('floorfeed:listing', onListing);
     const onShow = () => { if (visible() && Date.now() - loadedAt.current > 2 * 60_000) loadHoldings(); };
     window.addEventListener?.('floorfeed:activity', onTrade);
     document.addEventListener?.('visibilitychange', onShow);
     return () => {
       clearInterval(t);
       window.removeEventListener?.('floorfeed:activity', onTrade);
+      window.removeEventListener?.('floorfeed:listing', onListing);
       document.removeEventListener?.('visibilitychange', onShow);
     };
   }, [loadHoldings]);
 
-  const list = items?.wallets === wallets ? items.list : null;
+  const list = useMemo(() => {
+    const l = items?.wallets === wallets ? items.list : null;
+    if (!l || !Object.keys(listingOverrides).length) return l;
+    return l.map((n) => {
+      const o = listingOverrides[n.mint.toLowerCase()];
+      return o ? { ...n, listing: o.listing } : n;
+    });
+  }, [items, wallets, listingOverrides]);
   const symbols = useMemo(() => [...new Set((list ?? []).map((n) => n.collection.symbol))].sort().join(','), [list]);
 
   // --- values: fast, from our DB ---

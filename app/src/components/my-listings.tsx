@@ -16,12 +16,12 @@ import { sol, usd } from '@/lib/format';
 import { usePrices } from '@/lib/prices';
 
 // Everything this wallet has listed on OpenSea (EVM), with Change price and
-// Cancel (free on OpenSea's signed zone). Refreshes every minute and whenever
-// `refreshKey` changes (a list / cancel elsewhere on the page).
+// Cancel (free on OpenSea's signed zone). Refreshes every minute and after a
+// list / cancel anywhere on the page.
 
 type RowState = { kind: 'confirm' } | { kind: 'cancelling' } | { kind: 'error'; message: string };
 
-export function MyListings({ address, refreshKey, onChanged }: { address: string; refreshKey?: number; onChanged?: () => void }) {
+export function MyListings({ address, onChanged }: { address: string; onChanged?: () => void }) {
   const w = useEvmWallet();
   const { toUsd } = usePrices();
   const [data, setData] = useState<{ address: string; listings: MyListing[] } | { address: string; error: string } | null>(null);
@@ -36,8 +36,11 @@ export function MyListings({ address, refreshKey, onChanged }: { address: string
   useEffect(() => {
     load();
     const t = setInterval(load, 60_000);
-    return () => clearInterval(t);
-  }, [load, refreshKey]);
+    // Listed or cancelled anywhere on the page: OpenSea takes a few seconds to show it.
+    const onListing = () => { setTimeout(load, 4_000); setTimeout(load, 15_000); };
+    window.addEventListener?.('floorfeed:listing', onListing);
+    return () => { clearInterval(t); window.removeEventListener?.('floorfeed:listing', onListing); };
+  }, [load]);
 
   const current = data?.address === address ? data : null;
   const listings = current && 'listings' in current ? current.listings.filter((l) => !gone.has(l.orderHash)) : [];

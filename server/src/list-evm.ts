@@ -267,11 +267,17 @@ export type MyListing = {
 };
 const mineCache = new Map<string, { at: number; v: MyListing[] }>();
 const nftMeta = new Map<string, { name: string | null; image: string | null; slug: string | null }>();
-export const forgetListings = (seller: string) => mineCache.delete(seller.toLowerCase());
+// After a list / cancel, skip the cache for a minute: OpenSea can take a few
+// seconds to index the change, and a stale read mustn't stick for 60s.
+const dirtyUntil = new Map<string, number>();
+export const forgetListings = (seller: string) => {
+  mineCache.delete(seller.toLowerCase());
+  dirtyUntil.set(seller.toLowerCase(), Date.now() + 60_000);
+};
 export async function evmWalletListings(seller: string): Promise<MyListing[]> {
   const ck = seller.toLowerCase();
   const hit = mineCache.get(ck);
-  if (hit && Date.now() - hit.at < 60_000) return hit.v;
+  if (hit && Date.now() - hit.at < 60_000 && (dirtyUntil.get(ck) ?? 0) < Date.now()) return hit.v;
   const raw = await getOsMyListings(null, seller);
   const v = await Promise.all(raw.filter((l) => isTradableChain(l.chain)).map(async (l): Promise<MyListing> => {
     const [contract, tokenId] = l.mint.split(":");
