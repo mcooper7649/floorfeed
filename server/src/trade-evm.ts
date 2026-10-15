@@ -566,6 +566,9 @@ export const isTradableChain = (c: string) => isTradable(c);
 // the nonce, gas and fees, Privy shows and signs that exact transaction, and
 // this broadcasts it through our RPC.
 
+// Minimum priority fee: 0.05 gwei on Ethereum (a few cents at most), 0.001 gwei on L2s.
+const MIN_TIP = (chain: EvmChain) => (chain === "ethereum" ? 50_000_000n : 1_000_000n);
+
 export async function evmPrepare(p: { chainId: number; from: string; to: string; data: string; value: string; gas?: string }) {
   const chain = evmChainOf(p.chainId);
   if (!chain) throw new Error("Unsupported network");
@@ -578,8 +581,12 @@ export async function evmPrepare(p: { chainId: number; from: string; to: string;
   ]);
   const base = { nonce, gas: gas.toString(), chainId: p.chainId };
   if (fees?.maxFeePerGas != null) {
-    // Headroom so a busy block doesn't strand it; the unused part isn't charged.
-    return { ...base, type: 2, maxFeePerGas: ((fees.maxFeePerGas * 13n) / 10n).toString(), maxPriorityFeePerGas: (fees.maxPriorityFeePerGas ?? 0n).toString() };
+    // RPCs often estimate a 0 tip, and a 0-tip transaction can wait many
+    // minutes for a block (Privy's did, and timed out). Floor the tip, and
+    // allow the base fee to double; only what's used is charged.
+    const tip = (fees.maxPriorityFeePerGas ?? 0n) > MIN_TIP(chain) ? fees.maxPriorityFeePerGas! : MIN_TIP(chain);
+    const baseFee = await c.getBlock().then((b) => b.baseFeePerGas ?? 0n).catch(() => fees.maxFeePerGas!);
+    return { ...base, type: 2, maxFeePerGas: (baseFee * 2n + tip).toString(), maxPriorityFeePerGas: tip.toString() };
   }
   return { ...base, type: 0, gasPrice: (((await c.getGasPrice()) * 12n) / 10n).toString() };
 }
