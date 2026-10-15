@@ -8,6 +8,7 @@ import { C } from '@/constants/brand';
 import { chainById, chainName } from '@/constants/chains';
 import { T } from '@/constants/type';
 import { api, type EvmSellQuote, type EvmTxOut } from '@/lib/api';
+import { cancelEvmListing } from '@/lib/evm-listing';
 import { useEvmWallet } from '@/lib/evm-wallet';
 import { signedSol, signedUsd, sol, usd } from '@/lib/format';
 import { recordTx } from '@/lib/activity';
@@ -38,6 +39,7 @@ export function EvmSellSheet({ symbol, id, open, onClose, onSold }: {
   const [quote, setQuote] = useState<{ key: string; q: EvmSellQuote } | { key: string; error: string } | null>(null);
   const [step, setStep] = useState<Step>({ kind: 'idle' });
   const [nonce, setNonce] = useState(0);
+  const [oldCancel, setOldCancel] = useState<'idle' | 'working' | 'done' | { error: string }>('idle'); // the listing left behind by a sale
   const [listing, setListing] = useState(false); // switched to listing at your price (the list sheet)
   const [justApproved, setJustApproved] = useState(false); // step 1 done in this session: make step 2 obvious
   const key = `${symbol}:${id}:${w.address}:${nonce}`;
@@ -86,6 +88,7 @@ export function EvmSellSheet({ symbol, id, open, onClose, onSold }: {
     if (polling.current) { clearInterval(polling.current); polling.current = null; }
     setStep({ kind: 'idle' });
     setListing(false);
+    setOldCancel('idle');
     onClose();
   };
 
@@ -126,6 +129,21 @@ export function EvmSellSheet({ symbol, id, open, onClose, onSold }: {
     }
   };
 
+  // After a sale the listing can't fill, but it stays signed until it expires:
+  // cancelling (free) makes sure it never fills if this NFT comes back.
+  const cancelOld = async () => {
+    if (!q?.listing) return;
+    setOldCancel('working');
+    try {
+      await cancelEvmListing(w, { chain: q.listing.chain, orderHash: q.listing.orderHash, name: q.name, mint: q.mint });
+      track('list_cancel', { chain: q.chain, from: 'sold' });
+      setOldCancel('done');
+    } catch (e) {
+      const m = (e as Error).message;
+      setOldCancel(/isn't live anymore/i.test(m) ? 'done' : { error: cancelled(m) ? 'You cancelled in your wallet. The listing is still signed.' : m });
+    }
+  };
+
   return (
     <>
     {open && listing && <EvmListSheet symbol={symbol} id={id} open onClose={close} onDone={onSold} />}
@@ -149,6 +167,23 @@ export function EvmSellSheet({ symbol, id, open, onClose, onSold }: {
                 <Text style={s.meta}>
                   {offer.currency} is wrapped {offer.currency.slice(1)}, worth the same. In Portfolio, under Money by network, you can unwrap it to {offer.currency.slice(1)} or move it to another network. Activity shows when the sale confirms.
                 </Text>
+              )}
+              {q?.listing && (
+                <View style={s.stepBox}>
+                  {oldCancel === 'done' ? (
+                    <Text style={s.okLine}>✓ Your OpenSea listing is cancelled.</Text>
+                  ) : (
+                    <>
+                      <Text style={s.meta}>
+                        You also had it listed at {sol(q.listing.price, 4, unit)}. That listing can&apos;t sell now, but it stays signed until it expires. Cancel it so it never fills if this NFT comes back to you{q.listing.cancelFree ? ' (free, no gas)' : ' (network fee)'}.
+                      </Text>
+                      <Pressable accessibilityRole="button" onPress={cancelOld} disabled={oldCancel === 'working'} style={[s.primary, oldCancel === 'working' && { opacity: 0.7 }]}>
+                        <Text style={s.primaryTxt}>{oldCancel === 'working' ? 'Confirm in your wallet…' : 'Cancel the old listing'}</Text>
+                      </Pressable>
+                      {typeof oldCancel === 'object' && <Text style={s.err}>{oldCancel.error}</Text>}
+                    </>
+                  )}
+                </View>
               )}
               <Pressable accessibilityRole="link" onPress={() => Linking.openURL(step.url)} style={s.secondary}>
                 <Text style={s.secondaryTxt}>View transaction ↗</Text>
@@ -188,6 +223,11 @@ export function EvmSellSheet({ symbol, id, open, onClose, onSold }: {
               {offer?.belowFloor != null && offer.belowFloor > 0.15 && (
                 <Text style={s.warn}>
                   This offer is {Math.round(offer.belowFloor * 100)}% below the floor. Listing it at your price could get more, but may take longer to sell.
+                </Text>
+              )}
+              {q.listing && (
+                <Text style={s.meta}>
+                  You have this listed on OpenSea at {sol(q.listing.price, 4, unit)}. Selling here ends it; you can cancel the leftover listing right after.
                 </Text>
               )}
               {q.reason && <Text style={s.meta}>{q.reason}</Text>}

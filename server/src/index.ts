@@ -735,9 +735,13 @@ const MINT_RE = /^0x[0-9a-fA-F]{40}:\d{1,78}$/;
 app.get("/trade/evm/sell-quote/:symbol", async (req, reply) => {
   const { symbol } = req.params as { symbol: string };
   const q = z.object({ seller: z.string().regex(EVM_ADDRESS_RE), id: z.string().regex(MINT_RE) }).parse(req.query);
-  const quote = await evmSellQuote(symbol, q.id, q.seller).catch((err) => { req.log.warn({ err }, "evm sell quote"); return null; });
+  const [quote, listed] = await Promise.all([
+    evmSellQuote(symbol, q.id, q.seller).catch((err) => { req.log.warn({ err }, "evm sell quote"); return null; }),
+    evmMyListings(null, q.seller).catch(() => new Map()),
+  ]);
   if (!quote) return reply.code(404).send({ error: "No quote for this NFT" });
-  return quote;
+  // Listed too? Selling leaves that listing signed until it expires, so the sheet offers to cancel it.
+  return { ...quote, listing: listed.get(q.id.toLowerCase()) ?? null };
 });
 // Listing on OpenSea (list-evm.ts): quote, typed data to sign, submit; and cancel.
 app.get("/trade/evm/list-quote/:symbol", async (req, reply) => {

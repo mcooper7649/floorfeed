@@ -318,6 +318,7 @@ export type EvmQuote = {
 };
 export type EvmSellQuote = {
   collection: { symbol: string; name: string; floor: number | null };
+  listing?: { price: number; expiresAt: number; orderHash: string; chain: string; cancelFree: boolean } | null; // also listed on OpenSea
   chain: string; mint: string; name: string; image: string | null;
   boughtAt: number | null;
   offer: {

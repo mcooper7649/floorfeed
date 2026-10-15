@@ -224,7 +224,9 @@ export async function evmCancelBuild(p: { chain: string; orderHash: string; sell
   if (!isTradableChain(p.chain)) throw new Error("Unsupported chain");
   const o = await getOsOrder(p.chain, p.orderHash, true);
   if (!o || o.protocol_data.parameters.offerer.toLowerCase() !== p.seller.toLowerCase()) throw new Error("That listing isn't yours.");
-  if ((o.status && o.status !== "ACTIVE") || o.remaining_quantity === 0) throw new Error("That listing isn't live anymore.");
+  // An order that's inactive only because the NFT left the wallet can still be
+  // cancelled (and should be: it would wake up if the NFT came back).
+  if (/cancel|fill|expir/i.test(o.status ?? "") || o.remaining_quantity === 0) throw new Error("That listing isn't live anymore.");
   const l = { orderHash: o.order_hash, protocolAddress: o.protocol_address, parameters: o.protocol_data.parameters };
   const chainId = EVM_CHAINS[p.chain as keyof typeof EVM_CHAINS].id;
   if (l.parameters.zone.toLowerCase() === SIGNED_ZONE) {
@@ -303,11 +305,13 @@ export async function evmWalletListings(seller: string): Promise<MyListing[]> {
   mineCache.set(ck, { at: Date.now(), v });
   return v;
 }
-// The same, keyed by mint, limited to the given chains (for holdings).
-export async function evmMyListings(chains: string[], seller: string) {
-  const out = new Map<string, { price: number; expiresAt: number; orderHash: string }>();
+// The same, keyed by mint, limited to the given chains (all when null; for holdings).
+export async function evmMyListings(chains: string[] | null, seller: string) {
+  const out = new Map<string, { price: number; expiresAt: number; orderHash: string; chain: string; cancelFree: boolean }>();
   for (const l of await evmWalletListings(seller)) {
-    if (chains.includes(l.chain) && !out.has(l.mint)) out.set(l.mint, { price: l.price, expiresAt: l.expiresAt, orderHash: l.orderHash });
+    if ((!chains || chains.includes(l.chain)) && !out.has(l.mint)) {
+      out.set(l.mint, { price: l.price, expiresAt: l.expiresAt, orderHash: l.orderHash, chain: l.chain, cancelFree: l.cancelFree });
+    }
   }
   return out;
 }
