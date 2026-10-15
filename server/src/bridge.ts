@@ -28,7 +28,7 @@ const APP_FEE_RECIPIENT = process.env.RELAY_FEE_RECIPIENT ?? "";
 const APP_FEE_BPS = Number(process.env.RELAY_FEE_BPS ?? 0);
 const appFees = /^0x[0-9a-fA-F]{40}$/.test(APP_FEE_RECIPIENT) && APP_FEE_BPS > 0 && APP_FEE_BPS <= 100
   ? [{ recipient: APP_FEE_RECIPIENT, fee: String(Math.round(APP_FEE_BPS)) }] : undefined;
-const SOL_FEE_RESERVE = 0.00002; // base fee + a priority fee the wallet may add
+const SOL_FEE_RESERVE = 0.00012; // base fee + our capped priority fee (buildSolDeposit)
 const SOL_RENT_MIN = 0.00089088;   // rent-exempt minimum for a plain wallet account
 type Chain = keyof typeof EVM_CHAINS | "solana";
 const isEvm = (c: string): c is keyof typeof EVM_CHAINS => c in EVM_CHAINS && !!evmChainOf(EVM_CHAINS[c as keyof typeof EVM_CHAINS].id);
@@ -70,6 +70,26 @@ const hexBytes = (h: string) => Uint8Array.from((h.replace(/^0x/, "").match(/../
 
 // Relay's Solana deposit -> an unsigned v0 transaction (base64) with a fresh
 // blockhash. The user's wallet must be the only signer, and it pays the fee.
+// Relay's instructions carry no priority fee, and validators drop zero-priority
+// transactions when Solana is busy, so a compute budget goes in front: the
+// units a dry run uses (+30%) at the going "very high" priority price, capped.
+const COMPUTE_BUDGET = address("ComputeBudget111111111111111111111111111111");
+const MAX_PRIORITY_LAMPORTS = 100_000; // 0.0001 SOL, at most, on top of the 5000-lamport base fee
+const budgetIx = (op: 2 | 3, value: bigint, bytes: 4 | 8): Instruction => {
+  const data = new Uint8Array(1 + bytes);
+  data[0] = op;
+  const view = new DataView(data.buffer);
+  if (bytes === 8) view.setBigUint64(1, value, true); else view.setUint32(1, Number(value), true);
+  return { programAddress: COMPUTE_BUDGET, accounts: [], data };
+};
+async function priorityPrice(tx: string) {
+  // Helius' estimate for this transaction; else recent fees on the network.
+  const est = await rpc<{ priorityFeeEstimate?: number }>("getPriorityFeeEstimate", [{ transaction: tx, options: { transactionEncoding: "base64", priorityLevel: "VeryHigh" } }]).catch(() => null);
+  if (est?.priorityFeeEstimate != null) return Math.ceil(est.priorityFeeEstimate);
+  const recent = await rpc<{ prioritizationFee: number }[]>("getRecentPrioritizationFees", [[]]).catch(() => []);
+  const fees = recent.map((r) => r.prioritizationFee).filter((f) => f > 0).sort((a, b) => a - b);
+  return fees.length ? fees[Math.floor(fees.length * 0.75)] : 50_000;
+}
 async function buildSolDeposit(user: string, item: SolItem) {
   const signers = new Set(item.instructions.flatMap((i) => i.keys.filter((k) => k.isSigner).map((k) => k.pubkey)));
   if (signers.size !== 1 || !signers.has(user)) throw new Error("Relay returned an unexpected route. Try again.");
@@ -85,13 +105,20 @@ async function buildSolDeposit(user: string, item: SolItem) {
     solRpc.getLatestBlockhash({ commitment: "confirmed" }).send(),
     item.addressLookupTableAddresses?.length ? fetchAddressesForLookupTables(item.addressLookupTableAddresses.map(address), solRpc) : {},
   ]);
-  const message = compressTransactionMessageUsingAddressLookupTables(pipe(
+  const build = (all: Instruction[]) => getBase64EncodedWireTransaction(compileTransaction(compressTransactionMessageUsingAddressLookupTables(pipe(
     createTransactionMessage({ version: 0 }),
     (m) => setTransactionMessageFeePayer(address(user), m),
     (m) => setTransactionMessageLifetimeUsingBlockhash(lifetime, m),
-    (m) => appendTransactionMessageInstructions(ixs, m),
-  ), tables);
-  return getBase64EncodedWireTransaction(compileTransaction(message));
+    (m) => appendTransactionMessageInstructions(all, m),
+  ), tables)));
+  const draft = build(ixs);
+  const [sim, price] = await Promise.all([
+    rpc<{ value: { unitsConsumed?: number } }>("simulateTransaction", [draft, { encoding: "base64", sigVerify: false, replaceRecentBlockhash: true, commitment: "confirmed" }]).catch(() => null),
+    priorityPrice(draft),
+  ]);
+  const units = Math.min(1_400_000, Math.max(50_000, Math.ceil((sim?.value.unitsConsumed ?? 200_000) * 1.3) + 1_000));
+  const micro = Math.max(10_000, Math.min(price, Math.floor((MAX_PRIORITY_LAMPORTS * 1_000_000) / units)));
+  return build([budgetIx(2, BigInt(units), 4), budgetIx(3, BigInt(micro), 8), ...ixs]);
 }
 
 // Dry run without a signature: null when it would land, else the reason.

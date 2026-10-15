@@ -65,7 +65,9 @@ export function recordActivity(a: {
 }
 
 const now = () => Math.floor(Date.now() / 1000);
-const DROP_AFTER = 15 * 60; // a hash that never shows up on chain in 15 min was dropped
+// A hash that never shows up on chain was dropped: after 15 min on EVM chains;
+// on Solana after 3 min, since its blockhash expires in about one.
+const dropAfter = (chain: string) => (chain === "solana" ? 3 * 60 : 15 * 60);
 
 // Bring unfinished entries up to date (a few per call keeps it cheap).
 async function refresh(rows: Row[]) {
@@ -76,7 +78,7 @@ async function refresh(rows: Row[]) {
     if (info.from && info.from !== r.wallet) { remove.run(r.hash); r.status = "removed"; return; }
     let status = r.status, outTx: string | null = null;
     if (info.state === "failed") status = "failed";
-    else if (info.state === "missing") status = now() - r.created_at > DROP_AFTER ? "dropped" : "pending";
+    else if (info.state === "missing") status = now() - r.created_at > dropAfter(r.chain) ? "dropped" : "pending";
     else if (info.state === "pending") status = "pending";
     else if (r.kind === "bridge" && r.request_id) {
       const b = await bridgeStatus(r.request_id).catch(() => null);

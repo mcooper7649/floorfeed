@@ -886,6 +886,18 @@ app.post("/solana-rpc", async (req, reply) => {
 // signs only). Signed bytes only, ≤1232 bytes; light per-IP limit, since it
 // spends our RPC credits.
 const solSends = new Map<string, number[]>();
+// Keep re-sending a transaction every 2s until it shows up on chain or its
+// blockhash runs out (~90s). Leaders drop transactions under load, and one
+// send is often not enough.
+async function rebroadcast(transaction: string, signature: string) {
+  const until = Date.now() + 90_000;
+  while (Date.now() < until) {
+    await new Promise((r) => setTimeout(r, 2_000));
+    const st = await rpc<{ value: (unknown | null)[] }>("getSignatureStatuses", [[signature]]).catch(() => null);
+    if (st?.value[0]) return;
+    await rpc("sendTransaction", [transaction, { encoding: "base64", skipPreflight: true, maxRetries: 0 }]).catch(() => {});
+  }
+}
 app.post("/chain/sol/send", async (req, reply) => {
   const { transaction } = z.object({ transaction: z.string().regex(/^[A-Za-z0-9+/=]{100,1700}$/) }).parse(req.body);
   const now = Date.now();
@@ -898,6 +910,7 @@ app.post("/chain/sol/send", async (req, reply) => {
   }
   try {
     const signature = await rpc<string>("sendTransaction", [transaction, { encoding: "base64", preflightCommitment: "confirmed", maxRetries: 5 }]);
+    void rebroadcast(transaction, signature);
     return { signature };
   } catch (err) {
     const m = (err as Error).message;
