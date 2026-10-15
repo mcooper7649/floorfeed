@@ -271,6 +271,11 @@ export type Holding = {
   estValue: number | null; // floor minus the sell haircut (est. bid)
   boughtAt: number | null; // this wallet's last on-chain buy price, if we saw it
 };
+// A collection's live value for the portfolio panel (server/src/marks.ts).
+export type Mark = {
+  unit: string; floor: number | null; value: number | null; change24h: number | null;
+  updatedAt: number | null; lastSale: { price: number; at: number } | null;
+};
 export type Holdings = { address: string; sol: number; nftValue: number; totalValue: number; nfts: Holding[]; untracked: number };
 
 export type BuyQuote = {
@@ -419,6 +424,7 @@ export const api = {
   holdings: (address: string) => req<Holdings>(`/chain/holdings/${address}`),
   quote: (symbol: string, buyer: string) => req<BuyQuote>(`/trade/quote/${symbol}?buyer=${buyer}`),
   evmBalance: (address: string) => req<Record<string, number> & { eth: number }>(`/chain/evm/balance/${address}`),
+  marks: (symbols: string[]) => req<Record<string, Mark>>(`/portfolio/marks?c=${encodeURIComponent(symbols.join(','))}`),
   evmHoldings: (address: string) => req<EvmHoldings>(`/chain/evm/holdings/${address}`),
   evmQuote: (symbol: string, buyer?: string, id?: string) => {
     const q = new URLSearchParams();

@@ -21,6 +21,7 @@ import { itemDetail, warmRarity } from "./items.ts";
 import { ACTIVITY_KINDS, recordActivity, walletActivity } from "./activity.ts";
 import { bridgeQuote, bridgeStatus } from "./bridge.ts";
 import { dropDetail, dropMintTx } from "./drops.ts";
+import { marks } from "./marks.ts";
 import { EVM_ADDRESS_RE, evmApproveTx, evmBalances, evmBuyTx, evmHoldings, evmNetworks, evmNftTransferTx, evmQuote, evmSellQuote, evmSellTx, evmTransferFee, evmUnwrapTx, totalEth } from "./trade-evm.ts";
 import { startIngest } from "./ingest.ts";
 import { KINDS, generate, nextPost, postedSince, reportResult, startSocial, submitExternal, xLength } from "./social.ts";
@@ -793,6 +794,13 @@ app.get("/activity/:wallet", async (req, reply) => {
   const { wallet } = req.params as { wallet: string };
   if (!EVM_ADDRESS_RE.test(wallet) && !ADDRESS_RE.test(wallet)) return reply.code(400).send({ error: "Not a wallet address" });
   return walletActivity(wallet);
+});
+
+// Portfolio panel: current values for the collections a wallet holds (DB only).
+app.get("/portfolio/marks", async (req, reply) => {
+  const { c } = z.object({ c: z.string().max(4000) }).parse(req.query);
+  const symbols = c.split(",").map((x) => x.trim()).filter((x) => /^[\w.-]{1,80}$/.test(x));
+  return reply.header("cache-control", "no-store").send(marks(symbols));
 });
 
 // One drop (stages, supply, links) and an in-app mint transaction for it.

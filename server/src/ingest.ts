@@ -359,7 +359,37 @@ function every(ms: number, fn: () => Promise<void>) {
   setInterval(tick, ms);
 }
 
+// Collections someone has open in a portfolio panel (marks.ts) refresh every
+// 2 minutes instead of every 10. The cost scales with distinct held
+// collections, not with viewers, and is capped per pass. No snapshot rows, so
+// chart history keeps its usual spacing.
+const hot = new Map<string, number>(); // symbol -> when a panel last asked (ms)
+const HOT_TTL = 10 * 60_000, HOT_EVERY = 2 * 60_000, HOT_MAX = 20;
+const updatedAt = db.prepare("SELECT updated_at FROM collections WHERE symbol = ?");
+export function markHot(symbols: string[]) {
+  const now = Date.now();
+  for (const s of symbols) hot.set(s, now);
+}
+async function refreshHot() {
+  const now = Date.now();
+  const due = [...hot].filter(([s, t]) => {
+    if (now - t > HOT_TTL) { hot.delete(s); return false; }
+    const u = (updatedAt.get(s) as { updated_at: number | null } | undefined)?.updated_at ?? 0;
+    return now - u >= HOT_EVERY - 15_000;
+  }).slice(0, HOT_MAX);
+  for (const [symbol] of due) {
+    const evm = EVM_COLLECTIONS.find((c) => c.slug === symbol);
+    try {
+      if (evm) upsertEvm.run({ symbol, chain: evm.chain, ...inSaleUnit(symbol, await getOsStats(symbol)), now: Date.now() });
+      else if (COLLECTIONS.some((c) => c.symbol === symbol)) upsertStats.run({ symbol, ...(await getStats(symbol)), now: Date.now() });
+    } catch (err) {
+      console.warn(`[hot] ${symbol}:`, (err as Error).message);
+    }
+  }
+}
+
 export function startIngest() {
+  every(HOT_EVERY, refreshHot);
   every(config.statsPollMs, refreshPrices);
   every(24 * 3_600_000, discoverEvm);
   every(config.statsPollMs, refreshEvmStats);

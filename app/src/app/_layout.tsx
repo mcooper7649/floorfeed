@@ -6,6 +6,7 @@ import { StatusBar } from 'expo-status-bar';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { DiscoveryPanel } from '@/components/discovery-panel';
+import { PortfolioPanel } from '@/components/portfolio-panel';
 import { PriceTicker } from '@/components/price-ticker';
 import { UpdateBanner } from '@/components/update-banner';
 import { TopNav } from '@/components/top-nav';
@@ -77,7 +78,8 @@ function Pageviews() {
 }
 
 // Wide web: one header across the top, the discovery panel on the left, the
-// page beside it, and the price ticker along the bottom. Elsewhere the page
+// page in the middle, the portfolio glance on the right (widest windows), and
+// the price ticker along the bottom. Elsewhere the page
 // draws its own chrome (pages render TopNav as a back bar on narrow web).
 function Shell({ children }: { children: React.ReactNode }) {
   const { wide } = useLayout();
@@ -89,6 +91,7 @@ function Shell({ children }: { children: React.ReactNode }) {
       <View style={{ flex: 1, flexDirection: 'row', minHeight: 0 }}>
         {panel.available && <DiscoveryPanel />}
         <View style={{ flex: 1, minWidth: 0 }}>{children}</View>
+        {panel.right.available && <PortfolioPanel />}
       </View>
       <PriceTicker />
     </View>
