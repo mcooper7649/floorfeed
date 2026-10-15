@@ -16,10 +16,14 @@ import { track } from '@/lib/analytics';
 // and between Solana and any of them. Relay quotes the route, the wallet on
 // the origin side signs one deposit (MetaMask & co. on EVM, Phantom & co. or
 // the FloorFeed wallet on Solana), and Relay pays out on the destination,
-// usually in seconds. `amount` is what should arrive.
+// usually in seconds. The amount is what leaves the origin (with 25/50/75%/Max
+// shortcuts that keep back the network fee), or, when a buy or mint asks for a
+// top-up, what should arrive.
 
 const NETWORKS = ['solana', 'ethereum', 'base', 'abstract', 'ink', 'arbitrum', 'hyperevm', 'ronin', 'apechain', 'monad', 'robinhood'] as const;
 const unitOf = (c: string) => (c === 'solana' ? 'SOL' : CHAINS[c as keyof typeof CHAINS]?.symbol ?? 'ETH');
+// Typed-looking amount for the input when a % chip filled it.
+const trimAmt = (n: number) => String(Number(n.toFixed(n >= 1 ? 4 : 6)));
 const SOL_QUOTE_TTL = 40_000; // a Solana deposit's blockhash expires after ~60s; re-quote before signing
 const usd = (n: number | null) => (n == null ? '—' : n < 0.01 ? '< $0.01' : `$${n.toFixed(2)}`);
 
@@ -49,6 +53,9 @@ function Sheet({ open, onClose, onDone, to: toProp, from: fromProp, amount: amou
   const [to, setTo] = useState(toProp ?? (fromProp && fromProp !== 'ethereum' ? 'ethereum' : 'ink'));
   const [from, setFrom] = useState<string | null>(fromProp ?? null);
   const [amount, setAmount] = useState(amountProp ? String(Math.ceil(amountProp * 1e4) / 1e4) : '');
+  // 'send' = typed amount leaves the origin; 'receive' = it should arrive (top-ups pass `amount`).
+  const [side, setSide] = useState<'send' | 'receive'>(amountProp ? 'receive' : 'send');
+  const [fraction, setFraction] = useState<number | null>(null); // a share of the origin balance (1 = Max)
   const [balances, setBalances] = useState<{ address: string; b: Record<string, number> } | null>(null);
   const [solBal, setSolBal] = useState<{ address: string; sol: number } | null>(null);
   const [quote, setQuote] = useState<{ key: string; at: number; q?: BridgeQuote; error?: string } | null>(null);
@@ -83,10 +90,14 @@ function Sheet({ open, onClose, onDone, to: toProp, from: fromProp, amount: amou
   const recipient = addrOf(to);
 
   const value = Number(amount);
-  const key = `${origin}:${to}:${amount}:${user}:${recipient}:${nonce}`;
-  const fetchQuote = () => api.bridgeQuote({ user: user!, recipient: recipient ?? undefined, from: origin!, to, amount: value });
+  const wants = fraction != null || value > 0;
+  const key = `${origin}:${to}:${fraction ?? `${side}:${amount}`}:${user}:${recipient}:${nonce}`;
+  const fetchQuote = () => api.bridgeQuote({
+    user: user!, recipient: recipient ?? undefined, from: origin!, to,
+    ...(fraction != null ? { fraction } : { amount: value, side }),
+  });
   useEffect(() => {
-    if (!open || !origin || !user || !(value > 0)) return;
+    if (!open || !origin || !user || !wants) return;
     let alive = true;
     const t = setTimeout(() => {
       fetchQuote()
@@ -233,17 +244,37 @@ function Sheet({ open, onClose, onDone, to: toProp, from: fromProp, amount: amou
 
               {origin && (
                 <View style={{ gap: 6 }}>
-                  <Text style={s.label}>Amount to receive on {chainName(to)}</Text>
-                  <View style={s.inputRow}>
-                    <TextInput value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0.0"
-                      placeholderTextColor={C.muted} style={[s.input, { flex: 1 }]} />
-                    <Text style={s.unit}>{toUnit}</Text>
+                  <View style={s.labelRow}>
+                    <Text style={[s.label, { flex: 1 }]}>{side === 'send' ? `Amount to send from ${chainName(origin)}` : `Amount to receive on ${chainName(to)}`}</Text>
+                    <Pressable accessibilityRole="button" hitSlop={6}
+                      onPress={() => { setSide(side === 'send' ? 'receive' : 'send'); setFraction(null); setAmount(''); }}>
+                      <Text style={s.switch}>{side === 'send' ? 'Set amount to receive' : 'Set amount to send'}</Text>
+                    </Pressable>
                   </View>
-                  {note && <Text style={s.fine}>{note}</Text>}
+                  <View style={s.inputRow}>
+                    <TextInput
+                      value={fraction != null ? (q && q.side === 'send' ? trimAmt(q.send) : '') : amount}
+                      onChangeText={(t) => { setFraction(null); setAmount(t); }}
+                      keyboardType="decimal-pad" placeholder={fraction != null ? '…' : '0.0'}
+                      placeholderTextColor={C.muted} style={[s.input, { flex: 1 }]} />
+                    <Text style={s.unit}>{side === 'send' ? unitOf(origin) : toUnit}</Text>
+                  </View>
+                  {(bal?.[origin] ?? 0) > 0 && (
+                    <View style={s.pcts}>
+                      {[0.25, 0.5, 0.75, 1].map((f) => (
+                        <Chip key={f} label={f === 1 ? 'Max' : `${f * 100}%`} on={fraction === f}
+                          onPress={() => { setSide('send'); setFraction(f); }} />
+                      ))}
+                    </View>
+                  )}
+                  {fraction === 1 && q?.reserve != null && (
+                    <Text style={s.fine}>Max keeps {sol(q.reserve, 5, q.sendUnit)} back for the network fee{origin === 'solana' ? ' (and the small minimum a Solana wallet must hold)' : ''}.</Text>
+                  )}
+                  {note && side === 'receive' && <Text style={s.fine}>{note}</Text>}
                 </View>
               )}
 
-              {origin && value > 0 && (
+              {origin && wants && (
                 !current ? (
                   <View style={s.loadingRow}><ActivityIndicator color={C.accent} /><Text style={s.meta}>Finding a route…</Text></View>
                 ) : current.error ? (
@@ -313,6 +344,9 @@ const s = StyleSheet.create({
   fine: T.caption,
   bodyStrong: T.bodyStrong,
   chips: { gap: 6 },
+  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  switch: { ...T.caption, color: C.accent },
+  pcts: { flexDirection: 'row', gap: 6 },
   inputRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   input: { borderRadius: 12, borderWidth: 1, borderColor: C.border, backgroundColor: C.bg, color: C.text, fontSize: 15, paddingHorizontal: 12, paddingVertical: 10 },
   unit: { ...T.bodyStrong, minWidth: 44 },

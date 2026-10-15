@@ -6,7 +6,7 @@ import {
 import { formatEther, formatUnits, parseUnits } from "viem";
 import { ADDRESS_RE, rpc, solBalance } from "./chain.ts";
 import { EVM_CHAINS, config } from "./config.ts";
-import { EVM_ADDRESS_RE, evmBalances, evmChainOf, evmTxState, simulateEvm } from "./trade-evm.ts";
+import { EVM_ADDRESS_RE, evmBalances, evmChainOf, evmGasReserve, evmTxState, simulateEvm } from "./trade-evm.ts";
 
 // Moving funds between chains without leaving FloorFeed, via Relay
 // (https://relay.link): Relay quotes a route, the user's wallet signs one
@@ -29,6 +29,7 @@ const APP_FEE_BPS = Number(process.env.RELAY_FEE_BPS ?? 0);
 const appFees = /^0x[0-9a-fA-F]{40}$/.test(APP_FEE_RECIPIENT) && APP_FEE_BPS > 0 && APP_FEE_BPS <= 100
   ? [{ recipient: APP_FEE_RECIPIENT, fee: String(Math.round(APP_FEE_BPS)) }] : undefined;
 const SOL_FEE_RESERVE = 0.00002; // base fee + a priority fee the wallet may add
+const SOL_RENT_MIN = 0.00089088;   // rent-exempt minimum for a plain wallet account
 type Chain = keyof typeof EVM_CHAINS | "solana";
 const isEvm = (c: string): c is keyof typeof EVM_CHAINS => c in EVM_CHAINS && !!evmChainOf(EVM_CHAINS[c as keyof typeof EVM_CHAINS].id);
 const info = (c: Chain) => c === "solana"
@@ -125,11 +126,33 @@ export async function solTxInfo(sig: string) {
 // token. `user` sends on the origin chain; `recipient` receives on the
 // destination (the same address between EVM chains; a Solana route needs the
 // user's wallet on the other side).
-export async function bridgeQuote(p: { user: string; recipient?: string; from: string; to: string; amount: number }) {
+// `side` says what `amount` is: "receive" (default) = what should arrive, in
+// the destination's token; "send" = what leaves the origin, in its token.
+// `fraction` (0-1] sends that share of the origin balance instead, keeping
+// back the network fee, so 1 is "Max".
+export async function bridgeQuote(p: {
+  user: string; recipient?: string; from: string; to: string;
+  amount?: number; side?: "send" | "receive"; fraction?: number;
+}) {
   const from = p.from as Chain, to = p.to as Chain;
   if ((from !== "solana" && !isEvm(from)) || (to !== "solana" && !isEvm(to))) throw new Error("That route isn't supported.");
   if (from === to) throw new Error("Pick two different networks.");
-  if (!(p.amount > 0) || p.amount > 1e9) throw new Error("Enter an amount.");
+  let side = p.side ?? "receive";
+  let amount = p.amount ?? 0;
+  let reserve: number | null = null;
+  if (p.fraction != null) {
+    if (!(p.fraction > 0 && p.fraction <= 1)) throw new Error("Pick a share of your balance.");
+    const bal = from === "solana"
+      ? await solBalance(p.user).then((b) => b.sol)
+      : await evmBalances(p.user).then((b) => (b as Record<string, number>)[from] ?? 0);
+    // Solana: an account that isn't emptied must keep the rent-exempt minimum, and it can't be
+    // emptied exactly while it also pays the fee, so Max keeps that minimum plus the fee.
+    reserve = from === "solana" ? SOL_RENT_MIN + SOL_FEE_RESERVE * 2 : await evmGasReserve(from);
+    amount = Math.min(bal * p.fraction, bal - reserve);
+    side = "send";
+    if (!(amount > 0)) throw new Error(`Not enough ${info(from).native} on ${info(from).name} to cover the network fee.`);
+  }
+  if (!(amount > 0) || amount > 1e9) throw new Error("Enter an amount.");
   const recipient = p.recipient ?? p.user;
   const okAddr = (c: Chain, a: string) => (c === "solana" ? ADDRESS_RE.test(a) : EVM_ADDRESS_RE.test(a));
   if (!okAddr(from, p.user)) throw new Error(from === "solana" ? "Connect a Solana wallet to send from Solana." : "Connect an Ethereum wallet first.");
@@ -139,7 +162,9 @@ export async function bridgeQuote(p: { user: string; recipient?: string; from: s
     user: p.user, recipient,
     originChainId: src.id, destinationChainId: dst.id,
     originCurrency: src.currency, destinationCurrency: dst.currency,
-    amount: parseUnits(p.amount.toFixed(dst.decimals), dst.decimals).toString(), tradeType: "EXACT_OUTPUT",
+    ...(side === "send"
+      ? { amount: parseUnits(amount.toFixed(src.decimals), src.decimals).toString(), tradeType: "EXACT_INPUT" }
+      : { amount: parseUnits(amount.toFixed(dst.decimals), dst.decimals).toString(), tradeType: "EXACT_OUTPUT" }),
     ...(appFees ? { appFees } : {}),
   }).catch((err: Error) => {
     throw new Error(/amount|small|minimum/i.test(err.message) ? `Relay can't move that amount: ${err.message}` : `No route right now: ${err.message}`);
@@ -188,7 +213,8 @@ export async function bridgeQuote(p: { user: string; recipient?: string; from: s
   const usd = (k: string) => Number(q.fees?.[k]?.amountUsd ?? 0);
   return {
     requestId: steps[0].requestId ?? null,
-    from, to, recipient,
+    from, to, recipient, side,
+    reserve, // with `fraction`: what was kept back for the network fee, in sendUnit
     send, sendUnit: src.native, sendUsd: Number(q.details?.currencyIn?.amountUsd ?? 0) || null,
     receive, receiveUnit: dst.native,
     feeUsd: usd("relayer") || null, // Relay's fee (solver + destination gas)

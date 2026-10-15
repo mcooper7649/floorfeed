@@ -622,3 +622,12 @@ export async function evmBroadcast(p: { from: string; tx: Record<string, string 
       : `The network rejected it: ${m.split("\n")[0].slice(0, 160)}`);
   }
 }
+
+// What to keep back for the network fee when moving "Max" off a chain: a
+// bridge deposit's gas (~120k, with headroom) at today's price, plus a small
+// allowance for the L1 data fee on rollups. In the chain's native token.
+export async function evmGasReserve(chain: string) {
+  if (!isTradable(chain)) throw new Error("Unsupported chain");
+  const gp = await (clients[chain] as unknown as PublicClient).getGasPrice();
+  return Number(formatEther((gp * 120_000n * 15n) / 10n)) + (chain === "ethereum" ? 0 : 0.00002);
+}

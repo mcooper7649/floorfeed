@@ -758,7 +758,10 @@ app.post("/trade/evm/sell-tx", async (req, reply) => {
 const TX_HASH_RE = /^(0x[0-9a-fA-F]{64}|[1-9A-HJ-NP-Za-km-z]{80,90})$/;
 app.post("/bridge/quote", async (req, reply) => {
   const addr = z.string().refine((a) => EVM_ADDRESS_RE.test(a) || ADDRESS_RE.test(a), "Not a wallet address");
-  const b = z.object({ user: addr, recipient: addr.optional(), from: z.string(), to: z.string(), amount: z.number().positive() }).parse(req.body);
+  const b = z.object({
+    user: addr, recipient: addr.optional(), from: z.string(), to: z.string(),
+    amount: z.number().positive().optional(), side: z.enum(["send", "receive"]).optional(), fraction: z.number().positive().max(1).optional(),
+  }).refine((x) => x.amount != null || x.fraction != null, "Enter an amount").parse(req.body);
   try { return await bridgeQuote(b); } catch (err) { return reply.code(409).send({ error: (err as Error).message }); }
 });
 app.get("/bridge/status/:id", async (req, reply) => {

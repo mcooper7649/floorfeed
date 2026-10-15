@@ -331,6 +331,7 @@ export type EvmSellQuote = {
 export type EvmTxOut = { chainId: number; to: string; data: string; value: string; gas: string; explorerTx?: string };
 export type BridgeQuote = {
   requestId: string | null; from: string; to: string; recipient: string;
+  side?: 'send' | 'receive'; reserve?: number | null; // what the amount meant; kept back for gas with a % / Max
   send: number; sendUnit: string; sendUsd: number | null;
   receive: number; receiveUnit: string;
   feeUsd: number | null; gasUsd: number | null; seconds: number | null;
@@ -454,7 +455,7 @@ export const api = {
     amount?: number | null; unit?: string | null; symbol?: string | null; mint?: string | null;
     requestId?: string | null; toChain?: string | null;
   }) => send('POST', '/activity', a) as Promise<{ ok: boolean }>,
-  bridgeQuote: (b: { user: string; recipient?: string; from: string; to: string; amount: number }) =>
+  bridgeQuote: (b: { user: string; recipient?: string; from: string; to: string; amount?: number; side?: 'send' | 'receive'; fraction?: number }) =>
     send('POST', '/bridge/quote', b) as Promise<BridgeQuote>,
   // `deposit`: mined | failed | pending | missing (the wallet's tx never reached the chain).
   bridgeStatus: (requestId: string, deposit?: { chain: string; tx: string }) =>
