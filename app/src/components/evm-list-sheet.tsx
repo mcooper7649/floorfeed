@@ -9,6 +9,7 @@ import { T } from '@/constants/type';
 import { recordTx } from '@/lib/activity';
 import { track } from '@/lib/analytics';
 import { api, type EvmListQuote } from '@/lib/api';
+import { cancelEvmListing, daysLeft } from '@/lib/evm-listing';
 import { useEvmWallet } from '@/lib/evm-wallet';
 import { signedSol, signedUsd, sol, usd } from '@/lib/format';
 import { usePrices } from '@/lib/prices';
@@ -23,10 +24,6 @@ type Step = { kind: 'idle' } | { kind: 'approving'; hash?: string } | { kind: 's
   | { kind: 'cancelling' } | { kind: 'listed'; price: number; days: number } | { kind: 'cancelled' } | { kind: 'error'; message: string };
 
 const cancelledMsg = (m: string) => /reject|denied|cancel/i.test(m);
-const daysLeft = (expiresAt: number) => {
-  const d = (expiresAt * 1000 - Date.now()) / 86_400_000;
-  return d >= 1 ? `${Math.floor(d)} day${Math.floor(d) === 1 ? '' : 's'} left` : `${Math.max(1, Math.round(d * 24))}h left`;
-};
 const trim = (n: number) => String(Number(n.toPrecision(4)));
 
 export function EvmListSheet({ symbol, id, open, onClose, onDone }: {
@@ -104,19 +101,8 @@ export function EvmListSheet({ symbol, id, open, onClose, onDone }: {
     } catch (e) { fail(e, 'The approval did not go through.'); }
   };
 
-  // Sign the cancel for a listing: free off-chain on OpenSea's zone, else an on-chain transaction.
   const cancelListing = async (orderHash: string) => {
-    if (!q || !w.address) return;
-    const c = await api.evmCancelBuild({ chain: q.chain, orderHash, seller: w.address });
-    if (c.kind === 'offchain') {
-      if (!w.signTypedData) throw new Error("This wallet can't sign the cancel.");
-      const signature = await w.signTypedData(c.typedData);
-      await api.evmCancelSubmit({ chain: q.chain, protocolAddress: c.protocolAddress, orderHash, signature, seller: w.address });
-    } else {
-      if (!w.send) throw new Error("This wallet can't send the cancel.");
-      const hash = await w.send({ ...c.tx, description: 'Cancel your OpenSea listing (network fee only).' });
-      recordTx({ hash, wallet: w.address, chain: q.chain, kind: 'approve', title: `Cancelled listing of ${q.name}` });
-    }
+    if (q) await cancelEvmListing(w, { chain: q.chain, orderHash, name: q.name });
   };
 
   const list = async () => {

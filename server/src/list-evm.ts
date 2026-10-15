@@ -1,7 +1,7 @@
 import { formatEther, parseAbiItem, parseEther, type Hex } from "viem";
 import { EVM_CHAINS, EVM_SALES } from "./config.ts";
 import { db } from "./db.ts";
-import { cancelOsOrder, getOsBestOffer, getOsFees, getOsMyListings, postOsListing, type OsOrderParams } from "./opensea.ts";
+import { cancelOsOrder, getOsBestOffer, getOsFees, getOsMyListings, getOsNft, getOsOrder, postOsListing, type OsOrderParams } from "./opensea.ts";
 import { evmHolds, evmPublicClient, isTradableChain, osConduit } from "./trade-evm.ts";
 
 // Listing an NFT on OpenSea from FloorFeed. Nothing moves on chain to list:
@@ -197,9 +197,10 @@ export async function evmListSubmit(p: { chain: string; parameters: OsOrderParam
 // Cancel: off-chain (sign the order hash; free) on OpenSea's signed zone, else an on-chain Seaport.cancel.
 export async function evmCancelBuild(p: { chain: string; orderHash: string; seller: string }) {
   if (!isTradableChain(p.chain)) throw new Error("Unsupported chain");
-  const mine = await getOsMyListings(p.chain, p.seller);
-  const l = mine.find((x) => x.orderHash.toLowerCase() === p.orderHash.toLowerCase());
-  if (!l) throw new Error("That listing isn't live anymore.");
+  const o = await getOsOrder(p.chain, p.orderHash, true);
+  if (!o || o.protocol_data.parameters.offerer.toLowerCase() !== p.seller.toLowerCase()) throw new Error("That listing isn't yours.");
+  if ((o.status && o.status !== "ACTIVE") || o.remaining_quantity === 0) throw new Error("That listing isn't live anymore.");
+  const l = { orderHash: o.order_hash, protocolAddress: o.protocol_address, parameters: o.protocol_data.parameters };
   const chainId = EVM_CHAINS[p.chain as keyof typeof EVM_CHAINS].id;
   if (l.parameters.zone.toLowerCase() === SIGNED_ZONE) {
     return {
@@ -231,21 +232,51 @@ export async function evmCancelSubmit(p: { chain: string; protocolAddress: strin
   return { ok: true };
 }
 
-// Live listings for a wallet on the given chains, keyed by mint (for holdings).
-// Cached a minute per wallet; listing or cancelling clears it.
-type Mine = Map<string, { price: number; expiresAt: number; orderHash: string }>;
-const mineCache = new Map<string, { at: number; key: string; v: Mine }>();
+// A wallet's live OpenSea listings, for "Your listings" and the Listed tags on
+// holdings: the NFT (name, art, collection), price, expiry, and floor / cost to
+// compare. Cached a minute per wallet; listing or cancelling clears it.
+export type MyListing = {
+  chain: string; mint: string; symbol: string | null; collection: string | null; name: string; image: string | null;
+  price: number; unit: string; expiresAt: number; listedAt: number; orderHash: string; cancelFree: boolean;
+  floor: number | null; boughtAt: number | null; url: string;
+};
+const mineCache = new Map<string, { at: number; v: MyListing[] }>();
+const nftMeta = new Map<string, { name: string | null; image: string | null; slug: string | null }>();
 export const forgetListings = (seller: string) => mineCache.delete(seller.toLowerCase());
-export async function evmMyListings(chains: string[], seller: string) {
-  const ck = seller.toLowerCase(), key = [...chains].sort().join(",");
+export async function evmWalletListings(seller: string): Promise<MyListing[]> {
+  const ck = seller.toLowerCase();
   const hit = mineCache.get(ck);
-  if (hit && hit.key === key && Date.now() - hit.at < 60_000) return hit.v;
-  const out: Mine = new Map();
-  await Promise.all(chains.filter((c) => isTradableChain(c)).map(async (c) => {
-    for (const l of await getOsMyListings(c, seller).catch(() => [])) {
-      if (!out.has(l.mint)) out.set(l.mint, { price: Number(formatEther(BigInt(l.priceWei))), expiresAt: l.expiresAt, orderHash: l.orderHash });
+  if (hit && Date.now() - hit.at < 60_000) return hit.v;
+  const raw = await getOsMyListings(null, seller);
+  const v = await Promise.all(raw.filter((l) => isTradableChain(l.chain)).map(async (l): Promise<MyListing> => {
+    const [contract, tokenId] = l.mint.split(":");
+    let art = nftMeta.get(`${l.chain}:${l.mint}`);
+    if (!art) {
+      const n = await getOsNft(l.chain, contract, tokenId).catch(() => null);
+      art = { name: n?.name ?? null, image: n?.image ?? null, slug: n?.collection ?? null };
+      if (n) nftMeta.set(`${l.chain}:${l.mint}`, art);
     }
+    const meta = art.slug ? EVM_SALES.find((c) => c.slug === art.slug) : undefined;
+    const chainCfg = EVM_CHAINS[l.chain as keyof typeof EVM_CHAINS];
+    return {
+      chain: l.chain, mint: l.mint, symbol: meta?.slug ?? null, collection: meta?.name ?? art.slug,
+      name: art.name ?? `${meta?.name ?? "NFT"} #${tokenId}`, image: art.image,
+      price: Number(formatEther(BigInt(l.priceWei))), unit: l.currency || chainCfg?.native || "ETH",
+      expiresAt: l.expiresAt, listedAt: l.listedAt, orderHash: l.orderHash,
+      cancelFree: l.parameters.zone.toLowerCase() === SIGNED_ZONE,
+      floor: meta ? ((floorOf.get(meta.slug) as { floor: number | null } | undefined)?.floor ?? null) : null,
+      boughtAt: (lastBuyOf.get(ck, l.mint) as { price: number } | undefined)?.price ?? null,
+      url: `https://opensea.io/assets/${l.chain === "apechain" ? "ape_chain" : l.chain}/${contract}/${tokenId}`,
+    };
   }));
-  mineCache.set(ck, { at: Date.now(), key, v: out });
+  mineCache.set(ck, { at: Date.now(), v });
+  return v;
+}
+// The same, keyed by mint, limited to the given chains (for holdings).
+export async function evmMyListings(chains: string[], seller: string) {
+  const out = new Map<string, { price: number; expiresAt: number; orderHash: string }>();
+  for (const l of await evmWalletListings(seller)) {
+    if (chains.includes(l.chain) && !out.has(l.mint)) out.set(l.mint, { price: l.price, expiresAt: l.expiresAt, orderHash: l.orderHash });
+  }
   return out;
 }

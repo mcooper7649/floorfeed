@@ -352,6 +352,11 @@ export type EvmListQuote = {
   listing?: { orderHash: string; price: number; expiresAt: number; cancelFree: boolean } | null;
   executable: boolean; reason: string | null; marketUrl?: string;
 };
+export type MyListing = {
+  chain: string; mint: string; symbol: string | null; collection: string | null; name: string; image: string | null;
+  price: number; unit: string; expiresAt: number; listedAt: number; orderHash: string; cancelFree: boolean;
+  floor: number | null; boughtAt: number | null; url: string;
+};
 export type EvmListBuild = { chain: string; chainId: number; net: number; parameters: Record<string, unknown>; typedData: import('./auth-types').TypedData };
 export type EvmCancelBuild =
   | { kind: 'offchain'; chain: string; protocolAddress: string; typedData: import('./auth-types').TypedData }
@@ -454,6 +459,7 @@ export const api = {
     send('POST', '/trade/evm/list-build', b) as Promise<EvmListBuild>,
   evmListSubmit: (b: { chain: string; parameters: Record<string, unknown>; signature: string }) =>
     send('POST', '/trade/evm/list-submit', b) as Promise<{ orderHash: string | null }>,
+  evmListings: (address: string) => req<{ listings: MyListing[] }>(`/trade/evm/listings/${address}`),
   evmCancelBuild: (b: { chain: string; orderHash: string; seller: string }) =>
     send('POST', '/trade/evm/cancel-build', b) as Promise<EvmCancelBuild>,
   evmCancelSubmit: (b: { chain: string; protocolAddress: string; orderHash: string; signature: string; seller: string }) =>

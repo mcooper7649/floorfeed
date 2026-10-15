@@ -167,7 +167,7 @@ export const osChain = (chain: string) => (chain === "polygon" ? "matic" : chain
 export const fromOsChain = (chain: string) => (chain === "matic" ? "polygon" : chain === "ape_chain" ? "apechain" : chain);
 
 type OsNft = {
-  identifier: string; name: string | null; image_url?: string | null; display_image_url?: string | null;
+  identifier: string; collection?: string; name: string | null; image_url?: string | null; display_image_url?: string | null;
   traits?: { trait_type: string; value: string | number }[] | null;
   owners?: { address: string; quantity: number }[] | null;
   rarity?: { rank?: number | null } | null;
@@ -178,6 +178,7 @@ export async function getOsNft(chain: string, contract: string, id: string) {
   const n = r.nft;
   return {
     name: n.name || null,
+    collection: n.collection ?? null,
     image: n.display_image_url || n.image_url || null,
     traits: (n.traits ?? []).map((t) => ({ type: t.trait_type, value: String(t.value) })),
     owner: n.owners?.[0]?.address?.toLowerCase() ?? null,
@@ -241,7 +242,7 @@ export async function getOsAccountNfts(chain: string, address: string, pages = 6
     // OpenSea's CDN caches this by exact URL for minutes, so a wallet that just
     // bought showed its old (empty) list. A 30s bucket keeps every read fresh
     // enough while still letting repeat reads share one fetch.
-    const q = new URLSearchParams({ limit: "100", cb: String(Math.floor(Date.now() / 30_000)) });
+    const q = new URLSearchParams({ limit: "100", cb: String(Math.floor(Date.now() / 5_000)) }); // past OpenSea's URL cache
     if (next) q.set("next", next);
     const r = await get<{ nfts: { collection: string; contract: string; identifier: string; name?: string | null;
       display_image_url?: string | null; image_url?: string | null }[]; next?: string | null }>(
@@ -391,24 +392,47 @@ export type OsOrderParams = {
   startTime: string; endTime: string; zoneHash: string; salt: string; conduitKey: string; counter: string | number;
   totalOriginalConsiderationItems?: number;
 };
-// This wallet's live OpenSea listings on a chain (newest first), with their Seaport parameters.
-export async function getOsMyListings(chain: string, maker: string) {
-  const q = new URLSearchParams({ maker, limit: "50", cb: String(Math.floor(Date.now() / 30_000)) });
-  const r = await get<{ orders?: {
-    order_hash: string; protocol_address: string; current_price: string; expiration_time: number; listing_time: number;
-    cancelled?: boolean; finalized?: boolean; marked_invalid?: boolean;
-    protocol_data: { parameters: OsOrderParams };
-  }[] }>(`/orders/${osChain(chain)}/seaport/listings?${q}`);
-  return (r.orders ?? []).filter((o) => !o.cancelled && !o.finalized && !o.marked_invalid).flatMap((o) => {
-    const nft = o.protocol_data.parameters.offer.find((i) => i.itemType === 2 || i.itemType === 3);
-    if (!nft) return [];
-    return [{
-      mint: `${nft.token.toLowerCase()}:${nft.identifierOrCriteria}`,
-      orderHash: o.order_hash, protocolAddress: o.protocol_address,
-      priceWei: o.current_price, expiresAt: o.expiration_time, listedAt: o.listing_time,
+// This wallet's live OpenSea listings (all chains, or one), newest first, with
+// their Seaport parameters. The account endpoint gives hash/price/NFT only, so
+// each order is then fetched for its parameters (zone, expiry, for cancels).
+const SEAPORTS = ["0x0000000000000068F116a894984e2DB1123eB395", "0x00000000000000ADc04C56Bf30aC9d3c0aAF14dC"]; // 1.6, 1.5
+type OsFullOrder = { order_hash: string; protocol_address: string; status?: string; remaining_quantity?: number; protocol_data: { parameters: OsOrderParams } };
+// An order's parameters never change, so they're kept once fetched (status comes from
+// the account list; `fresh` re-reads it, e.g. before a cancel).
+const orderCache = new Map<string, OsFullOrder>();
+export async function getOsOrder(chain: string, hash: string, fresh = false) {
+  const hit = fresh ? null : orderCache.get(hash);
+  if (hit) return hit;
+  for (const p of SEAPORTS) {
+    const r = await get<{ order?: OsFullOrder }>(`/orders/chain/${osChain(chain)}/protocol/${p}/${hash}`).catch(() => null);
+    if (r?.order?.protocol_data?.parameters) {
+      if (orderCache.size > 2_000) orderCache.clear();
+      orderCache.set(hash, r.order);
+      return r.order;
+    }
+  }
+  return null;
+}
+export async function getOsMyListings(chain: string | null, maker: string) {
+  const q = new URLSearchParams({ limit: "100", cb: String(Math.floor(Date.now() / 5_000)) }); // past OpenSea's URL cache
+  const r = await get<{ listings?: {
+    order_hash: string; chain: string; asset?: { identifier: string; contract: string }; status?: string; order_created_at?: number;
+    price?: { current?: { currency: string; decimals: number; value: string } };
+  }[] }>(`/account/${maker}/listings?${q}`);
+  const live = (r.listings ?? []).filter((l) => (l.status ?? "ACTIVE") === "ACTIVE" && l.asset && (!chain || fromOsChain(l.chain) === chain));
+  const out = await Promise.all(live.slice(0, 40).map(async (l) => {
+    const o = await getOsOrder(l.chain, l.order_hash);
+    if (!o) return null;
+    return {
+      chain: fromOsChain(l.chain),
+      mint: `${l.asset!.contract.toLowerCase()}:${l.asset!.identifier}`,
+      orderHash: l.order_hash, protocolAddress: o.protocol_address,
+      priceWei: l.price?.current?.value ?? "0", currency: l.price?.current?.currency ?? "ETH",
+      expiresAt: Number(o.protocol_data.parameters.endTime), listedAt: l.order_created_at ?? Number(o.protocol_data.parameters.startTime),
       parameters: o.protocol_data.parameters,
-    }];
-  });
+    };
+  }));
+  return out.filter((x) => x !== null).sort((a, b) => b.listedAt - a.listedAt);
 }
 
 export async function cancelOsOrder(chain: string, protocolAddress: string, orderHash: string, offererSignature: string) {

@@ -22,7 +22,7 @@ import { ACTIVITY_KINDS, recordActivity, walletActivity } from "./activity.ts";
 import { bridgeQuote, bridgeStatus } from "./bridge.ts";
 import { dropDetail, dropMintTx } from "./drops.ts";
 import { marks } from "./marks.ts";
-import { evmCancelBuild, evmCancelSubmit, evmListBuild, evmListQuote, evmListSubmit, evmMyListings } from "./list-evm.ts";
+import { evmCancelBuild, evmCancelSubmit, evmListBuild, evmListQuote, evmListSubmit, evmMyListings, evmWalletListings } from "./list-evm.ts";
 import { EVM_ADDRESS_RE, evmApproveTx, evmBroadcast, evmPrepare, evmBalances, evmBuyTx, evmHoldings, evmNetworks, evmNftTransferTx, evmQuote, evmSellQuote, evmSellTx, evmTransferFee, evmUnwrapTx, totalEth } from "./trade-evm.ts";
 import { startIngest } from "./ingest.ts";
 import { KINDS, generate, nextPost, postedSince, reportResult, startSocial, submitExternal, xLength } from "./social.ts";
@@ -753,6 +753,15 @@ app.post("/trade/evm/list-build", async (req, reply) => {
 app.post("/trade/evm/list-submit", async (req, reply) => {
   const b = z.object({ chain: z.string(), parameters: z.any(), signature: z.string().regex(/^0x[0-9a-fA-F]{128,200}$/) }).parse(req.body);
   try { return await evmListSubmit(b); } catch (err) { return reply.code(409).send({ error: (err as Error).message }); }
+});
+// Everything this wallet has listed on OpenSea (EVM), for "Your listings".
+app.get("/trade/evm/listings/:address", async (req, reply) => {
+  const { address } = req.params as { address: string };
+  if (!EVM_ADDRESS_RE.test(address)) return reply.code(400).send({ error: "Not an EVM address" });
+  try { return { listings: await evmWalletListings(address) }; } catch (err) {
+    req.log.warn({ err }, "evm listings");
+    return reply.code(502).send({ error: "Couldn't load your listings from OpenSea" });
+  }
 });
 app.post("/trade/evm/cancel-build", async (req, reply) => {
   const b = z.object({ chain: z.string(), orderHash: z.string().regex(/^0x[0-9a-fA-F]{64}$/), seller: z.string().regex(EVM_ADDRESS_RE) }).parse(req.body);

@@ -8,6 +8,7 @@ import { EvmListSheet } from '@/components/evm-list-sheet';
 import { EvmSellSheet } from '@/components/evm-sell-sheet';
 import { NetworksCard, networkLines } from '@/components/networks-card';
 import { MODE_COLOR, ModeToggle } from '@/components/mode-toggle';
+import { MyListings } from '@/components/my-listings';
 import { NftImage } from '@/components/nft-image';
 import { Screen } from '@/components/screen';
 import { Button, Card, ListRow, RowAction, SectionHeader } from '@/components/ui';
@@ -245,6 +246,7 @@ function RealPortfolio({ solAddress, evmAddress }: { solAddress: string | null; 
   const [selling, setSelling] = useState<Row | null>(null);
   const [listing, setListing] = useState<Row | null>(null);
   const [nets, setNets] = useState<{ address: string; n: EvmNetwork[] } | null>(null);
+  const [listedKey, setListedKey] = useState(0); // bumps when a list / cancel happens on this page
 
   const fetchData = useCallback(() => {
     const jobs: Promise<unknown>[] = [];
@@ -294,7 +296,7 @@ function RealPortfolio({ solAddress, evmAddress }: { solAddress: string | null; 
     <>
     {listing && (
       <EvmListSheet symbol={listing.collection.symbol} id={listing.mint} open onClose={() => setListing(null)}
-        onDone={() => setTimeout(fetchData, 3_000)} />
+        onDone={() => { setTimeout(fetchData, 3_000); setTimeout(() => setListedKey((k) => k + 1), 3_000); }} />
     )}
     {selling && (
       <EvmSellSheet symbol={selling.collection.symbol} id={selling.mint} open onClose={() => setSelling(null)}
@@ -310,6 +312,7 @@ function RealPortfolio({ solAddress, evmAddress }: { solAddress: string | null; 
           <MoneyTotal loading={moneyLoading} cash={cashUsd} nfts={nftUsd} nftCount={rows.length} networks={cashLines.length} units={unitTotals} />
           <WalletsCard />
           <NetworksCard sol={solAddress ? sh?.sol ?? null : null} networks={evmAddress ? en : []} onChanged={fetchData} />
+          {evmAddress && <MyListings address={evmAddress} refreshKey={listedKey} onChanged={() => setTimeout(fetchData, 3_000)} />}
           <SectionHeader title="Holdings" count={rows.length || undefined} />
         </View>
       }
