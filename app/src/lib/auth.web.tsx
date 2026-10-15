@@ -105,7 +105,12 @@ function PrivyLoader({ children }: { children: ReactNode }) {
         logout: privy.logout,
         fund: privy.fund,
         evmAddress: privy.evmAddress,
-        sendEvm: privy.sendEvm,
+        sendEvm: privy.signEvm ? async (tx) => {
+          const from = privy.evmAddress!;
+          const prepared = await api.evmPrepare({ chainId: tx.chainId, from, to: tx.to, data: tx.data, value: tx.value, gas: tx.gas });
+          const signed = await privy.signEvm!({ ...tx, ...prepared });
+          return api.evmSend({ from, tx: { to: tx.to, data: tx.data, value: tx.value, ...prepared }, signed });
+        } : null,
         fundEth: privy.fundEth,
         sendSol: privy.signSol ? async (t) => api.solSend(await privy.signSol!(t)) : null,
         sendSolTx: privy.signSolTx ? async (b64) => api.solSend(await privy.signSolTx!(b64)) : null,

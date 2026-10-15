@@ -424,6 +424,11 @@ export const api = {
   holdings: (address: string) => req<Holdings>(`/chain/holdings/${address}`),
   quote: (symbol: string, buyer: string) => req<BuyQuote>(`/trade/quote/${symbol}?buyer=${buyer}`),
   evmBalance: (address: string) => req<Record<string, number> & { eth: number }>(`/chain/evm/balance/${address}`),
+  // FloorFeed (Privy) EVM wallet: fields to sign, then broadcast through our RPC.
+  evmPrepare: (b: { chainId: number; from: string; to: string; data: string; value: string; gas?: string }) =>
+    send('POST', '/chain/evm/prepare', b) as Promise<import('./auth-types').PreparedEvm & { chainId: number }>,
+  evmSend: (b: { from: string; tx: Record<string, string | number>; signed: string }) =>
+    (send('POST', '/chain/evm/send', b) as Promise<{ hash: string }>).then((r) => r.hash),
   // Broadcast a signed Solana transaction (base64) through our RPC; resolves to its signature.
   solSend: (transaction: string) => (send('POST', '/chain/sol/send', { transaction }) as Promise<{ signature: string }>).then((r) => r.signature),
   marks: (symbols: string[]) => req<Record<string, Mark>>(`/portfolio/marks?c=${encodeURIComponent(symbols.join(','))}`),

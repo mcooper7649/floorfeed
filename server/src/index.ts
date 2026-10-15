@@ -22,7 +22,7 @@ import { ACTIVITY_KINDS, recordActivity, walletActivity } from "./activity.ts";
 import { bridgeQuote, bridgeStatus } from "./bridge.ts";
 import { dropDetail, dropMintTx } from "./drops.ts";
 import { marks } from "./marks.ts";
-import { EVM_ADDRESS_RE, evmApproveTx, evmBalances, evmBuyTx, evmHoldings, evmNetworks, evmNftTransferTx, evmQuote, evmSellQuote, evmSellTx, evmTransferFee, evmUnwrapTx, totalEth } from "./trade-evm.ts";
+import { EVM_ADDRESS_RE, evmApproveTx, evmBroadcast, evmPrepare, evmBalances, evmBuyTx, evmHoldings, evmNetworks, evmNftTransferTx, evmQuote, evmSellQuote, evmSellTx, evmTransferFee, evmUnwrapTx, totalEth } from "./trade-evm.ts";
 import { startIngest } from "./ingest.ts";
 import { KINDS, generate, nextPost, postedSince, reportResult, startSocial, submitExternal, xLength } from "./social.ts";
 import { amountsFrom, feeRates } from "./fees.ts";
@@ -839,6 +839,24 @@ app.post("/chain/sol/send", async (req, reply) => {
     return reply.code(409).send({ error: /blockhash not found|expired/i.test(m) ? "The transaction expired before it was sent. Try again."
       : /insufficient (funds|lamports)|no record of a prior credit/i.test(m) ? "Not enough SOL for this plus the network fee." : `Solana rejected it: ${m.replace(/^RPC /, "").slice(0, 160)}` });
   }
+});
+
+// FloorFeed (Privy) wallet on EVM: fields to sign, then broadcast (trade-evm.ts).
+app.post("/chain/evm/prepare", async (req, reply) => {
+  const hex = z.string().regex(/^0x[0-9a-fA-F]*$/);
+  const b = z.object({ chainId: z.number().int(), from: z.string().regex(EVM_ADDRESS_RE), to: z.string().regex(EVM_ADDRESS_RE),
+    data: hex, value: z.string().regex(/^\d+$/), gas: z.string().regex(/^\d+$/).optional() }).parse(req.body);
+  try { return await evmPrepare(b); } catch (err) { return reply.code(409).send({ error: (err as Error).message }); }
+});
+const evmSends = new Map<string, number[]>();
+app.post("/chain/evm/send", async (req, reply) => {
+  const b = z.object({ from: z.string().regex(EVM_ADDRESS_RE), tx: z.record(z.string(), z.union([z.string(), z.number()])),
+    signed: z.string().regex(/^0x[0-9a-fA-F]{130,40000}$/) }).parse(req.body);
+  const now = Date.now();
+  const recent = (evmSends.get(req.ip) ?? []).filter((t) => now - t < 60_000);
+  if (recent.length >= 20) return reply.code(429).send({ error: "Too many transactions. Wait a minute and try again." });
+  evmSends.set(req.ip, [...recent, now]);
+  try { return { hash: await evmBroadcast(b) }; } catch (err) { return reply.code(409).send({ error: (err as Error).message }); }
 });
 
 app.get("/chain/blockhash", async (_req, reply) => {

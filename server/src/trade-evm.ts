@@ -1,4 +1,7 @@
-import { createPublicClient, encodeFunctionData, formatEther, http, parseAbiItem, parseEther, type Hex, type PublicClient } from "viem";
+import {
+  createPublicClient, encodeFunctionData, formatEther, http, parseAbiItem, parseEther, parseSignature, parseTransaction, recoverTransactionAddress,
+  serializeTransaction, type Hex, type PublicClient, type TransactionSerializable,
+} from "viem";
 import { abstract, apeChain, arbitrum, base, hyperEvm, ink, mainnet, monad, robinhood, ronin } from "viem/chains";
 import { EVM_CHAINS, EVM_SALES, config, normalizeUnit } from "./config.ts";
 import { unitOf } from "./units.ts";
@@ -555,3 +558,60 @@ export async function evmTxInfo(chain: string, hash: string) {
 }
 
 export const isTradableChain = (c: string) => isTradable(c);
+
+
+// --- the FloorFeed (Privy) wallet: we prepare and broadcast, Privy only signs ---
+// Privy's own send fetched nonce/fees and broadcast through RPCs we can't see
+// or control (hangs, and a hash that never landed). Now the app asks here for
+// the nonce, gas and fees, Privy shows and signs that exact transaction, and
+// this broadcasts it through our RPC.
+
+export async function evmPrepare(p: { chainId: number; from: string; to: string; data: string; value: string; gas?: string }) {
+  const chain = evmChainOf(p.chainId);
+  if (!chain) throw new Error("Unsupported network");
+  const c = clients[chain] as unknown as PublicClient;
+  const [nonce, gas, fees] = await Promise.all([
+    c.getTransactionCount({ address: p.from as Hex, blockTag: "pending" }),
+    p.gas ? Promise.resolve(BigInt(p.gas))
+      : c.estimateGas({ account: p.from as Hex, to: p.to as Hex, data: p.data as Hex, value: BigInt(p.value) }).then((g) => (g * 12n) / 10n),
+    c.estimateFeesPerGas().catch(() => null),
+  ]);
+  const base = { nonce, gas: gas.toString(), chainId: p.chainId };
+  if (fees?.maxFeePerGas != null) {
+    // Headroom so a busy block doesn't strand it; the unused part isn't charged.
+    return { ...base, type: 2, maxFeePerGas: ((fees.maxFeePerGas * 13n) / 10n).toString(), maxPriorityFeePerGas: (fees.maxPriorityFeePerGas ?? 0n).toString() };
+  }
+  return { ...base, type: 0, gasPrice: (((await c.getGasPrice()) * 12n) / 10n).toString() };
+}
+
+// `signed` is what the wallet returned: the signed transaction, or (some
+// wallets) only the 65-byte signature over `tx`. Checks the signer is `from`.
+export async function evmBroadcast(p: { from: string; tx: Record<string, string | number>; signed: string }) {
+  const chainId = Number(p.tx.chainId);
+  const chain = evmChainOf(chainId);
+  if (!chain) throw new Error("Unsupported network");
+  let raw = p.signed as Hex;
+  if (raw.length === 132) { // r,s,v only: put it on the transaction we prepared
+    const t = p.tx;
+    const unsigned: TransactionSerializable = {
+      chainId, to: t.to as Hex, data: t.data as Hex, value: BigInt(t.value), nonce: Number(t.nonce), gas: BigInt(t.gas),
+      ...(Number(t.type) === 2
+        ? { type: "eip1559" as const, maxFeePerGas: BigInt(t.maxFeePerGas), maxPriorityFeePerGas: BigInt(t.maxPriorityFeePerGas) }
+        : { type: "legacy" as const, gasPrice: BigInt(t.gasPrice) }),
+    };
+    raw = serializeTransaction(unsigned, parseSignature(raw));
+  }
+  const parsed = parseTransaction(raw);
+  if (parsed.chainId !== chainId) throw new Error("The signed transaction is for a different network.");
+  const signer = await recoverTransactionAddress({ serializedTransaction: raw as never });
+  if (signer.toLowerCase() !== p.from.toLowerCase()) throw new Error("The transaction wasn't signed by this wallet.");
+  const c = clients[chain] as unknown as PublicClient;
+  try {
+    return await c.sendRawTransaction({ serializedTransaction: raw });
+  } catch (err) {
+    const m = (err as Error).message;
+    throw new Error(/insufficient funds/i.test(m) ? `Not enough ${EVM_CHAINS[chain].native} for this plus gas.`
+      : /nonce too low|already known/i.test(m) ? "That transaction was already sent. Check Activity before trying again."
+      : `The network rejected it: ${m.split("\n")[0].slice(0, 160)}`);
+  }
+}

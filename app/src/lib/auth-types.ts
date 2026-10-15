@@ -31,14 +31,20 @@ export type AuthState = {
 
 // `description` is shown in Privy's confirmation screen.
 export type EvmTx = { to: string; data: string; value: string; chainId: number; gas?: string; description?: string };
+// What our API fills in before the Privy wallet signs (/chain/evm/prepare).
+export type PreparedEvm = { nonce: number; gas: string; type: number; maxFeePerGas?: string; maxPriorityFeePerGas?: string; gasPrice?: string };
 export type SolTransfer = { to: string; lamports: string; blockhash: string; lastValidBlockHeight: string };
 
 // What the separately built Privy bundle (privy/entry.tsx) reports back.
 // Solana: Privy only signs (its "sign and send" needs Solana RPCs configured
 // inside Privy and hung without them); the app broadcasts the signed
 // transaction through our API (auth.web.tsx), so sendSol/sendSolTx are built there.
-export type PrivyState = Omit<AuthState, 'supported' | 'sendSol' | 'sendSolTx'> & {
+export type PrivyState = Omit<AuthState, 'supported' | 'sendSol' | 'sendSolTx' | 'sendEvm'> & {
   getAccessToken: () => Promise<string | null>;
+  // EVM likewise: Privy's own send broadcast transactions that never reached
+  // the chain. The app gets nonce/gas/fees from our API, Privy shows and signs
+  // exactly that, and our API broadcasts it.
+  signEvm: ((tx: EvmTx & PreparedEvm) => Promise<string>) | null; // signed tx (or signature), hex
   signSol: ((t: SolTransfer) => Promise<string>) | null;     // signed tx, base64
   signSolTx: ((base64: string) => Promise<string>) | null;   // signed tx, base64
 };
