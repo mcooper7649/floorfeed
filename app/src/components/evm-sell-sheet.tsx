@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { EvmListSheet } from '@/components/evm-list-sheet';
 import { ModeChip } from '@/components/mode-toggle';
 import { NftImage } from '@/components/nft-image';
 import { C } from '@/constants/brand';
@@ -37,6 +38,7 @@ export function EvmSellSheet({ symbol, id, open, onClose, onSold }: {
   const [quote, setQuote] = useState<{ key: string; q: EvmSellQuote } | { key: string; error: string } | null>(null);
   const [step, setStep] = useState<Step>({ kind: 'idle' });
   const [nonce, setNonce] = useState(0);
+  const [listing, setListing] = useState(false); // switched to listing at your price (the list sheet)
   const [justApproved, setJustApproved] = useState(false); // step 1 done in this session: make step 2 obvious
   const key = `${symbol}:${id}:${w.address}:${nonce}`;
   useEffect(() => { if (open) track('sell_open', { chain: 'evm' }); }, [open]);
@@ -83,6 +85,7 @@ export function EvmSellSheet({ symbol, id, open, onClose, onSold }: {
   const close = () => {
     if (polling.current) { clearInterval(polling.current); polling.current = null; }
     setStep({ kind: 'idle' });
+    setListing(false);
     onClose();
   };
 
@@ -124,7 +127,9 @@ export function EvmSellSheet({ symbol, id, open, onClose, onSold }: {
   };
 
   return (
-    <Modal visible={open} transparent animationType="fade" onRequestClose={close}>
+    <>
+    {open && listing && <EvmListSheet symbol={symbol} id={id} open onClose={close} onDone={onSold} />}
+    <Modal visible={open && !listing} transparent animationType="fade" onRequestClose={close}>
       <Pressable style={s.backdrop} onPress={close}>
         <Pressable style={s.sheet} onPress={() => {}}>
           <View style={s.head}>
@@ -182,7 +187,7 @@ export function EvmSellSheet({ symbol, id, open, onClose, onSold }: {
 
               {offer?.belowFloor != null && offer.belowFloor > 0.15 && (
                 <Text style={s.warn}>
-                  This offer is {Math.round(offer.belowFloor * 100)}% below the floor. Listing on OpenSea could get more, but may take longer to sell.
+                  This offer is {Math.round(offer.belowFloor * 100)}% below the floor. Listing it at your price could get more, but may take longer to sell.
                 </Text>
               )}
               {q.reason && <Text style={s.meta}>{q.reason}</Text>}
@@ -221,8 +226,8 @@ export function EvmSellSheet({ symbol, id, open, onClose, onSold }: {
                   Offers pay in {offer.currency}{offer.currency.startsWith('W') ? `, which you can swap 1:1 for ${offer.currency.slice(1)}` : ''}. FloorFeed checks the sale against the chain first; your wallet shows it and asks you to confirm.
                 </Text>
               )}
-              <Pressable accessibilityRole="link" onPress={() => Linking.openURL(q.marketUrl)}>
-                <Text style={s.link}>List it on OpenSea instead ↗</Text>
+              <Pressable accessibilityRole="button" onPress={() => setListing(true)} disabled={busy} style={s.secondary}>
+                <Text style={s.secondaryTxt}>List for sale at your price instead</Text>
               </Pressable>
             </>
           )}
@@ -233,6 +238,7 @@ export function EvmSellSheet({ symbol, id, open, onClose, onSold }: {
         </Pressable>
       </Pressable>
     </Modal>
+    </>
   );
 }
 
