@@ -22,6 +22,7 @@ import { ACTIVITY_KINDS, recordActivity, walletActivity } from "./activity.ts";
 import { bridgeQuote, bridgeStatus } from "./bridge.ts";
 import { dropDetail, dropMintTx } from "./drops.ts";
 import { marks } from "./marks.ts";
+import { evmCancelBuild, evmCancelSubmit, evmListBuild, evmListQuote, evmListSubmit, evmMyListings } from "./list-evm.ts";
 import { EVM_ADDRESS_RE, evmApproveTx, evmBroadcast, evmPrepare, evmBalances, evmBuyTx, evmHoldings, evmNetworks, evmNftTransferTx, evmQuote, evmSellQuote, evmSellTx, evmTransferFee, evmUnwrapTx, totalEth } from "./trade-evm.ts";
 import { startIngest } from "./ingest.ts";
 import { KINDS, generate, nextPost, postedSince, reportResult, startSocial, submitExternal, xLength } from "./social.ts";
@@ -698,7 +699,10 @@ app.get("/chain/evm/balance/:address", async (req, reply) => {
 app.get("/chain/evm/holdings/:address", async (req, reply) => {
   const { address } = req.params as { address: string };
   if (!EVM_ADDRESS_RE.test(address)) return reply.code(400).send({ error: "Not an EVM address" });
-  return evmHoldings(address);
+  const h = await evmHoldings(address);
+  // Which of them are listed on OpenSea (price, expiry), from the chains they're on.
+  const listed = await evmMyListings([...new Set(h.nfts.map((n) => n.chain))], address).catch(() => new Map());
+  return { ...h, nfts: h.nfts.map((n) => ({ ...n, listing: listed.get(n.mint.toLowerCase()) ?? null })) };
 });
 
 app.get("/trade/evm/quote/:symbol", async (req, reply) => {
@@ -735,6 +739,31 @@ app.get("/trade/evm/sell-quote/:symbol", async (req, reply) => {
   if (!quote) return reply.code(404).send({ error: "No quote for this NFT" });
   return quote;
 });
+// Listing on OpenSea (list-evm.ts): quote, typed data to sign, submit; and cancel.
+app.get("/trade/evm/list-quote/:symbol", async (req, reply) => {
+  const { symbol } = req.params as { symbol: string };
+  const q = z.object({ id: z.string().max(130), seller: z.string().regex(EVM_ADDRESS_RE) }).parse(req.query);
+  try { return await evmListQuote(symbol, q.id, q.seller); } catch (err) { return reply.code(409).send({ error: (err as Error).message }); }
+});
+app.post("/trade/evm/list-build", async (req, reply) => {
+  const b = z.object({ symbol: z.string().max(80), id: z.string().max(130), seller: z.string().regex(EVM_ADDRESS_RE),
+    price: z.number().positive(), days: z.number().int() }).parse(req.body);
+  try { return await evmListBuild(b); } catch (err) { return reply.code(409).send({ error: (err as Error).message }); }
+});
+app.post("/trade/evm/list-submit", async (req, reply) => {
+  const b = z.object({ chain: z.string(), parameters: z.any(), signature: z.string().regex(/^0x[0-9a-fA-F]{128,200}$/) }).parse(req.body);
+  try { return await evmListSubmit(b); } catch (err) { return reply.code(409).send({ error: (err as Error).message }); }
+});
+app.post("/trade/evm/cancel-build", async (req, reply) => {
+  const b = z.object({ chain: z.string(), orderHash: z.string().regex(/^0x[0-9a-fA-F]{64}$/), seller: z.string().regex(EVM_ADDRESS_RE) }).parse(req.body);
+  try { return await evmCancelBuild(b); } catch (err) { return reply.code(409).send({ error: (err as Error).message }); }
+});
+app.post("/trade/evm/cancel-submit", async (req, reply) => {
+  const b = z.object({ chain: z.string(), protocolAddress: z.string().regex(EVM_ADDRESS_RE), orderHash: z.string().regex(/^0x[0-9a-fA-F]{64}$/),
+    signature: z.string().regex(/^0x[0-9a-fA-F]{128,200}$/), seller: z.string().regex(EVM_ADDRESS_RE) }).parse(req.body);
+  try { return await evmCancelSubmit(b); } catch (err) { return reply.code(409).send({ error: (err as Error).message }); }
+});
+
 app.post("/trade/evm/approve-tx", async (req, reply) => {
   const b = z.object({
     chain: z.string(), contract: z.string().regex(EVM_ADDRESS_RE),

@@ -4,6 +4,7 @@ import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, StyleSheet
 
 import { ChainBadge } from '@/components/chain-badge';
 import { EvmBuySheet } from '@/components/evm-buy-sheet';
+import { EvmListSheet } from '@/components/evm-list-sheet';
 import { EvmSellSheet } from '@/components/evm-sell-sheet';
 import { Avatar, TierBadge } from '@/components/event-card';
 import { NftImage, Pill } from '@/components/nft-image';
@@ -43,6 +44,7 @@ export default function ItemScreen() {
   const { mode } = useTradeMode();
   const [buyOpen, setBuyOpen] = useState(false);
   const [sellOpen, setSellOpen] = useState(false);
+  const [listOpen, setListOpen] = useState(false);
   const evmWallet = useEvmWallet();
 
   useTitle(data && `${data.name ?? data.collection.name}${data.rarity ? ` · Rank ${data.rarity.rank.toLocaleString()}` : ''}: traits, rarity & sales | FloorFeed`);
@@ -116,9 +118,14 @@ export default function ItemScreen() {
 
       <View style={s.ctaRow}>
         {mine ? (
-          <Pressable accessibilityRole="button" onPress={() => setSellOpen(true)} style={s.primary}>
-            <Text style={s.primaryTxt}>Sell to the best offer</Text>
-          </Pressable>
+          <>
+            <Pressable accessibilityRole="button" onPress={() => setSellOpen(true)} style={s.primary}>
+              <Text style={s.primaryTxt}>Sell to the best offer</Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" onPress={() => setListOpen(true)} style={s.secondary}>
+              <Text style={s.secondaryTxt}>List for sale</Text>
+            </Pressable>
+          </>
         ) : data.listing && data.chain !== 'solana' && mode === 'real' ? (
           <Pressable accessibilityRole="button" onPress={() => setBuyOpen(true)} style={s.primary}>
             <Text style={s.primaryTxt}>Buy now · {sol(data.listing.price, 2, u)}</Text>
@@ -196,6 +203,7 @@ export default function ItemScreen() {
       {nav}
       {data.chain !== 'solana' && <EvmBuySheet symbol={data.symbol} id={data.id} open={buyOpen} onClose={() => setBuyOpen(false)} />}
       {mine && <EvmSellSheet symbol={data.symbol} id={data.id} open={sellOpen} onClose={() => setSellOpen(false)} />}
+      {mine && listOpen && <EvmListSheet symbol={data.symbol} id={data.id} open onClose={() => setListOpen(false)} />}
       <ScrollView contentContainerStyle={{ padding: pad, paddingBottom: 60, width: '100%', maxWidth, alignSelf: 'center', gap: 24 }}>
         {wide ? (
           <View style={{ flexDirection: 'row', gap: 32, alignItems: 'flex-start' }}>

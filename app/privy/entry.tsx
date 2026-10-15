@@ -1,5 +1,5 @@
 import {
-  PrivyProvider, useCreateWallet, useExportWallet as useExportEvmWallet, useFundWallet as useFundEvmWallet, usePrivy, useSignTransaction as useSignEvmTransaction,
+  PrivyProvider, useCreateWallet, useExportWallet as useExportEvmWallet, useFundWallet as useFundEvmWallet, usePrivy, useSignTransaction as useSignEvmTransaction, useSignTypedData,
 } from '@privy-io/react-auth';
 import {
   useExportWallet as useExportSolanaWallet, useFundWallet, useSignTransaction, useWallets as useSolanaWallets,
@@ -15,7 +15,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { abstract, apeChain, arbitrum, base, hyperEvm, ink, mainnet, monad, robinhood, ronin } from 'viem/chains';
 
-import type { EvmTx, PreparedEvm, PrivyMountOptions, PrivyState, SolTransfer } from '../src/lib/auth-types';
+import { EIP712_DOMAIN, type EvmTx, type PreparedEvm, type PrivyMountOptions, type PrivyState, type SolTransfer, type TypedData } from '../src/lib/auth-types';
 
 // Privy's SDK is several MB, so it is built on its own (scripts/build-privy.mjs)
 // and only fetched when someone signs in, or is already signed in. It runs in
@@ -59,6 +59,7 @@ function Bridge({ onState }: { onState: (s: PrivyState) => void }) {
   const { fundWallet } = useFundWallet();
   const { fundWallet: fundEvmWallet } = useFundEvmWallet();
   const { signTransaction: signEvmTransaction } = useSignEvmTransaction();
+  const { signTypedData } = useSignTypedData();
   const { createWallet } = useCreateWallet();
   const { signTransaction } = useSignTransaction();
   const { wallets: solWallets } = useSolanaWallets();
@@ -84,6 +85,15 @@ function Bridge({ onState }: { onState: (s: PrivyState) => void }) {
     creating.current = true;
     createWallet().catch(() => {});
   }, [ready, authenticated, evmAddress, createWallet]);
+
+  // EIP-712 (an OpenSea listing or cancel): a signature, no transaction.
+  const signTypedEvmImpl = useCallback(async (td: TypedData, description?: string) => {
+    const { signature } = await signTypedData(
+      { ...td, types: { EIP712Domain: [...EIP712_DOMAIN], ...td.types } } as never,
+      { address: evmAddress ?? undefined, uiOptions: { description: description ?? 'Sign to confirm. This costs no gas.' } },
+    );
+    return signature;
+  }, [signTypedData, evmAddress]);
 
   // Sign only: nonce, gas and fees come prepared from our API, which also broadcasts.
   const signEvm = useCallback(async (tx: EvmTx & PreparedEvm) => {
@@ -149,6 +159,7 @@ function Bridge({ onState }: { onState: (s: PrivyState) => void }) {
   const fund = userId ? fundSol : null;
   const fundEth = userId ? fundEthImpl : null;
   const signEvmOrNull = userId && evmAddress ? signEvm : null;
+  const signTypedEvm = userId && evmAddress ? signTypedEvmImpl : null;
   const signSol = userId && embeddedAddress ? signSolImpl : null;
   const signSolTx = userId && embeddedAddress ? signSolTxImpl : null;
   const exportSolana = useMemo(() => (userId && embeddedAddress ? () => exportSol({ address: embeddedAddress }) : null), [userId, embeddedAddress, exportSol]);
@@ -157,9 +168,9 @@ function Bridge({ onState }: { onState: (s: PrivyState) => void }) {
   const state = useMemo<PrivyState>(
     () => ({
       ready, userId, label, embeddedAddress, login: () => login(), logout, getAccessToken, fund,
-      evmAddress, signEvm: signEvmOrNull, fundEth, signSol, signSolTx, exportSolana, exportEvm,
+      evmAddress, signEvm: signEvmOrNull, signTypedEvm, fundEth, signSol, signSolTx, exportSolana, exportEvm,
     }),
-    [ready, userId, label, embeddedAddress, login, logout, getAccessToken, fund, evmAddress, signEvmOrNull, fundEth, signSol, signSolTx, exportSolana, exportEvm],
+    [ready, userId, label, embeddedAddress, login, logout, getAccessToken, fund, evmAddress, signEvmOrNull, signTypedEvm, fundEth, signSol, signSolTx, exportSolana, exportEvm],
   );
   useEffect(() => onState(state), [state, onState]);
   return null;

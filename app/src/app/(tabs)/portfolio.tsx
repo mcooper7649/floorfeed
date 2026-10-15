@@ -4,6 +4,7 @@ import { FlatList, Linking, Pressable, RefreshControl, StyleSheet, Text, View } 
 
 import { CollIcon } from '@/components/coll-icon';
 import { ActivityList } from '@/components/activity-list';
+import { EvmListSheet } from '@/components/evm-list-sheet';
 import { EvmSellSheet } from '@/components/evm-sell-sheet';
 import { NetworksCard, networkLines } from '@/components/networks-card';
 import { MODE_COLOR, ModeToggle } from '@/components/mode-toggle';
@@ -242,6 +243,7 @@ function RealPortfolio({ solAddress, evmAddress }: { solAddress: string | null; 
   const [evm, setEvm] = useState<{ address: string; h: EvmHoldings } | { address: string; error: string } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [selling, setSelling] = useState<Row | null>(null);
+  const [listing, setListing] = useState<Row | null>(null);
   const [nets, setNets] = useState<{ address: string; n: EvmNetwork[] } | null>(null);
 
   const fetchData = useCallback(() => {
@@ -290,6 +292,10 @@ function RealPortfolio({ solAddress, evmAddress }: { solAddress: string | null; 
 
   return (
     <>
+    {listing && (
+      <EvmListSheet symbol={listing.collection.symbol} id={listing.mint} open onClose={() => setListing(null)}
+        onDone={() => setTimeout(fetchData, 3_000)} />
+    )}
     {selling && (
       <EvmSellSheet symbol={selling.collection.symbol} id={selling.mint} open onClose={() => setSelling(null)}
         onSold={() => setTimeout(fetchData, 20_000)} />
@@ -347,13 +353,20 @@ function RealPortfolio({ solAddress, evmAddress }: { solAddress: string | null; 
             onPress={() => router.push({ pathname: '/item/[symbol]/[id]', params: { symbol: n.collection.symbol, id: n.mint } })}
             art={<NftImage uri={n.image} name={n.collection.name} radius={10} px={120} style={{ width: 44 }} />}
             title={n.name || n.collection.name}
-            meta={n.boughtAt != null ? `${n.collection.name}, bought at ${sol(n.boughtAt, 2, n.unit)}` : n.collection.name}
+            meta={[n.collection.name, n.boughtAt != null ? `bought at ${sol(n.boughtAt, 2, n.unit)}` : null,
+              n.listing ? `listed at ${sol(n.listing.price, 3, n.unit)}` : null].filter(Boolean).join(', ')}
             value={n.estValue != null ? sol(n.estValue, 3, n.unit) : '—'}
             note={valueUsd != null ? `≈ ${usd(valueUsd)}` : undefined}
             sub={p != null ? `${signedSol(p, 3, n.unit)}${pUsd != null ? ` (${signedUsd(pUsd)})` : ''}` : undefined}
             subColor={p != null ? (p >= 0 ? C.up : C.down) : undefined}
             // Ethereum-family NFTs sell in-app into the best offer; Solana still finishes on Magic Eden.
-            action={<RowAction label="Sell" onPress={() => (n.chain === 'evm' ? setSelling(n) : Linking.openURL(sellUrl))} />}
+            // EVM NFTs can also be listed at your price (OpenSea), from here.
+            action={n.chain === 'evm' ? (
+              <View style={{ flexDirection: 'row', gap: 6 }}>
+                <RowAction label="Sell" onPress={() => setSelling(n)} />
+                <RowAction label={n.listing ? 'Listed' : 'List'} onPress={() => setListing(n)} />
+              </View>
+            ) : <RowAction label="Sell" onPress={() => Linking.openURL(sellUrl)} />}
           />
         );
       }}

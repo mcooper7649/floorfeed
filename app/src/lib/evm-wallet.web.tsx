@@ -4,7 +4,7 @@ import { createContext, use, useCallback, useEffect, useState, type ReactNode } 
 import { chainById } from '@/constants/chains';
 
 import { useAuth } from './auth';
-import type { EvmTx } from './auth-types';
+import { EIP712_DOMAIN, type EvmTx, type TypedData } from './auth-types';
 import type { EvmWalletState } from './wallet-types';
 
 // Ethereum browser wallets announce themselves with EIP-6963 events, so
@@ -79,37 +79,51 @@ export function EvmWalletProvider({ children }: { children: ReactNode }) {
     await AsyncStorage.removeItem(LAST_KEY).catch(() => {});
   }, []);
 
+  // Switch the extension to `chainId`, adding the network first if it doesn't know it.
+  const ensureChain = useCallback(async (chainId: number) => {
+    if (!wallet) throw new Error('No wallet connected.');
+    const p = wallet.provider;
+    const want = hex(chainId);
+    const current = await p.request({ method: 'eth_chainId' }).catch(() => null);
+    if (current === want) return;
+    try {
+      await p.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: want }] });
+    } catch (e) {
+      // 4902: the wallet doesn't know this network yet (common for Abstract, Ink, HyperEVM...). Add it, which also switches.
+      const info = chainById(chainId)?.[1];
+      if ((e as { code?: number }).code !== 4902 || !info?.rpc) throw e;
+      await p.request({ method: 'wallet_addEthereumChain', params: [{
+        chainId: want, chainName: info.name, rpcUrls: [info.rpc],
+        nativeCurrency: { name: info.symbol ?? 'Ether', symbol: info.symbol ?? 'ETH', decimals: 18 },
+        blockExplorerUrls: info.explorer ? [info.explorer] : undefined,
+      }] });
+    }
+  }, [wallet]);
+
   const sendExtension = useCallback(async (tx: EvmTx) => {
     if (!wallet || !address) throw new Error('No wallet connected.');
     const p = wallet.provider;
-    const want = hex(tx.chainId);
-    const current = await p.request({ method: 'eth_chainId' }).catch(() => null);
-    if (current !== want) {
-      try {
-        await p.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: want }] });
-      } catch (e) {
-        // 4902: the wallet doesn't know this network yet (common for Abstract, Ink, HyperEVM...). Add it, which also switches.
-        const info = chainById(tx.chainId)?.[1];
-        if ((e as { code?: number }).code !== 4902 || !info?.rpc) throw e;
-        await p.request({ method: 'wallet_addEthereumChain', params: [{
-          chainId: want, chainName: info.name, rpcUrls: [info.rpc],
-          nativeCurrency: { name: info.symbol ?? 'Ether', symbol: info.symbol ?? 'ETH', decimals: 18 },
-          blockExplorerUrls: info.explorer ? [info.explorer] : undefined,
-        }] });
-      }
-    }
+    await ensureChain(tx.chainId);
     const hash = await p.request({
       method: 'eth_sendTransaction',
       params: [{ from: address, to: tx.to, data: tx.data, value: hex(BigInt(tx.value)), ...(tx.gas ? { gas: hex(BigInt(tx.gas)) } : {}) }],
     });
     return String(hash);
-  }, [wallet, address]);
+  }, [wallet, address, ensureChain]);
 
   const signExtension = useCallback(async (message: string) => {
     if (!wallet || !address) throw new Error('No wallet connected.');
     const hexMsg = '0x' + Array.from(new TextEncoder().encode(message), (b) => b.toString(16).padStart(2, '0')).join('');
     return String(await wallet.provider.request({ method: 'personal_sign', params: [hexMsg, address] }));
   }, [wallet, address]);
+
+  // MetaMask & co. only sign typed data for the network they're on.
+  const signTypedExtension = useCallback(async (td: TypedData) => {
+    if (!wallet || !address) throw new Error('No wallet connected.');
+    await ensureChain(td.domain.chainId);
+    const payload = JSON.stringify({ ...td, types: { EIP712Domain: EIP712_DOMAIN, ...td.types } });
+    return String(await wallet.provider.request({ method: 'eth_signTypedData_v4', params: [address, payload] }));
+  }, [wallet, address, ensureChain]);
 
   // A connected extension wins; otherwise the signed-in user's Privy wallet.
   const embedded = !address && auth.evmAddress ? auth.evmAddress.toLowerCase() : null;
@@ -126,6 +140,7 @@ export function EvmWalletProvider({ children }: { children: ReactNode }) {
     disconnect,
     send: address ? sendExtension : embedded ? auth.sendEvm : null,
     signMessage: address ? signExtension : null,
+    signTypedData: address ? signTypedExtension : embedded && auth.signTypedEvm ? (td) => auth.signTypedEvm!(td) : null,
   };
   return <Ctx value={value}>{children}</Ctx>;
 }

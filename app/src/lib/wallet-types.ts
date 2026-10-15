@@ -43,4 +43,6 @@ export type EvmWalletState = {
   disconnect: () => Promise<void>;
   send: ((tx: import('./auth-types').EvmTx) => Promise<string>) | null;
   signMessage: ((message: string) => Promise<string>) | null; // personal_sign, hex signature
+  // EIP-712 typed data (e.g. an OpenSea listing): no gas, hex signature.
+  signTypedData: ((td: import('./auth-types').TypedData) => Promise<string>) | null;
 };

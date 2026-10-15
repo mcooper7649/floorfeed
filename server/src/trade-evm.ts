@@ -634,3 +634,10 @@ export async function evmGasReserve(chain: string) {
   const gp = await (clients[chain] as unknown as PublicClient).getGasPrice();
   return Number(formatEther((gp * 120_000n * 15n) / 10n)) + (chain === "ethereum" ? 0 : 0.00002);
 }
+
+// For list-evm.ts.
+export const evmPublicClient = (chain: string) => {
+  if (!isTradable(chain)) throw new Error("Unsupported chain");
+  return clients[chain] as unknown as PublicClient;
+};
+export { holds as evmHolds, osConduit };

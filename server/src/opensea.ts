@@ -371,3 +371,47 @@ export async function getOsDrops(type: "featured" | "upcoming" | "recently_minte
   const r = await get<{ drops: OsDrop[] }>(`/drops?type=${type}&limit=${limit}`);
   return r.drops ?? [];
 }
+
+// --- listing (list-evm.ts) ---
+
+// A collection's fees as OpenSea charges them on a listing: its own fee plus
+// creator fees, each with whether it's required. Percent, e.g. 1 = 1%.
+export async function getOsFees(slug: string) {
+  const c = await get<{ fees?: { fee: number; recipient: string; required: boolean }[]; required_zone?: string | null }>(`/collections/${slug}`);
+  return { fees: c.fees ?? [], requiredZone: c.required_zone ?? null };
+}
+
+export async function postOsListing(chain: string, body: unknown) {
+  return post<{ order?: { order_hash?: string } }>(`/orders/${osChain(chain)}/seaport/listings`, body);
+}
+
+type OsOrderItem = { itemType: number; token: string; identifierOrCriteria: string; startAmount: string; endAmount: string; recipient?: string };
+export type OsOrderParams = {
+  offerer: string; zone: string; offer: OsOrderItem[]; consideration: OsOrderItem[]; orderType: number;
+  startTime: string; endTime: string; zoneHash: string; salt: string; conduitKey: string; counter: string | number;
+  totalOriginalConsiderationItems?: number;
+};
+// This wallet's live OpenSea listings on a chain (newest first), with their Seaport parameters.
+export async function getOsMyListings(chain: string, maker: string) {
+  const q = new URLSearchParams({ maker, limit: "50", cb: String(Math.floor(Date.now() / 30_000)) });
+  const r = await get<{ orders?: {
+    order_hash: string; protocol_address: string; current_price: string; expiration_time: number; listing_time: number;
+    cancelled?: boolean; finalized?: boolean; marked_invalid?: boolean;
+    protocol_data: { parameters: OsOrderParams };
+  }[] }>(`/orders/${osChain(chain)}/seaport/listings?${q}`);
+  return (r.orders ?? []).filter((o) => !o.cancelled && !o.finalized && !o.marked_invalid).flatMap((o) => {
+    const nft = o.protocol_data.parameters.offer.find((i) => i.itemType === 2 || i.itemType === 3);
+    if (!nft) return [];
+    return [{
+      mint: `${nft.token.toLowerCase()}:${nft.identifierOrCriteria}`,
+      orderHash: o.order_hash, protocolAddress: o.protocol_address,
+      priceWei: o.current_price, expiresAt: o.expiration_time, listedAt: o.listing_time,
+      parameters: o.protocol_data.parameters,
+    }];
+  });
+}
+
+export async function cancelOsOrder(chain: string, protocolAddress: string, orderHash: string, offererSignature: string) {
+  return post<{ last_signature_issued_valid_until?: string | null }>(
+    `/orders/chain/${osChain(chain)}/protocol/${protocolAddress}/${orderHash}/cancel`, { offererSignature });
+}

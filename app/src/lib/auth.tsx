@@ -15,6 +15,7 @@ const NATIVE: AuthState = {
   fund: null,
   evmAddress: null,
   sendEvm: null,
+  signTypedEvm: null,
   fundEth: null,
   sendSol: null,
   sendSolTx: null,

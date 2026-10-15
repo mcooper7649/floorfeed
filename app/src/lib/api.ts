@@ -272,6 +272,7 @@ export type Holding = {
   collection: { symbol: string; name: string; floor: number | null };
   estValue: number | null; // floor minus the sell haircut (est. bid)
   boughtAt: number | null; // this wallet's last on-chain buy price, if we saw it
+  listing?: { price: number; expiresAt: number; orderHash: string } | null; // live OpenSea listing (EVM)
 };
 // A collection's live value for the portfolio panel (server/src/marks.ts).
 export type Mark = {
@@ -342,6 +343,19 @@ export type BridgeQuote = {
   tx: EvmTxOut | null;                                      // EVM origin
   solTx: { transaction: string; explorerTx: string } | null; // Solana origin (unsigned, base64; blockhash lasts ~1 min)
 };
+export type EvmListQuote = {
+  chain: string; unit: string; mint: string; name: string; collection: { symbol: string; name: string };
+  owned?: boolean; floor?: number | null; lastSale?: number | null; boughtAt?: number | null;
+  bestOffer?: { price: number; net: number; currency: string } | null;
+  fees?: { pct: number; recipient: string }[]; feePct?: number;
+  approved?: boolean; operator?: string | null; days?: number[];
+  listing?: { orderHash: string; price: number; expiresAt: number; cancelFree: boolean } | null;
+  executable: boolean; reason: string | null; marketUrl?: string;
+};
+export type EvmListBuild = { chain: string; chainId: number; net: number; parameters: Record<string, unknown>; typedData: import('./auth-types').TypedData };
+export type EvmCancelBuild =
+  | { kind: 'offchain'; chain: string; protocolAddress: string; typedData: import('./auth-types').TypedData }
+  | { kind: 'onchain'; chain: string; tx: { chainId: number; to: string; data: string; value: string; explorerTx: string } };
 export type EvmNetwork = {
   chain: string; name: string; chainId: number; native: string; balance: number | null;
   tokens: { address: string; symbol: string; unit: string; unwrappable: boolean; balance: number | null }[];
@@ -434,6 +448,16 @@ export const api = {
     (send('POST', '/chain/evm/send', b) as Promise<{ hash: string }>).then((r) => r.hash),
   // Broadcast a signed Solana transaction (base64) through our RPC; resolves to its signature.
   solSend: (transaction: string) => (send('POST', '/chain/sol/send', { transaction }) as Promise<{ signature: string }>).then((r) => r.signature),
+  evmListQuote: (symbol: string, id: string, seller: string) =>
+    req<EvmListQuote>(`/trade/evm/list-quote/${symbol}?id=${encodeURIComponent(id)}&seller=${seller}`),
+  evmListBuild: (b: { symbol: string; id: string; seller: string; price: number; days: number }) =>
+    send('POST', '/trade/evm/list-build', b) as Promise<EvmListBuild>,
+  evmListSubmit: (b: { chain: string; parameters: Record<string, unknown>; signature: string }) =>
+    send('POST', '/trade/evm/list-submit', b) as Promise<{ orderHash: string | null }>,
+  evmCancelBuild: (b: { chain: string; orderHash: string; seller: string }) =>
+    send('POST', '/trade/evm/cancel-build', b) as Promise<EvmCancelBuild>,
+  evmCancelSubmit: (b: { chain: string; protocolAddress: string; orderHash: string; signature: string; seller: string }) =>
+    send('POST', '/trade/evm/cancel-submit', b) as Promise<{ ok: true }>,
   marks: (symbols: string[]) => req<Record<string, Mark>>(`/portfolio/marks?c=${encodeURIComponent(symbols.join(','))}`),
   evmHoldings: (address: string) => req<EvmHoldings>(`/chain/evm/holdings/${address}`),
   evmQuote: (symbol: string, buyer?: string, id?: string) => {

@@ -191,7 +191,8 @@ function NftRow({ n, unit, value, usd: dollars, change, sales, pl, plUsd }: {
         </View>
         <View style={s.sub}>
           <ChainBadge chain={n.chain as Chain} />
-          <Text style={s.coll} numberOfLines={1}>{n.collection.name}</Text>
+          {n.listing ? <Text style={s.listed} numberOfLines={1}>Listed {amt(n.listing.price, unit, 3)}</Text>
+            : <Text style={s.coll} numberOfLines={1}>{n.collection.name}</Text>}
         </View>
       </View>
       <View style={{ alignItems: 'flex-end', gap: 2 }}>
@@ -251,6 +252,7 @@ const s = StyleSheet.create({
   name: { color: C.text, fontSize: 14, fontWeight: '600' },
   sub: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   coll: { color: C.dim, fontSize: 12, flexShrink: 1 },
+  listed: { color: C.accent, fontSize: 12, fontWeight: '600', flexShrink: 1 },
   value: { color: C.text, fontSize: 14, fontWeight: '600', fontVariant: ['tabular-nums'] },
   small: { color: C.dim, fontSize: 12, fontVariant: ['tabular-nums'] },
   empty: { paddingHorizontal: 12, paddingVertical: 12, gap: 8 },

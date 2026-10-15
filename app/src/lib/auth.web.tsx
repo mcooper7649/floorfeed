@@ -32,6 +32,7 @@ const OFF: AuthState = {
   fund: null,
   evmAddress: null,
   sendEvm: null,
+  signTypedEvm: null,
   fundEth: null,
   sendSol: null,
   sendSolTx: null,
@@ -111,6 +112,7 @@ function PrivyLoader({ children }: { children: ReactNode }) {
           const signed = await privy.signEvm!({ ...tx, ...prepared });
           return api.evmSend({ from, tx: { to: tx.to, data: tx.data, value: tx.value, ...prepared }, signed });
         } : null,
+        signTypedEvm: privy.signTypedEvm,
         fundEth: privy.fundEth,
         sendSol: privy.signSol ? async (t) => api.solSend(await privy.signSol!(t)) : null,
         sendSolTx: privy.signSolTx ? async (b64) => api.solSend(await privy.signSolTx!(b64)) : null,

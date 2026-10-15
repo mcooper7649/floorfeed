@@ -18,6 +18,7 @@ export type AuthState = {
   // tx hash), and the same card/exchange funding flow for ETH.
   evmAddress: string | null;
   sendEvm: ((tx: EvmTx) => Promise<string>) | null;
+  signTypedEvm: ((td: TypedData, description?: string) => Promise<string>) | null; // EIP-712 with the Privy EVM wallet
   fundEth: ((address: string, amountEth?: string, chainId?: number) => Promise<void>) | null;
   // Withdrawals from the Privy wallets: send SOL (resolves to the signature),
   // and Privy's own key-export screens (the key never reaches FloorFeed).
@@ -28,6 +29,18 @@ export type AuthState = {
   exportSolana: (() => Promise<void>) | null;
   exportEvm: (() => Promise<void>) | null;
 };
+
+// EIP-712 typed data as our API builds it (EIP712Domain is added when signing).
+export type TypedData = {
+  domain: { name: string; version: string; chainId: number; verifyingContract: string };
+  types: Record<string, readonly { name: string; type: string }[]>;
+  primaryType: string;
+  message: Record<string, unknown>;
+};
+export const EIP712_DOMAIN = [
+  { name: 'name', type: 'string' }, { name: 'version', type: 'string' },
+  { name: 'chainId', type: 'uint256' }, { name: 'verifyingContract', type: 'address' },
+] as const;
 
 // `description` is shown in Privy's confirmation screen.
 export type EvmTx = { to: string; data: string; value: string; chainId: number; gas?: string; description?: string };
