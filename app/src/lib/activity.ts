@@ -13,7 +13,7 @@ type Entry = {
 
 export function recordTx(e: Entry) {
   const chain = e.chain ?? (e.chainId != null ? chainById(e.chainId)?.[0] : undefined);
-  if (!chain || !/^0x[0-9a-fA-F]{64}$/.test(e.hash)) return;
+  if (!chain || !(/^0x[0-9a-fA-F]{64}$/.test(e.hash) || (chain === 'solana' && /^[1-9A-HJ-NP-Za-km-z]{80,90}$/.test(e.hash)))) return;
   const { chainId: _ignored, ...rest } = e;
   api.recordActivity({ ...rest, chain }).catch(() => {});
   window.dispatchEvent?.(new Event('floorfeed:activity'));

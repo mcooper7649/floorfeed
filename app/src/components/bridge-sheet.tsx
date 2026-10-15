@@ -7,16 +7,20 @@ import { CHAINS, chainName } from '@/constants/chains';
 import { T } from '@/constants/type';
 import { api, type BridgeQuote } from '@/lib/api';
 import { useEvmWallet } from '@/lib/evm-wallet';
+import { useWallet } from '@/lib/wallet';
 import { sol } from '@/lib/format';
 import { recordTx } from '@/lib/activity';
 import { track } from '@/lib/analytics';
 
-// Move funds between EVM chains without leaving FloorFeed. Relay quotes the
-// route, the wallet signs one deposit on the origin chain, and Relay pays out
-// on the destination (usually seconds). `amount` is what should arrive.
+// Move funds between networks without leaving FloorFeed: between EVM chains,
+// and between Solana and any of them. Relay quotes the route, the wallet on
+// the origin side signs one deposit (MetaMask & co. on EVM, Phantom & co. or
+// the FloorFeed wallet on Solana), and Relay pays out on the destination,
+// usually in seconds. `amount` is what should arrive.
 
-const EVM = ['ethereum', 'base', 'abstract', 'ink', 'arbitrum', 'hyperevm', 'ronin', 'apechain', 'monad', 'robinhood'] as const;
-const unitOf = (c: string) => CHAINS[c as keyof typeof CHAINS]?.symbol ?? 'ETH';
+const NETWORKS = ['solana', 'ethereum', 'base', 'abstract', 'ink', 'arbitrum', 'hyperevm', 'ronin', 'apechain', 'monad', 'robinhood'] as const;
+const unitOf = (c: string) => (c === 'solana' ? 'SOL' : CHAINS[c as keyof typeof CHAINS]?.symbol ?? 'ETH');
+const SOL_QUOTE_TTL = 40_000; // a Solana deposit's blockhash expires after ~60s; re-quote before signing
 const usd = (n: number | null) => (n == null ? '—' : n < 0.01 ? '< $0.01' : `$${n.toFixed(2)}`);
 
 type Step = { kind: 'idle' } | { kind: 'confirm' }
@@ -40,11 +44,14 @@ export function BridgeSheet(props: Props) {
 
 function Sheet({ open, onClose, onDone, to: toProp, from: fromProp, amount: amountProp, note }: Props) {
   const w = useEvmWallet();
+  const sw = useWallet();
+  const addrOf = (c: string) => (c === 'solana' ? sw.address : w.address);
   const [to, setTo] = useState(toProp ?? (fromProp && fromProp !== 'ethereum' ? 'ethereum' : 'ink'));
   const [from, setFrom] = useState<string | null>(fromProp ?? null);
   const [amount, setAmount] = useState(amountProp ? String(Math.ceil(amountProp * 1e4) / 1e4) : '');
   const [balances, setBalances] = useState<{ address: string; b: Record<string, number> } | null>(null);
-  const [quote, setQuote] = useState<{ key: string; q?: BridgeQuote; error?: string } | null>(null);
+  const [solBal, setSolBal] = useState<{ address: string; sol: number } | null>(null);
+  const [quote, setQuote] = useState<{ key: string; at: number; q?: BridgeQuote; error?: string } | null>(null);
   const [step, setStep] = useState<Step>({ kind: 'idle' });
   const [nonce, setNonce] = useState(0); // bump to re-quote after a failed attempt
   const poll = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -55,28 +62,43 @@ function Sheet({ open, onClose, onDone, to: toProp, from: fromProp, amount: amou
     const address = w.address;
     api.evmBalance(address).then((b) => setBalances({ address, b })).catch(() => setBalances({ address, b: {} }));
   }, [w.address]);
+  useEffect(() => {
+    if (!sw.address) return;
+    const address = sw.address;
+    api.balance(address).then((b) => setSolBal({ address, sol: b.sol })).catch(() => setSolBal({ address, sol: 0 }));
+  }, [sw.address]);
   useEffect(() => () => { if (poll.current) clearInterval(poll.current); }, []);
-  const bal = balances?.address === w.address ? balances.b : null;
+  const evmBal = balances?.address === w.address ? balances.b : null;
+  const solHere = solBal?.address === sw.address ? solBal.sol : null;
+  // Balances per network, once each connected wallet has loaded.
+  const loading = (!!w.address && !evmBal) || (!!sw.address && solHere == null);
+  const bal: Record<string, number> | null = loading ? null : { ...(evmBal ?? {}), ...(solHere != null ? { solana: solHere } : {}) };
 
-  // Origins: chains where the wallet has a balance, same token as the destination first.
-  const origins = EVM.filter((c) => c !== to && (bal?.[c] ?? 0) > 0)
+  // Origins: networks with a balance and a wallet that can sign there, same token as the destination first.
+  const canSign = (c: string) => (c === 'solana' ? !!sw.sendTransaction : !!w.send);
+  const origins = NETWORKS.filter((c) => c !== to && (bal?.[c] ?? 0) > 0 && canSign(c))
     .sort((a, b) => Number(unitOf(b) === unitOf(to)) - Number(unitOf(a) === unitOf(to)) || (bal![b] - bal![a]));
-  const origin = from && origins.includes(from as (typeof EVM)[number]) ? from : origins[0] ?? null;
+  const origin = from && origins.includes(from as (typeof NETWORKS)[number]) ? from : origins[0] ?? null;
+  const user = origin ? addrOf(origin) : null;
+  const recipient = addrOf(to);
 
   const value = Number(amount);
-  const key = `${origin}:${to}:${amount}:${w.address}:${nonce}`;
+  const key = `${origin}:${to}:${amount}:${user}:${recipient}:${nonce}`;
+  const fetchQuote = () => api.bridgeQuote({ user: user!, recipient: recipient ?? undefined, from: origin!, to, amount: value });
   useEffect(() => {
-    if (!open || !origin || !w.address || !(value > 0)) return;
+    if (!open || !origin || !user || !(value > 0)) return;
     let alive = true;
     const t = setTimeout(() => {
-      api.bridgeQuote({ user: w.address!, from: origin, to, amount: value })
-        .then((q) => alive && setQuote({ key, q }))
-        .catch((e) => alive && setQuote({ key, error: (e as Error).message }));
+      fetchQuote()
+        .then((q) => alive && setQuote({ key, at: Date.now(), q }))
+        .catch((e) => alive && setQuote({ key, at: Date.now(), error: (e as Error).message }));
     }, 450);
     return () => { alive = false; clearTimeout(t); };
-  }, [open, origin, to, value, w.address, key]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `key` covers everything fetchQuote reads
+  }, [open, key]);
   const current = quote?.key === key ? quote : null;
   const q = current?.q ?? null;
+  const quoteNow = q;
 
   const close = () => {
     if (poll.current) { clearInterval(poll.current); poll.current = null; }
@@ -84,14 +106,32 @@ function Sheet({ open, onClose, onDone, to: toProp, from: fromProp, amount: amou
   };
 
   const bridge = async () => {
-    if (!q?.tx || !w.send) return;
+    if (!quoteNow || !(quoteNow.tx && w.send) && !(quoteNow.solTx && sw.sendTransaction)) return;
+    let q: BridgeQuote = quoteNow;
     setStep({ kind: 'confirm' });
     try {
-      const hash = await w.send({ ...q.tx, description: `Bridge ${sol(q.send, 5, q.sendUnit)} from ${chainName(q.from)} to ${chainName(q.to)}` });
+      let hash: string, url: string, sender: string;
+      if (q.solTx) {
+        // A quote sitting open too long has an expired blockhash: get a fresh one first.
+        let tx = q.solTx;
+        if (Date.now() - (current?.at ?? 0) > SOL_QUOTE_TTL) {
+          const fresh = await fetchQuote();
+          if (!fresh.solTx) throw new Error(fresh.problem ?? 'The route changed. Check the amounts and try again.');
+          setQuote({ key, at: Date.now(), q: fresh });
+          q = fresh; // its requestId is the one to follow
+          tx = fresh.solTx;
+        }
+        hash = await sw.sendTransaction!(tx.transaction);
+        url = `${tx.explorerTx}${hash}`;
+        sender = sw.address!;
+      } else {
+        hash = await w.send!({ ...q.tx!, description: `Bridge ${sol(q.send, 5, q.sendUnit)} from ${chainName(q.from)} to ${chainName(q.to)}` });
+        url = `${q.tx!.explorerTx ?? 'https://etherscan.io/tx/'}${hash}`;
+        sender = w.address!;
+      }
       track('bridge_signed', { from: q.from, to: q.to });
-      recordTx({ hash, wallet: w.address!, chain: q.from, kind: 'bridge', title: `Moved ${sol(q.receive, 5, q.receiveUnit)} to ${chainName(q.to)}`,
+      recordTx({ hash, wallet: sender, chain: q.from, kind: 'bridge', title: `Moved ${sol(q.receive, 5, q.receiveUnit)} to ${chainName(q.to)}`,
         amount: q.receive, unit: q.receiveUnit, requestId: q.requestId, toChain: q.to });
-      const url = `${q.tx.explorerTx ?? 'https://etherscan.io/tx/'}${hash}`;
       setStep({ kind: 'moving', hash, url, status: 'waiting', deposit: null, since: Date.now() });
       if (!q.requestId) return;
       const started = Date.now();
@@ -140,8 +180,8 @@ function Sheet({ open, onClose, onDone, to: toProp, from: fromProp, amount: amou
         <Pressable style={s.sheet} onPress={() => {}}>
           <Text style={s.title}>{toProp ? `Move funds to ${chainName(to)}` : 'Move funds between networks'}</Text>
 
-          {!w.address ? (
-            <Text style={s.meta}>Sign in or connect an Ethereum wallet first.</Text>
+          {!w.address && !sw.address ? (
+            <Text style={s.meta}>Sign in or connect a wallet first.</Text>
           ) : step.kind === 'moving' || step.kind === 'done' ? (
             <View style={{ gap: 10 }}>
               {step.kind === 'done' ? (
@@ -170,7 +210,7 @@ function Sheet({ open, onClose, onDone, to: toProp, from: fromProp, amount: amou
                 <View style={{ gap: 6 }}>
                   <Text style={s.label}>To</Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>
-                    {EVM.map((c) => <Chip key={c} label={chainName(c)} on={to === c} onPress={() => setTo(c)} />)}
+                    {NETWORKS.map((c) => <Chip key={c} label={chainName(c)} on={to === c} onPress={() => setTo(c)} />)}
                   </ScrollView>
                 </View>
               )}
@@ -179,7 +219,9 @@ function Sheet({ open, onClose, onDone, to: toProp, from: fromProp, amount: amou
                 <Text style={s.label}>From</Text>
                 {bal == null ? <ActivityIndicator color={C.accent} style={{ alignSelf: 'flex-start' }} />
                   : origins.length === 0 ? (
-                    <Text style={s.meta}>Your wallet has no funds on another network to move. Deposit first.</Text>
+                    <Text style={s.meta}>{to === 'solana' && !w.address ? 'Connect an Ethereum wallet with funds to move to Solana.'
+                      : sw.address && !sw.sendTransaction && (solHere ?? 0) > 0 ? `${sw.walletName ?? 'Your Solana wallet'} can't send from FloorFeed. Try Phantom, Solflare or Backpack.`
+                      : 'Your wallets have no funds on another network to move. Deposit first.'}</Text>
                   ) : (
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>
                       {origins.map((c) => (
@@ -219,11 +261,14 @@ function Sheet({ open, onClose, onDone, to: toProp, from: fromProp, amount: amou
               {q?.problem && <Text style={s.err}>{q.problem}</Text>}
               {step.kind === 'error' && <Text style={s.err}>{step.message}</Text>}
 
-              {q?.tx && w.send && (
+              {q && ((q.tx && w.send) || (q.solTx && sw.sendTransaction)) && (
                 <Pressable accessibilityRole="button" onPress={bridge} disabled={step.kind === 'confirm'}
                   style={[s.primary, step.kind === 'confirm' && { opacity: 0.7 }]}>
                   <Text style={s.primaryTxt}>{step.kind === 'confirm' ? 'Confirm in your wallet…' : `Move ${sol(q.receive, 4, q.receiveUnit)} to ${chainName(q.to)}`}</Text>
                 </Pressable>
+              )}
+              {q && recipient && q.from === 'solana' !== (q.to === 'solana') && (
+                <Text style={s.fine}>Arrives in your {q.to === 'solana' ? 'Solana' : 'Ethereum'} wallet {recipient.slice(0, 4)}…{recipient.slice(-4)}.</Text>
               )}
               <Text style={s.fine}>Routed by Relay. Your wallet signs one deposit; FloorFeed never holds your funds.</Text>
             </>

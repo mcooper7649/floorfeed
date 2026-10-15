@@ -22,6 +22,9 @@ export type AuthState = {
   // Withdrawals from the Privy wallets: send SOL (resolves to the signature),
   // and Privy's own key-export screens (the key never reaches FloorFeed).
   sendSol: ((t: SolTransfer) => Promise<string>) | null;
+  // Any prepared Solana transaction (unsigned, base64 wire format) from the
+  // Privy wallet; Privy shows it, signs and sends. Resolves to the signature.
+  sendSolTx: ((base64: string) => Promise<string>) | null;
   exportSolana: (() => Promise<void>) | null;
   exportEvm: (() => Promise<void>) | null;
 };

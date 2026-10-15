@@ -9,6 +9,7 @@ import { T } from '@/constants/type';
 import { recordTx } from '@/lib/activity';
 import { api, type EvmNetwork } from '@/lib/api';
 import { useEvmWallet } from '@/lib/evm-wallet';
+import { useWallet } from '@/lib/wallet';
 import { amt, usd } from '@/lib/format';
 import { usePrices } from '@/lib/prices';
 import { track } from '@/lib/analytics';
@@ -41,6 +42,7 @@ export function NetworksCard({ sol, networks, onChanged }: {
   onChanged: () => void;           // refetch after an unwrap or move
 }) {
   const w = useEvmWallet();
+  const sw = useWallet();
   const { toUsd } = usePrices();
   const [bridge, setBridge] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -75,7 +77,7 @@ export function NetworksCard({ sol, networks, onChanged }: {
       {lines.map((l) => {
         const n = networks?.find((x) => x.chain === l.chain);
         const wrapped = n?.tokens.find((t) => t.unwrappable && (t.balance ?? 0) > 0);
-        const canMove = l.chain !== 'solana' && !!n && (n.balance ?? 0) > 0 && !!w.send;
+        const canMove = l.chain === 'solana' ? (sol ?? 0) > 0 && !!sw.sendTransaction : !!n && (n.balance ?? 0) > 0 && !!w.send;
         return (
           <View key={l.key} style={s.rowWrap}>
             <View style={s.row}>

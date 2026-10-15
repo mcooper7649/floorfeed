@@ -1,5 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { SolanaSignAndSendTransaction, SolanaSignMessage, SolanaSignTransaction, type SolanaSignMessageFeature } from '@solana/wallet-standard-features';
+import { getBase58Decoder } from '@solana/kit';
+import {
+  SolanaSignAndSendTransaction, SolanaSignMessage, SolanaSignTransaction,
+  type SolanaSignAndSendTransactionFeature, type SolanaSignMessageFeature,
+} from '@solana/wallet-standard-features';
 import { getWallets } from '@wallet-standard/app';
 import type { Wallet, WalletAccount } from '@wallet-standard/base';
 import {
@@ -109,6 +113,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     return btoa(bin);
   }, [wallet, account]);
 
+  const sendExtension = useCallback(async (base64: string) => {
+    if (!wallet || !account || !(SolanaSignAndSendTransaction in wallet.features)) throw new Error('This wallet can’t send transactions from FloorFeed.');
+    const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+    const [out] = await (wallet.features[SolanaSignAndSendTransaction] as SolanaSignAndSendTransactionFeature[typeof SolanaSignAndSendTransaction])
+      .signAndSendTransaction({ account, transaction: bytes, chain: 'solana:mainnet' });
+    return getBase58Decoder().decode(out.signature);
+  }, [wallet, account]);
+
   // A connected extension wins; otherwise the signed-in user's Privy wallet.
   const embedded = !address && auth.embeddedAddress ? auth.embeddedAddress : null;
   const value: WalletState = {
@@ -123,6 +135,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     connect,
     disconnect,
     signMessage: address && wallet && SolanaSignMessage in wallet.features ? signMessage : null,
+    sendTransaction: address
+      ? (wallet && SolanaSignAndSendTransaction in wallet.features ? sendExtension : null)
+      : embedded ? auth.sendSolTx : null,
   };
   return <Ctx value={value}>{children}</Ctx>;
 }

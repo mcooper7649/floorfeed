@@ -1,5 +1,5 @@
 import { db } from "./db.ts";
-import { bridgeStatus } from "./bridge.ts";
+import { bridgeStatus, solTxInfo } from "./bridge.ts";
 import { EVM_CHAINS } from "./config.ts";
 import { evmTxInfo, forgetBalances } from "./trade-evm.ts";
 
@@ -49,12 +49,15 @@ export function recordActivity(a: {
   amount?: number | null; unit?: string | null; symbol?: string | null; mint?: string | null;
   requestId?: string | null; toChain?: string | null;
 }) {
-  if (!(a.chain in EVM_CHAINS)) throw new Error("Unsupported chain");
-  const wallet = a.wallet.toLowerCase();
+  const solana = a.chain === "solana";
+  if (!solana && !(a.chain in EVM_CHAINS)) throw new Error("Unsupported chain");
+  if (solana !== !a.wallet.startsWith("0x") || solana !== !a.hash.startsWith("0x")) throw new Error("Wallet and network don't match");
+  // EVM addresses and hashes are case-insensitive; Solana's base58 ones aren't.
+  const wallet = solana ? a.wallet : a.wallet.toLowerCase();
   // Generous for a person, useless for flooding.
   if ((countRecent.get(wallet, now() - 3600) as { n: number }).n >= 60) throw new Error("Too many entries");
   insert.run({
-    hash: a.hash.toLowerCase(), wallet, chain: a.chain, kind: a.kind, title: a.title.slice(0, 140),
+    hash: solana ? a.hash : a.hash.toLowerCase(), wallet, chain: a.chain, kind: a.kind, title: a.title.slice(0, 140),
     amount: a.amount ?? null, unit: a.unit ?? null, symbol: a.symbol ?? null, mint: a.mint ?? null,
     request_id: a.requestId ?? null, to_chain: a.toChain ?? null, now: now(),
   });
@@ -67,7 +70,7 @@ const DROP_AFTER = 15 * 60; // a hash that never shows up on chain in 15 min was
 async function refresh(rows: Row[]) {
   const open = rows.filter((r) => r.status === "pending" || r.status === "delivering").slice(0, 8);
   await Promise.all(open.map(async (r) => {
-    const info = await evmTxInfo(r.chain, r.hash).catch(() => null);
+    const info = await (r.chain === "solana" ? solTxInfo(r.hash) : evmTxInfo(r.chain, r.hash)).catch(() => null);
     if (!info) return;
     if (info.from && info.from !== r.wallet) { remove.run(r.hash); r.status = "removed"; return; }
     let status = r.status, outTx: string | null = null;
@@ -88,13 +91,17 @@ async function refresh(rows: Row[]) {
   }));
 }
 
+const txUrl = (chain: string, hash: string) => chain === "solana"
+  ? `https://solscan.io/tx/${hash}`
+  : `${EVM_CHAINS[chain as keyof typeof EVM_CHAINS]?.explorer ?? "https://etherscan.io"}/tx/${hash}`;
+
 export async function walletActivity(wallet: string, limit = 50) {
-  const rows = list.all(wallet.toLowerCase(), limit) as Row[];
+  const rows = list.all(wallet.startsWith("0x") ? wallet.toLowerCase() : wallet, limit) as Row[];
   await refresh(rows);
   return rows.filter((r) => r.status !== "removed").map((r) => ({
     hash: r.hash, chain: r.chain, kind: r.kind, title: r.title, amount: r.amount, unit: r.unit,
     symbol: r.symbol, mint: r.mint, toChain: r.to_chain, status: r.status, createdAt: r.created_at,
-    explorerUrl: `${EVM_CHAINS[r.chain as keyof typeof EVM_CHAINS]?.explorer ?? "https://etherscan.io"}/tx/${r.hash}`,
-    outUrl: r.out_tx && r.to_chain ? `${EVM_CHAINS[r.to_chain as keyof typeof EVM_CHAINS]?.explorer}/tx/${r.out_tx}` : null,
+    explorerUrl: txUrl(r.chain, r.hash),
+    outUrl: r.out_tx && r.to_chain ? txUrl(r.to_chain, r.out_tx) : null,
   }));
 }

@@ -17,6 +17,7 @@ const NATIVE: AuthState = {
   sendEvm: null,
   fundEth: null,
   sendSol: null,
+  sendSolTx: null,
   exportSolana: null,
   exportEvm: null,
 };

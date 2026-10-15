@@ -10,7 +10,7 @@ import { api, type ActivityItem } from '@/lib/api';
 import { amt, timeAgo, usd } from '@/lib/format';
 import { usePrices } from '@/lib/prices';
 
-// The wallet's FloorFeed transactions with their real outcome, newest first.
+// The wallets' FloorFeed transactions (EVM and Solana) with their real outcome, newest first.
 // Polls while anything is still in flight, and refreshes when a sheet records
 // a new transaction (the 'floorfeed:activity' event).
 
@@ -24,8 +24,8 @@ const STATUS: Record<ActivityItem['status'], { label: string; color: string }> =
 };
 const ICON: Record<ActivityItem['kind'], string> = { buy: '↓', sell: '↑', approve: '✓', bridge: '⇄', send: '→', unwrap: '◎', mint: '✦' };
 
-export function ActivityList({ wallet, onSettled, limit = 8 }: {
-  wallet: string;
+export function ActivityList({ wallets, onSettled, limit = 8 }: {
+  wallets: string[];
   onSettled?: () => void; // something just confirmed: balances/holdings changed
   limit?: number;
 }) {
@@ -33,8 +33,11 @@ export function ActivityList({ wallet, onSettled, limit = 8 }: {
   const [items, setItems] = useState<{ wallet: string; list: ActivityItem[] } | null>(null);
   const [all, setAll] = useState(false);
 
+  const wallet = wallets.join(',');
   const load = useCallback(() => {
-    api.activity(wallet).then((list) => setItems((prev) => {
+    Promise.all(wallet.split(',').map((a) => api.activity(a)))
+      .then((lists) => lists.flat().sort((a, b) => b.createdAt - a.createdAt))
+      .then((list) => setItems((prev) => {
       // A pending entry that just settled means balances moved.
       const before = prev?.wallet === wallet ? prev.list : [];
       if (before.some((b) => (b.status === 'pending' || b.status === 'delivering')

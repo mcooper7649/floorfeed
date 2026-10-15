@@ -97,6 +97,15 @@ function Bridge({ onState }: { onState: (s: PrivyState) => void }) {
     return getBase58Decoder().decode(signature);
   }, [solWallets, embeddedAddress, signAndSendTransaction]);
 
+  // A transaction our API prepared (e.g. a Relay bridge deposit), unsigned.
+  const sendSolTxImpl = useCallback(async (base64: string) => {
+    const w = solWallets.find((x) => x.address === embeddedAddress);
+    if (!w) throw new Error("Your FloorFeed Solana wallet isn't ready yet. Try again in a moment.");
+    const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+    const { signature } = await signAndSendTransaction({ transaction: bytes, wallet: w });
+    return getBase58Decoder().decode(signature);
+  }, [solWallets, embeddedAddress, signAndSendTransaction]);
+
   const fundEthImpl = useCallback(
     async (address: string, amountEth?: string, chainId?: number) => {
       await fundEvmWallet({
@@ -125,15 +134,16 @@ function Bridge({ onState }: { onState: (s: PrivyState) => void }) {
   const fundEth = userId ? fundEthImpl : null;
   const send = userId && evmAddress ? sendEvm : null;
   const sendSol = userId && embeddedAddress ? sendSolImpl : null;
+  const sendSolTx = userId && embeddedAddress ? sendSolTxImpl : null;
   const exportSolana = useMemo(() => (userId && embeddedAddress ? () => exportSol({ address: embeddedAddress }) : null), [userId, embeddedAddress, exportSol]);
   const exportEvm = useMemo(() => (userId && evmAddress ? () => exportEth({ address: evmAddress }) : null), [userId, evmAddress, exportEth]);
 
   const state = useMemo<PrivyState>(
     () => ({
       ready, userId, label, embeddedAddress, login: () => login(), logout, getAccessToken, fund,
-      evmAddress, sendEvm: send, fundEth, sendSol, exportSolana, exportEvm,
+      evmAddress, sendEvm: send, fundEth, sendSol, sendSolTx, exportSolana, exportEvm,
     }),
-    [ready, userId, label, embeddedAddress, login, logout, getAccessToken, fund, evmAddress, send, fundEth, sendSol, exportSolana, exportEvm],
+    [ready, userId, label, embeddedAddress, login, logout, getAccessToken, fund, evmAddress, send, fundEth, sendSol, sendSolTx, exportSolana, exportEvm],
   );
   useEffect(() => onState(state), [state, onState]);
   return null;

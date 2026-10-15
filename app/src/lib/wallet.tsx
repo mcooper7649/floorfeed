@@ -17,6 +17,7 @@ const NATIVE: WalletState = {
   connect: async () => {},
   disconnect: async () => {},
   signMessage: null,
+  sendTransaction: null,
 };
 
 const Ctx = createContext<WalletState>(NATIVE);

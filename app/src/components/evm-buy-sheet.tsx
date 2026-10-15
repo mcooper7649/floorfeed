@@ -11,6 +11,7 @@ import { T } from '@/constants/type';
 import { api, type EvmQuote } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useEvmWallet } from '@/lib/evm-wallet';
+import { useWallet } from '@/lib/wallet';
 import { sol, usd } from '@/lib/format';
 import { recordTx } from '@/lib/activity';
 import { track } from '@/lib/analytics';
@@ -32,13 +33,14 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
   onPaper?: () => void;
 }) {
   const w = useEvmWallet();
+  const sw = useWallet();
   const auth = useAuth();
   const { toUsd } = usePrices();
   const [quote, setQuote] = useState<{ key: string; q: EvmQuote } | { key: string; error: string } | null>(null);
   const [step, setStep] = useState<Step>({ kind: 'idle' });
   useEffect(() => { if (open) track('buy_open', { chain: 'evm' }); }, [open]);
   const [deposit, setDeposit] = useState(false);
-  const [bridging, setBridging] = useState<{ to: string; amount?: number } | null>(null);
+  const [bridging, setBridging] = useState<{ to: string; amount?: number; from?: string } | null>(null);
   const [arrived, setArrived] = useState<{ amount: number; unit: string; chain: string } | null>(null);
   const [nonce, setNonce] = useState(0);
   const key = `${symbol}:${id ?? ''}:${w.address}:${nonce}`;
@@ -166,9 +168,18 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
                       Each network keeps its own balance, so NFTs on {chainName(q.chain)} need {unit} on {chainName(q.chain)}. You can move it here without leaving FloorFeed.
                     </Text>
                   )}
+                  {elsewhere.length > 0 && sw.sendTransaction && unit === 'ETH' && (
+                    <Pressable accessibilityRole="button" onPress={() => { track('bridge_click', { chain: q.chain, from: 'solana' }); setBridging({ to: q.chain, amount: bridgeAmount ?? undefined, from: 'solana' }); }}>
+                      <Text style={[s.meta, { color: C.accent }]}>Or pay with SOL from your Solana wallet</Text>
+                    </Pressable>
+                  )}
                   {elsewhere.length > 0 ? (
                     <Pressable accessibilityRole="button" onPress={() => { track('bridge_click', { chain: q.chain }); setBridging({ to: q.chain, amount: bridgeAmount ?? undefined }); }} style={s.primary}>
                       <Text style={s.primaryTxt}>Move {unit} to {chainName(q.chain)}</Text>
+                    </Pressable>
+                  ) : sw.sendTransaction && unit === 'ETH' ? (
+                    <Pressable accessibilityRole="button" onPress={() => { track('bridge_click', { chain: q.chain, from: 'solana' }); setBridging({ to: q.chain, amount: bridgeAmount ?? undefined, from: 'solana' }); }} style={s.primary}>
+                      <Text style={s.primaryTxt}>Pay with SOL: move it to {chainName(q.chain)}</Text>
                     </Pressable>
                   ) : unit === 'ETH' && q.chain === 'ethereum' ? (
                     <Pressable accessibilityRole="button" onPress={() => setDeposit(true)} style={s.primary}>
@@ -210,7 +221,7 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
         </Pressable>
       </Pressable>
     </Modal>
-    <BridgeSheet open={!!bridging} to={bridging?.to} amount={bridging?.amount}
+    <BridgeSheet open={!!bridging} to={bridging?.to} amount={bridging?.amount} from={bridging?.from}
       note="Includes a small cushion in case the cheapest listing sells while the funds move. Anything left over stays in your wallet."
       onDone={(a) => { setArrived(a); setNonce((n) => n + 1); }} onClose={() => { setBridging(null); setNonce((n) => n + 1); }} />
     <DepositSheet chain="ethereum" open={deposit} suggest={short ?? undefined}

@@ -327,10 +327,10 @@ function RealPortfolio({ solAddress, evmAddress }: { solAddress: string | null; 
               {untracked} other NFT{untracked === 1 ? '' : 's'} from collections FloorFeed doesn&apos;t track.
             </Text>
           )}
-          {evmAddress && (
+          {(evmAddress || solAddress) && (
             <>
               <SectionHeader title="Activity" />
-              <ActivityList wallet={evmAddress} onSettled={fetchData} />
+              <ActivityList wallets={[evmAddress, solAddress].filter((a): a is string => !!a)} onSettled={fetchData} />
             </>
           )}
         </View>

@@ -20,6 +20,10 @@ export type WalletState = {
   // Signs a text message with the connected extension (base64 signature), to
   // prove the address is the user's. null when the wallet can't.
   signMessage: ((message: string) => Promise<string>) | null;
+  // Signs and sends a prepared transaction (unsigned, base64 wire format; built
+  // and simulated by our API), resolving to its signature. Uses the connected
+  // extension, else the Privy wallet. null when neither can.
+  sendTransaction: ((base64: string) => Promise<string>) | null;
 };
 
 // Ethereum/Base side: a browser wallet found through EIP-6963 (MetaMask,

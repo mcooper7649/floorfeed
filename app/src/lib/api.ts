@@ -324,12 +324,13 @@ export type EvmSellQuote = {
 };
 export type EvmTxOut = { chainId: number; to: string; data: string; value: string; gas: string; explorerTx?: string };
 export type BridgeQuote = {
-  requestId: string | null; from: string; to: string;
+  requestId: string | null; from: string; to: string; recipient: string;
   send: number; sendUnit: string; sendUsd: number | null;
   receive: number; receiveUnit: string;
   feeUsd: number | null; gasUsd: number | null; seconds: number | null;
   balance: number | null; problem: string | null;
-  tx: EvmTxOut | null;
+  tx: EvmTxOut | null;                                      // EVM origin
+  solTx: { transaction: string; explorerTx: string } | null; // Solana origin (unsigned, base64; blockhash lasts ~1 min)
 };
 export type EvmNetwork = {
   chain: string; name: string; chainId: number; native: string; balance: number | null;
@@ -430,7 +431,7 @@ export const api = {
     amount?: number | null; unit?: string | null; symbol?: string | null; mint?: string | null;
     requestId?: string | null; toChain?: string | null;
   }) => send('POST', '/activity', a) as Promise<{ ok: boolean }>,
-  bridgeQuote: (b: { user: string; from: string; to: string; amount: number }) =>
+  bridgeQuote: (b: { user: string; recipient?: string; from: string; to: string; amount: number }) =>
     send('POST', '/bridge/quote', b) as Promise<BridgeQuote>,
   // `deposit`: mined | failed | pending | missing (the wallet's tx never reached the chain).
   bridgeStatus: (requestId: string, deposit?: { chain: string; tx: string }) =>

@@ -748,14 +748,17 @@ app.post("/trade/evm/sell-tx", async (req, reply) => {
 });
 
 // Moving native tokens between EVM chains in-app (Relay). The user's wallet signs the deposit.
+// An EVM tx hash, or a Solana signature (base58, 64 bytes).
+const TX_HASH_RE = /^(0x[0-9a-fA-F]{64}|[1-9A-HJ-NP-Za-km-z]{80,90})$/;
 app.post("/bridge/quote", async (req, reply) => {
-  const b = z.object({ user: z.string().regex(EVM_ADDRESS_RE), from: z.string(), to: z.string(), amount: z.number().positive() }).parse(req.body);
+  const addr = z.string().refine((a) => EVM_ADDRESS_RE.test(a) || ADDRESS_RE.test(a), "Not a wallet address");
+  const b = z.object({ user: addr, recipient: addr.optional(), from: z.string(), to: z.string(), amount: z.number().positive() }).parse(req.body);
   try { return await bridgeQuote(b); } catch (err) { return reply.code(409).send({ error: (err as Error).message }); }
 });
 app.get("/bridge/status/:id", async (req, reply) => {
   const { id } = req.params as { id: string };
   if (!/^0x[0-9a-fA-F]{64}$/.test(id)) return reply.code(400).send({ error: "bad request id" });
-  const q = z.object({ chain: z.string().optional(), tx: z.string().regex(/^0x[0-9a-fA-F]{64}$/).optional() }).parse(req.query);
+  const q = z.object({ chain: z.string().optional(), tx: z.string().regex(TX_HASH_RE).optional() }).parse(req.query);
   try { return await bridgeStatus(id, q.chain && q.tx ? { chain: q.chain, tx: q.tx } : undefined); } catch (err) { return reply.code(502).send({ error: (err as Error).message }); }
 });
 
@@ -773,7 +776,7 @@ app.post("/chain/evm/unwrap-tx", async (req, reply) => {
 // A wallet's FloorFeed transactions with their on-chain outcome.
 app.post("/activity", async (req, reply) => {
   const b = z.object({
-    hash: z.string().regex(/^0x[0-9a-fA-F]{64}$/), wallet: z.string().regex(EVM_ADDRESS_RE), chain: z.string(),
+    hash: z.string().regex(TX_HASH_RE), wallet: z.string().refine((a) => EVM_ADDRESS_RE.test(a) || ADDRESS_RE.test(a)), chain: z.string(),
     kind: z.enum(ACTIVITY_KINDS), title: z.string().min(1).max(140),
     amount: z.number().finite().nullable().optional(), unit: z.string().max(12).nullable().optional(),
     symbol: z.string().max(80).nullable().optional(), mint: z.string().max(140).nullable().optional(),
@@ -783,7 +786,7 @@ app.post("/activity", async (req, reply) => {
 });
 app.get("/activity/:wallet", async (req, reply) => {
   const { wallet } = req.params as { wallet: string };
-  if (!EVM_ADDRESS_RE.test(wallet)) return reply.code(400).send({ error: "Not an EVM address" });
+  if (!EVM_ADDRESS_RE.test(wallet) && !ADDRESS_RE.test(wallet)) return reply.code(400).send({ error: "Not a wallet address" });
   return walletActivity(wallet);
 });
 
