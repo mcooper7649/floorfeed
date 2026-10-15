@@ -424,6 +424,8 @@ export const api = {
   holdings: (address: string) => req<Holdings>(`/chain/holdings/${address}`),
   quote: (symbol: string, buyer: string) => req<BuyQuote>(`/trade/quote/${symbol}?buyer=${buyer}`),
   evmBalance: (address: string) => req<Record<string, number> & { eth: number }>(`/chain/evm/balance/${address}`),
+  // Broadcast a signed Solana transaction (base64) through our RPC; resolves to its signature.
+  solSend: (transaction: string) => (send('POST', '/chain/sol/send', { transaction }) as Promise<{ signature: string }>).then((r) => r.signature),
   marks: (symbols: string[]) => req<Record<string, Mark>>(`/portfolio/marks?c=${encodeURIComponent(symbols.join(','))}`),
   evmHoldings: (address: string) => req<EvmHoldings>(`/chain/evm/holdings/${address}`),
   evmQuote: (symbol: string, buyer?: string, id?: string) => {

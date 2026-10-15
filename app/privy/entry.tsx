@@ -2,12 +2,12 @@ import {
   PrivyProvider, useCreateWallet, useExportWallet as useExportEvmWallet, useFundWallet as useFundEvmWallet, usePrivy, useSendTransaction,
 } from '@privy-io/react-auth';
 import {
-  useExportWallet as useExportSolanaWallet, useFundWallet, useSignAndSendTransaction, useWallets as useSolanaWallets,
+  useExportWallet as useExportSolanaWallet, useFundWallet, useSignTransaction, useWallets as useSolanaWallets,
 } from '@privy-io/react-auth/solana';
 import { getTransferSolInstruction } from '@solana-program/system';
 import {
   address as solAddress, appendTransactionMessageInstruction, blockhash as solBlockhash, compileTransaction, createNoopSigner,
-  createTransactionMessage, getBase58Decoder, getTransactionEncoder, pipe, setTransactionMessageFeePayerSigner,
+  createTransactionMessage, getTransactionEncoder, pipe, setTransactionMessageFeePayerSigner,
   setTransactionMessageLifetimeUsingBlockhash,
 } from '@solana/kit';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
@@ -47,7 +47,7 @@ function Bridge({ onState }: { onState: (s: PrivyState) => void }) {
   const { fundWallet: fundEvmWallet } = useFundEvmWallet();
   const { sendTransaction } = useSendTransaction();
   const { createWallet } = useCreateWallet();
-  const { signAndSendTransaction } = useSignAndSendTransaction();
+  const { signTransaction } = useSignTransaction();
   const { wallets: solWallets } = useSolanaWallets();
   const { exportWallet: exportSol } = useExportSolanaWallet();
   const { exportWallet: exportEth } = useExportEvmWallet();
@@ -80,31 +80,31 @@ function Bridge({ onState }: { onState: (s: PrivyState) => void }) {
     return hash;
   }, [sendTransaction, evmAddress]);
 
-  // A plain SOL transfer from the Privy wallet. The app passes a recent
-  // blockhash (from our API, which has the RPC); Privy shows it and signs.
-  const sendSolImpl = useCallback(async (t: SolTransfer) => {
+  // Solana from the Privy wallet: Privy shows the transaction and signs it; the
+  // app broadcasts it through our API (see PrivyState). Returns base64.
+  const signBytes = useCallback(async (bytes: Uint8Array) => {
     const w = solWallets.find((x) => x.address === embeddedAddress);
     if (!w) throw new Error("Your FloorFeed Solana wallet isn't ready yet. Try again in a moment.");
-    const signer = createNoopSigner(solAddress(w.address));
+    const { signedTransaction } = await signTransaction({ transaction: bytes, wallet: w, chain: 'solana:mainnet' });
+    let bin = '';
+    for (const b of signedTransaction) bin += String.fromCharCode(b);
+    return btoa(bin);
+  }, [solWallets, embeddedAddress, signTransaction]);
+
+  // A plain SOL transfer. The app passes a recent blockhash (from our API, which has the RPC).
+  const signSolImpl = useCallback(async (t: SolTransfer) => {
+    const signer = createNoopSigner(solAddress(embeddedAddress ?? ''));
     const message = pipe(
       createTransactionMessage({ version: 0 }),
       (m) => setTransactionMessageFeePayerSigner(signer, m),
       (m) => setTransactionMessageLifetimeUsingBlockhash({ blockhash: solBlockhash(t.blockhash), lastValidBlockHeight: BigInt(t.lastValidBlockHeight) }, m),
       (m) => appendTransactionMessageInstruction(getTransferSolInstruction({ source: signer, destination: solAddress(t.to), amount: BigInt(t.lamports) }), m),
     );
-    const bytes = getTransactionEncoder().encode(compileTransaction(message));
-    const { signature } = await signAndSendTransaction({ transaction: new Uint8Array(bytes), wallet: w });
-    return getBase58Decoder().decode(signature);
-  }, [solWallets, embeddedAddress, signAndSendTransaction]);
+    return signBytes(new Uint8Array(getTransactionEncoder().encode(compileTransaction(message))));
+  }, [embeddedAddress, signBytes]);
 
   // A transaction our API prepared (e.g. a Relay bridge deposit), unsigned.
-  const sendSolTxImpl = useCallback(async (base64: string) => {
-    const w = solWallets.find((x) => x.address === embeddedAddress);
-    if (!w) throw new Error("Your FloorFeed Solana wallet isn't ready yet. Try again in a moment.");
-    const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
-    const { signature } = await signAndSendTransaction({ transaction: bytes, wallet: w });
-    return getBase58Decoder().decode(signature);
-  }, [solWallets, embeddedAddress, signAndSendTransaction]);
+  const signSolTxImpl = useCallback((base64: string) => signBytes(Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))), [signBytes]);
 
   const fundEthImpl = useCallback(
     async (address: string, amountEth?: string, chainId?: number) => {
@@ -133,17 +133,17 @@ function Bridge({ onState }: { onState: (s: PrivyState) => void }) {
   const fund = userId ? fundSol : null;
   const fundEth = userId ? fundEthImpl : null;
   const send = userId && evmAddress ? sendEvm : null;
-  const sendSol = userId && embeddedAddress ? sendSolImpl : null;
-  const sendSolTx = userId && embeddedAddress ? sendSolTxImpl : null;
+  const signSol = userId && embeddedAddress ? signSolImpl : null;
+  const signSolTx = userId && embeddedAddress ? signSolTxImpl : null;
   const exportSolana = useMemo(() => (userId && embeddedAddress ? () => exportSol({ address: embeddedAddress }) : null), [userId, embeddedAddress, exportSol]);
   const exportEvm = useMemo(() => (userId && evmAddress ? () => exportEth({ address: evmAddress }) : null), [userId, evmAddress, exportEth]);
 
   const state = useMemo<PrivyState>(
     () => ({
       ready, userId, label, embeddedAddress, login: () => login(), logout, getAccessToken, fund,
-      evmAddress, sendEvm: send, fundEth, sendSol, sendSolTx, exportSolana, exportEvm,
+      evmAddress, sendEvm: send, fundEth, signSol, signSolTx, exportSolana, exportEvm,
     }),
-    [ready, userId, label, embeddedAddress, login, logout, getAccessToken, fund, evmAddress, send, fundEth, sendSol, sendSolTx, exportSolana, exportEvm],
+    [ready, userId, label, embeddedAddress, login, logout, getAccessToken, fund, evmAddress, send, fundEth, signSol, signSolTx, exportSolana, exportEvm],
   );
   useEffect(() => onState(state), [state, onState]);
   return null;

@@ -817,6 +817,30 @@ app.post("/drops/:slug/mint-tx", async (req, reply) => {
 });
 
 // --- Withdrawals from the Privy wallets (the user's wallet signs every one) ---
+// Broadcast a Solana transaction the user's wallet signed (the Privy wallet
+// signs only). Signed bytes only, ≤1232 bytes; light per-IP limit, since it
+// spends our RPC credits.
+const solSends = new Map<string, number[]>();
+app.post("/chain/sol/send", async (req, reply) => {
+  const { transaction } = z.object({ transaction: z.string().regex(/^[A-Za-z0-9+/=]{100,1700}$/) }).parse(req.body);
+  const now = Date.now();
+  const recent = (solSends.get(req.ip) ?? []).filter((t) => now - t < 60_000);
+  if (recent.length >= 20) return reply.code(429).send({ error: "Too many transactions. Wait a minute and try again." });
+  solSends.set(req.ip, [...recent, now]);
+  const bytes = Buffer.from(transaction, "base64");
+  if (bytes.length > 1232 || bytes[0] < 1 || bytes.subarray(1, 65).every((b) => b === 0)) {
+    return reply.code(400).send({ error: "That transaction isn't signed." });
+  }
+  try {
+    const signature = await rpc<string>("sendTransaction", [transaction, { encoding: "base64", preflightCommitment: "confirmed", maxRetries: 5 }]);
+    return { signature };
+  } catch (err) {
+    const m = (err as Error).message;
+    return reply.code(409).send({ error: /blockhash not found|expired/i.test(m) ? "The transaction expired before it was sent. Try again."
+      : /insufficient (funds|lamports)|no record of a prior credit/i.test(m) ? "Not enough SOL for this plus the network fee." : `Solana rejected it: ${m.replace(/^RPC /, "").slice(0, 160)}` });
+  }
+});
+
 app.get("/chain/blockhash", async (_req, reply) => {
   try {
     const r = await rpc<{ value: { blockhash: string; lastValidBlockHeight: number } }>("getLatestBlockhash", [{ commitment: "confirmed" }]);

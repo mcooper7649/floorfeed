@@ -34,8 +34,13 @@ export type EvmTx = { to: string; data: string; value: string; chainId: number; 
 export type SolTransfer = { to: string; lamports: string; blockhash: string; lastValidBlockHeight: string };
 
 // What the separately built Privy bundle (privy/entry.tsx) reports back.
-export type PrivyState = Omit<AuthState, 'supported'> & {
+// Solana: Privy only signs (its "sign and send" needs Solana RPCs configured
+// inside Privy and hung without them); the app broadcasts the signed
+// transaction through our API (auth.web.tsx), so sendSol/sendSolTx are built there.
+export type PrivyState = Omit<AuthState, 'supported' | 'sendSol' | 'sendSolTx'> & {
   getAccessToken: () => Promise<string | null>;
+  signSol: ((t: SolTransfer) => Promise<string>) | null;     // signed tx, base64
+  signSolTx: ((base64: string) => Promise<string>) | null;   // signed tx, base64
 };
 
 export type PrivyMountOptions = {

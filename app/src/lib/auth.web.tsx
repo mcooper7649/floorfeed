@@ -3,7 +3,7 @@ import { createContext, use, useCallback, useEffect, useRef, useState, type Reac
 
 import { C } from '@/constants/brand';
 
-import { setTokenGetter } from './api';
+import { api, setTokenGetter } from './api';
 import type { AuthState, PrivyMountOptions, PrivyState } from './auth-types';
 import { track } from '@/lib/analytics';
 
@@ -107,8 +107,8 @@ function PrivyLoader({ children }: { children: ReactNode }) {
         evmAddress: privy.evmAddress,
         sendEvm: privy.sendEvm,
         fundEth: privy.fundEth,
-        sendSol: privy.sendSol,
-        sendSolTx: privy.sendSolTx,
+        sendSol: privy.signSol ? async (t) => api.solSend(await privy.signSol!(t)) : null,
+        sendSolTx: privy.signSolTx ? async (b64) => api.solSend(await privy.signSolTx!(b64)) : null,
         exportSolana: privy.exportSolana,
         exportEvm: privy.exportEvm,
       }
