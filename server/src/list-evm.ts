@@ -35,6 +35,30 @@ const CANCEL = parseAbiItem("function cancel((address offerer,address zone,(uint
 const floorOf = db.prepare("SELECT floor FROM collections WHERE symbol = ?");
 const lastSaleOf = db.prepare("SELECT price FROM trades WHERE mint = ? ORDER BY block_time DESC LIMIT 1");
 const lastBuyOf = db.prepare("SELECT price FROM trades WHERE buyer = ? AND mint = ? ORDER BY block_time DESC LIMIT 1");
+const recentSalesOf = db.prepare("SELECT mint, price, block_time, source FROM trades WHERE collection = ? ORDER BY block_time DESC LIMIT 40");
+
+// What the collection is actually selling for, to price a listing against.
+// Sales into offers (paid in WETH and similar) run below asking prices, so the
+// "typical" price is the median of recent sales that filled a listing.
+function collectionMarket(symbol: string) {
+  const rows = recentSalesOf.all(symbol) as { mint: string; price: number; block_time: number; source: string | null }[];
+  const sales = rows.map((r) => ({
+    price: r.price, at: r.block_time, id: r.mint.split(":")[1] ?? r.mint,
+    kind: /WETH|BETH|WRON|offer/i.test(r.source ?? "") ? "offer" as const : "listing" as const,
+  }));
+  const fills = sales.filter((x) => x.kind === "listing");
+  const last10 = fills.slice(0, 10).map((x) => x.price).sort((a, b) => a - b);
+  const median = last10.length >= 3 ? last10[Math.floor(last10.length / 2)] : null;
+  const dayAgo = Date.now() / 1000 - 86_400;
+  const day = fills.filter((x) => x.at >= dayAgo);
+  return {
+    lastSale: fills[0] ? { price: fills[0].price, at: fills[0].at } : null,
+    median,
+    high24h: day.length ? Math.max(...day.map((x) => x.price)) : null,
+    sales24h: sales.filter((x) => x.at >= dayAgo).length,
+    recent: sales.slice(0, 6),
+  };
+}
 
 export const SEAPORT_TYPES = {
   OrderComponents: [
@@ -116,7 +140,8 @@ export async function evmListQuote(symbol: string, id: string, seller: string) {
     ...base,
     owned,
     floor,
-    lastSale: (lastSaleOf.get(base.mint) as { price: number } | undefined)?.price ?? null,
+    lastSale: (lastSaleOf.get(base.mint) as { price: number } | undefined)?.price ?? null, // this NFT's
+    market: collectionMarket(symbol),
     boughtAt: (lastBuyOf.get(seller.toLowerCase(), base.mint) as { price: number } | undefined)?.price ?? null,
     bestOffer: offer ? { price: offer.price, net: offer.net, currency: offer.currency } : null,
     fees: fees.fees.map((f) => ({ pct: f.bps / 100, recipient: f.recipient })),

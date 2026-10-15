@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Linking, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { ModeChip } from '@/components/mode-toggle';
 import { Chip } from '@/components/ui';
@@ -11,7 +11,7 @@ import { track } from '@/lib/analytics';
 import { api, type EvmListQuote } from '@/lib/api';
 import { cancelEvmListing, daysLeft } from '@/lib/evm-listing';
 import { useEvmWallet } from '@/lib/evm-wallet';
-import { signedSol, signedUsd, sol, usd } from '@/lib/format';
+import { signedSol, signedUsd, sol, timeAgo, usd } from '@/lib/format';
 import { usePrices } from '@/lib/prices';
 
 // List an NFT for sale on OpenSea at your price. Nothing moves on chain to
@@ -139,17 +139,34 @@ export function EvmListSheet({ symbol, id, open, onClose, onDone }: {
     } catch (e) { fail(e, "The listing wasn't cancelled."); }
   };
 
-  const shortcuts = [
-    q?.floor ? { label: 'Floor', v: q.floor } : null,
-    q?.floor ? { label: 'Floor +5%', v: q.floor * 1.05 } : null,
-    q?.lastSale ? { label: 'Last sale', v: q.lastSale } : null,
-    q?.boughtAt ? { label: 'What I paid', v: q.boughtAt } : null,
-  ].filter((x): x is { label: string; v: number } => !!x);
+  // Price ideas, in groups: what the collection sells for, a step above the
+  // floor, and against what you paid.
+  type Idea = { label: string; v: number };
+  const ok = (x: Idea | null | false | 0 | undefined): x is Idea => !!x && x.v > 0;
+  const m = q?.market;
+  const floor = q?.floor ?? null;
+  const ideas: { title: string; items: Idea[] }[] = [
+    { title: 'Market', items: [
+      floor && { label: 'Floor', v: floor },
+      floor && { label: 'Just under floor', v: floor * 0.99 },
+      m?.median && { label: 'Typical sale', v: m.median },
+      m?.lastSale && { label: 'Last sale', v: m.lastSale.price },
+      m?.high24h && { label: '24h high', v: m.high24h },
+    ].filter(ok) },
+    { title: 'Above floor', items: floor ? [5, 10, 25, 50].map((p) => ({ label: `+${p}%`, v: floor * (1 + p / 100) })) : [] },
+    { title: 'From what you paid', items: q?.boughtAt ? [
+      { label: 'Break even', v: q.boughtAt / (1 - feePct / 100) },
+      { label: '+50%', v: (q.boughtAt * 1.5) / (1 - feePct / 100) },
+      { label: '2×', v: (q.boughtAt * 2) / (1 - feePct / 100) },
+    ] : [] },
+  ].filter((g) => g.items.length);
+  const vsFloor = floor && value > 0 ? value / floor - 1 : null;
 
   return (
     <Modal visible={open} transparent animationType="fade" onRequestClose={close}>
       <Pressable style={s.backdrop} onPress={close}>
         <Pressable style={s.sheet} onPress={() => {}}>
+          <ScrollView contentContainerStyle={{ gap: 14 }} showsVerticalScrollIndicator={false}>
           <View style={s.head}>
             <Text style={s.title}>{old ? 'Your listing' : 'List for sale'}</Text>
             <ModeChip mode="real" />
@@ -207,9 +224,28 @@ export function EvmListSheet({ symbol, id, open, onClose, onDone }: {
                     placeholderTextColor={C.muted} style={[s.input, { flex: 1 }]} />
                   <Text style={s.unit}>{unit}</Text>
                 </View>
-                {shortcuts.length > 0 && (
-                  <View style={s.chips}>
-                    {shortcuts.map((x) => <Chip key={x.label} label={`${x.label} ${trim(x.v)}`} on={Number(price) === Number(trim(x.v))} onPress={() => setPrice(trim(x.v))} />)}
+                {vsFloor != null && (
+                  <Text style={[s.meta, { color: vsFloor < -0.1 ? C.down : C.muted }]}>
+                    {Math.abs(vsFloor) < 0.005 ? 'At the floor' : `${Math.abs(vsFloor * 100).toFixed(vsFloor > -0.1 && vsFloor < 0.1 ? 1 : 0)}% ${vsFloor > 0 ? 'above' : 'below'} the floor`}
+                  </Text>
+                )}
+                {ideas.map((g) => (
+                  <View key={g.title} style={{ gap: 4 }}>
+                    <Text style={s.groupTitle}>{g.title}</Text>
+                    <View style={s.chips}>
+                      {g.items.map((x) => <Chip key={x.label} label={`${x.label} ${trim(x.v)}`} on={Number(price) === Number(trim(x.v))} onPress={() => setPrice(trim(x.v))} />)}
+                    </View>
+                  </View>
+                ))}
+                {!!m?.recent.length && (
+                  <View style={s.recent}>
+                    <Text style={s.groupTitle}>Recent sales{m.sales24h ? ` · ${m.sales24h} in 24h` : ''}</Text>
+                    {m.recent.map((r, i) => (
+                      <View key={`${r.id}:${r.at}:${i}`} style={s.recentRow}>
+                        <Text style={s.meta}>#{r.id.length > 8 ? `${r.id.slice(0, 6)}…` : r.id} · {r.kind === 'offer' ? 'sold to an offer' : 'bought from a listing'}</Text>
+                        <Text style={s.meta}>{sol(r.price, 4, unit)} · {timeAgo(r.at)}</Text>
+                      </View>
+                    ))}
                   </View>
                 )}
               </View>
@@ -268,6 +304,7 @@ export function EvmListSheet({ symbol, id, open, onClose, onDone }: {
           <Pressable accessibilityRole="button" onPress={close} style={s.secondary}>
             <Text style={s.secondaryTxt}>{step.kind === 'listed' || step.kind === 'cancelled' ? 'Done' : 'Close'}</Text>
           </Pressable>
+          </ScrollView>
         </Pressable>
       </Pressable>
     </Modal>
@@ -285,7 +322,7 @@ function Row({ label, value, strong, color }: { label: string; value: string; st
 
 const s = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: '#000000AA', alignItems: 'center', justifyContent: 'center', padding: 16 },
-  sheet: { width: '100%', maxWidth: 440, backgroundColor: C.card, borderRadius: 20, padding: 20, gap: 14, borderWidth: 1, borderColor: C.border },
+  sheet: { width: '100%', maxWidth: 440, maxHeight: '100%', backgroundColor: C.card, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: C.border },
   head: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   title: T.title,
   loading: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 20, justifyContent: 'center' },
@@ -298,6 +335,9 @@ const s = StyleSheet.create({
   input: { borderRadius: 12, borderWidth: 1, borderColor: C.border, backgroundColor: C.bg, color: C.text, fontSize: 15, paddingHorizontal: 12, paddingVertical: 10 },
   unit: { ...T.bodyStrong, minWidth: 44 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  groupTitle: { ...T.caption, color: C.muted, marginTop: 4 },
+  recent: { gap: 3, marginTop: 4, padding: 10, borderRadius: 10, backgroundColor: C.cardHi },
+  recentRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
   oldBox: { gap: 4, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: C.border, backgroundColor: C.cardHi },
   rows: { gap: 8, padding: 12, borderRadius: 12, backgroundColor: C.cardHi },
   row: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },

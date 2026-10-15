@@ -346,6 +346,10 @@ export type BridgeQuote = {
 export type EvmListQuote = {
   chain: string; unit: string; mint: string; name: string; collection: { symbol: string; name: string };
   owned?: boolean; floor?: number | null; lastSale?: number | null; boughtAt?: number | null;
+  market?: {
+    lastSale: { price: number; at: number } | null; median: number | null; high24h: number | null; sales24h: number;
+    recent: { price: number; at: number; id: string; kind: 'listing' | 'offer' }[];
+  };
   bestOffer?: { price: number; net: number; currency: string } | null;
   fees?: { pct: number; recipient: string }[]; feePct?: number;
   approved?: boolean; operator?: string | null; days?: number[];
