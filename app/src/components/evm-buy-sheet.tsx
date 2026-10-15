@@ -62,7 +62,9 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
   const priceUnit = q?.currency ?? unit; // listings show in the collection's currency (Axie: ETH on Ronin)
   const balance = q?.balance ?? q?.balanceEth ?? null;
   // Short = price + gas - balance (executable listings are priced in the gas token).
-  const short = price != null && balance != null && q?.executable ? price + (q.gasReserve ?? 0) - balance : null;
+  const fee = q?.fee ?? null; // FloorFeed's fee, paid in the same transaction
+  const total = price != null ? price + (fee?.amount ?? 0) : null;
+  const short = total != null && balance != null && q?.executable ? total + (q.gasReserve ?? 0) - balance : null;
   // Bridges take a little while and cheap listings sell fast, so move a cushion
   // (10% of the price) on top: if the cheapest one goes, the next still fits.
   // Whatever is left over stays in the wallet on that chain.
@@ -78,10 +80,10 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
         orderHash: q.listing.orderHash, protocolAddress: q.listing.protocolAddress, chain: q.chain, buyer: w.address,
       });
       setStep({ kind: 'confirm' });
-      const hash = await w.send(tx);
+      const hash = await w.send({ ...tx, description: tx.feeEth ? `Buy ${q.listing.name ?? q.collection.name}: ${sol(tx.priceEth ?? 0, 4, unit)} + ${sol(tx.feeEth, 5, unit)} FloorFeed fee` : undefined });
       track('buy_signed', { chain: q.chain });
       recordTx({ hash, wallet: w.address, chain: q.chain, kind: 'buy', title: `Bought ${q.listing.name ?? q.collection.name}`,
-        amount: q.listing.price, unit: q.native ?? q.currency ?? 'ETH', symbol: q.collection.symbol, mint: q.listing.mint });
+        amount: tx.valueEth ?? q.listing.price, unit: q.native ?? q.currency ?? 'ETH', symbol: q.collection.symbol, mint: q.listing.mint });
       setStep({ kind: 'sent', hash, url: `${tx.explorerTx ?? `${chainById(tx.chainId)?.[1].explorer ?? 'https://etherscan.io'}/tx/`}${hash}` });
     } catch (e) {
       const msg = (e as Error).message || 'The purchase did not go through.';
@@ -148,6 +150,7 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
 
               <View style={s.rows}>
                 <Row label="Listing price" value={price != null ? sol(price, 3, priceUnit) : '—'} />
+                {fee && <Row label={`FloorFeed fee (${fee.pct}%)`} value={`${sol(fee.amount, 5, priceUnit)}${toUsd(fee.amount, priceUnit) != null ? ` · ${usd(toUsd(fee.amount, priceUnit)!)}` : ''}`} />}
                 <Row label="Network fee" value="shown in your wallet" />
                 <Row label="Your wallet" value={balance != null ? `${sol(balance, 3, unit)}${toUsd(balance, unit) != null ? ` · ${usd(toUsd(balance, unit)!)}` : ''}` : '—'} />
                 <Row label="Wallet" value={w.walletName ?? '—'} />
@@ -195,7 +198,7 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
                   <Text style={s.primaryTxt}>
                     {step.kind === 'preparing' ? 'Checking the listing…'
                       : step.kind === 'confirm' ? 'Confirm in your wallet…'
-                      : `Buy for ${price != null ? sol(price, 3, unit) : ''}`}
+                      : `Buy for ${total != null ? sol(total, fee ? 4 : 3, unit) : ''}`}
                   </Text>
                 </Pressable>
               ) : null}

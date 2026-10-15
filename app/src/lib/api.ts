@@ -298,6 +298,7 @@ export type EvmQuote = {
   balance?: number | null; // buyer's balance in `native`
   elsewhere?: { chain: string; balance: number }[]; // the same token on other chains
   gasReserve?: number | null; // estimated gas for the buy, in `native`
+  fee?: { pct: number; amount: number } | null; // FloorFeed's fee on top of the price, when one is set
   listing: {
     mint: string; price: number; currency?: string; orderHash: string | null; protocolAddress: string | null; chain: string;
     name: string | null; image: string | null;
@@ -347,6 +348,7 @@ export type ActivityItem = {
 export type EvmBuyTx = {
   chainId: number; to: string; data: string; value: string; valueEth: number; gas: string; gasCostEth: number | null;
   explorerTx?: string;
+  priceEth?: number; feeEth?: number; // value = price + FloorFeed's fee
 };
 
 export type Alert = {

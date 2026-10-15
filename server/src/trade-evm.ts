@@ -172,6 +172,8 @@ export async function evmQuote(symbol: string, buyer: string | undefined, id: st
     balanceEth: balance, // older app builds
     elsewhere,
     gasReserve,
+    // FloorFeed's fee on top of the price (expected; the buy may go ahead without it).
+    fee: tradable && listing && BUY_FEE_BPS > 0 ? { pct: BUY_FEE_BPS / 100, amount: listing.price * BUY_FEE_BPS / 10_000 } : null,
     executable: tradable,
     reason: !listing ? `No ${unit} listing is live right now.`
       : !isTradable(chain) ? `Buying on ${chain} isn't supported yet.`
@@ -179,6 +181,39 @@ export async function evmQuote(symbol: string, buyer: string | undefined, id: st
       : null,
     marketUrl: listing ? `https://opensea.io/assets/${osAssetChain(chain)}/${listing.mint.replace(":", "/")}` : `https://opensea.io/collection/${symbol}`,
   };
+}
+
+// FloorFeed's fee on buys: a Seaport "tip", an extra payment to our wallet
+// appended to the order at fill time (the seller's signed terms don't change),
+// paid by the buyer in the same transaction and shown in the buy sheet. Off
+// unless BUY_FEE_BPS is set (max 1%). Only for listings paid in the native coin.
+const FEE_ADDR_RE = /^0x[0-9a-fA-F]{40}$/;
+const BUY_FEE_RECIPIENT = process.env.BUY_FEE_RECIPIENT || process.env.RELAY_FEE_RECIPIENT || "";
+const BUY_FEE_BPS = FEE_ADDR_RE.test(BUY_FEE_RECIPIENT) ? Math.min(100, Math.max(0, Math.round(Number(process.env.BUY_FEE_BPS ?? 0)))) : 0;
+const ZERO_ADDR = "0x0000000000000000000000000000000000000000";
+const buyFee = (value: bigint) => (value * BigInt(BUY_FEE_BPS)) / 10_000n;
+export const buyFeePct = () => (BUY_FEE_BPS > 0 ? BUY_FEE_BPS / 100 : null);
+
+// The fulfillment with our tip added, or null when this order shape can't take
+// one. Seaport accepts payments beyond the signed ones: extra
+// additionalRecipients on basic orders, extra consideration items on others.
+type Input = Record<string, unknown>;
+function withTip(fn: string, input: Input, tip: bigint): Input | null {
+  const copy = structuredClone(input) as Input;
+  if (fn.startsWith("fulfillBasicOrder")) {
+    const p = copy.parameters as { considerationToken: string; additionalRecipients: { amount: string; recipient: string }[] };
+    if (!p || p.considerationToken.toLowerCase() !== ZERO_ADDR) return null;
+    p.additionalRecipients.push({ amount: tip.toString(), recipient: BUY_FEE_RECIPIENT });
+    return copy;
+  }
+  if (fn.startsWith("fulfillAdvancedOrder") || fn.startsWith("fulfillOrder")) {
+    const order = (copy.advancedOrder ?? copy.order) as { parameters: { consideration: Record<string, string | number>[] } } | undefined;
+    const cons = order?.parameters?.consideration;
+    if (!cons?.length || cons.some((c) => Number(c.itemType) !== 0)) return null; // native-coin payments only
+    cons.push({ itemType: 0, token: ZERO_ADDR, identifierOrCriteria: "0", startAmount: tip.toString(), endAmount: tip.toString(), recipient: BUY_FEE_RECIPIENT });
+    return copy;
+  }
+  return null;
 }
 
 // OpenSea gives the arguments as named objects in struct order; viem wants
@@ -190,15 +225,31 @@ export async function evmBuyTx(p: { orderHash: string; protocolAddress: string; 
   if (!isTradable(p.chain)) throw new Error(`Buying on ${p.chain} isn't supported yet.`);
   const tx = await getOsFulfillment(p.orderHash, p.chain, p.protocolAddress, p.buyer);
   const abi = parseAbiItem(`function ${tx.function}`) as ReturnType<typeof parseAbiItem> & { name: string };
-  const data = encodeFunctionData({ abi: [abi], functionName: abi.name, args: toArgs(tx.input_data) as never });
-  const value = BigInt(tx.value);
+  const encode = (input: Input) => encodeFunctionData({ abi: [abi], functionName: abi.name, args: toArgs(input) as never });
+  const price = BigInt(tx.value);
+  let data = encode(tx.input_data);
+  let value = price;
   // The chains' client types differ (Abstract is zkSync-based); the calls used here are common to all.
   const client = clients[p.chain] as unknown as PublicClient;
   // Dry run as the buyer: catches a listing that just sold, a short balance,
   // or a bad encoding before the wallet ever sees it.
-  let gas: bigint;
+  let gas: bigint | null = null;
+  let fee = 0n;
+  // With our fee first. If the order won't take the tip (some zones check the
+  // payments) the buy still goes ahead without it.
+  const native = EVM_CHAINS[p.chain].native;
+  const tip = BUY_FEE_BPS > 0 && price > 0n ? buyFee(price) : 0n;
+  const tipped = tip > 0n ? withTip(tx.function, tx.input_data, tip) : null;
+  if (tipped) {
+    const tData = encode(tipped);
+    const ok = await client.estimateGas({ account: p.buyer as Hex, to: tx.to as Hex, data: tData, value: price + tip }).catch((err: Error) => {
+      if (/insufficient funds/i.test(err.message)) throw new Error(`Not enough ${native} in this wallet for the price, FloorFeed's fee and gas.`);
+      return null;
+    });
+    if (ok) { gas = ok; data = tData; value = price + tip; fee = tip; }
+  }
   try {
-    gas = await client.estimateGas({ account: p.buyer as Hex, to: tx.to as Hex, data, value });
+    gas ??= await client.estimateGas({ account: p.buyer as Hex, to: tx.to as Hex, data, value });
   } catch (err) {
     const msg = (err as Error).message;
     throw new Error(/insufficient funds/i.test(msg)
@@ -214,6 +265,8 @@ export async function evmBuyTx(p: { orderHash: string; protocolAddress: string; 
     data,
     value: value.toString(),
     valueEth: Number(formatEther(value)),
+    priceEth: Number(formatEther(price)),
+    feeEth: Number(formatEther(fee)), // FloorFeed's fee included in value (0 when off or not applicable)
     gas: ((gas * 12n) / 10n).toString(), // +20% headroom
     gasCostEth,
   };
