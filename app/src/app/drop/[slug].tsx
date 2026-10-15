@@ -262,7 +262,7 @@ export default function DropScreen() {
 const EXPLORERS: Record<string, string> = {
   ethereum: 'https://etherscan.io', base: 'https://basescan.org', abstract: 'https://abscan.org', ink: 'https://explorer.inkonchain.com',
   arbitrum: 'https://arbiscan.io', hyperevm: 'https://hyperevmscan.io', ronin: 'https://app.roninchain.com', apechain: 'https://apescan.io',
-  monad: 'https://monadscan.com', polygon: 'https://polygonscan.com', robinhood: 'https://explorer.chain.robinhood.com',
+  monad: 'https://monadscan.com', polygon: 'https://polygonscan.com', robinhood: 'https://robinhoodchain.blockscout.com',
 };
 const chainExplorer = (c: string) => EXPLORERS[c] ?? 'https://etherscan.io';
 

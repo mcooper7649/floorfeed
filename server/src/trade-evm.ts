@@ -1,5 +1,5 @@
 import { createPublicClient, encodeFunctionData, formatEther, http, parseAbiItem, parseEther, type Hex, type PublicClient } from "viem";
-import { abstract, apeChain, arbitrum, base, hyperEvm, ink, mainnet, monad, ronin } from "viem/chains";
+import { abstract, apeChain, arbitrum, base, hyperEvm, ink, mainnet, monad, robinhood, ronin } from "viem/chains";
 import { EVM_CHAINS, EVM_SALES, config, normalizeUnit } from "./config.ts";
 import { unitOf } from "./units.ts";
 import { db } from "./db.ts";
@@ -30,6 +30,7 @@ const clients = {
   ronin: createPublicClient({ chain: ronin, transport: rpc(process.env.RONIN_RPC_URL || "https://api.roninchain.com/rpc") }),
   apechain: createPublicClient({ chain: apeChain, transport: rpc(process.env.APECHAIN_RPC_URL || "https://rpc.apechain.com/http") }),
   monad: createPublicClient({ chain: monad, transport: rpc(process.env.MONAD_RPC_URL || "https://rpc.monad.xyz") }),
+  robinhood: createPublicClient({ chain: robinhood, transport: rpc(process.env.ROBINHOOD_RPC_URL || "https://rpc.mainnet.chain.robinhood.com") }),
 };
 type EvmChain = keyof typeof clients;
 const TRADABLE = Object.keys(clients) as EvmChain[];
@@ -417,7 +418,7 @@ export async function evmTxState(chain: string, hash: string) {
 // Offer sales pay out in the chain's wrapped token (WETH on Ink...), which a
 // plain balance read never shows, so the money looks gone. These are read
 // alongside the native balance and can be unwrapped back 1:1.
-// Addresses verified on chain with symbol() (2026-10-14).
+// Addresses verified on chain with symbol() (2026-10-14; Robinhood 2026-10-15).
 const WRAPPED: Partial<Record<EvmChain, { address: Hex; symbol: string; unit: string; unwrappable: boolean }[]>> = {
   ethereum: [{ address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", symbol: "WETH", unit: "ETH", unwrappable: true }],
   base: [{ address: "0x4200000000000000000000000000000000000006", symbol: "WETH", unit: "ETH", unwrappable: true }],
@@ -432,6 +433,7 @@ const WRAPPED: Partial<Record<EvmChain, { address: Hex; symbol: string; unit: st
   ],
   apechain: [{ address: "0x48b62137EdfA95a428D35C09E44256a739F6B557", symbol: "WAPE", unit: "APE", unwrappable: true }],
   monad: [{ address: "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A", symbol: "WMON", unit: "MON", unwrappable: true }],
+  robinhood: [{ address: "0x0bd7d308f8e1639fab988df18a8011f41eacad73", symbol: "WETH", unit: "ETH", unwrappable: true }],
 };
 const ERC20_BALANCE = parseAbiItem("function balanceOf(address) view returns (uint256)");
 const WETH_WITHDRAW = parseAbiItem("function withdraw(uint256 wad)");

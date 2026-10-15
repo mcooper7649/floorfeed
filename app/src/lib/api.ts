@@ -128,7 +128,7 @@ export type Leaderboard = {
 };
 
 export type Chain = 'solana' | 'ethereum' | 'base' | 'polygon' | 'abstract' | 'ink' | 'arbitrum'
-  | 'hyperevm' | 'ronin' | 'apechain' | 'monad';
+  | 'hyperevm' | 'ronin' | 'apechain' | 'monad' | 'robinhood';
 // Currencies P&L is kept in. A wallet's numbers are always in one of these.
 export type Unit = 'SOL' | 'ETH' | 'HYPE' | 'RON' | 'APE' | 'MON';
 

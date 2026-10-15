@@ -23,7 +23,7 @@ type CatFilter = 'all' | MarketCategory | 'watch';
 type Sort = 'volume' | 'change' | 'floor' | 'sales';
 
 // Chain chips in this order, shown only for chains that have collections.
-const CHAIN_ORDER: Chain[] = ['solana', 'ethereum', 'base', 'abstract', 'ink', 'arbitrum', 'hyperevm', 'ronin', 'apechain', 'monad', 'polygon'];
+const CHAIN_ORDER: Chain[] = ['solana', 'ethereum', 'base', 'abstract', 'ink', 'arbitrum', 'hyperevm', 'ronin', 'apechain', 'monad', 'robinhood', 'polygon'];
 const CATEGORIES: { key: MarketCategory; blurb: string }[] = [
   { key: 'PFP', blurb: 'Profile-picture collections and their communities' },
   { key: 'Art', blurb: 'Generative and 1/1 art' },

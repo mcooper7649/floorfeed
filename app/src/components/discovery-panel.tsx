@@ -307,7 +307,7 @@ function MintingList() {
               <Row key={d.slug} left={<Art uri={d.image} name={d.name} chain={(d.chain in CHAINS ? d.chain : undefined) as Chain | undefined} />}
                 title={d.name}
                 extra={d.minting ? <Badge text="Live" tone="buy" /> : soon ? <Badge text="Soon" tone="info" /> : null}
-                sub={`${d.chain === 'robinhood' ? 'Robinhood Chain' : CHAINS[d.chain as Chain]?.name ?? d.chain} · ${d.stage ? `${d.stage} · ` : ''}${when}`}
+                sub={`${CHAINS[d.chain as Chain]?.name ?? d.chain} · ${d.stage ? `${d.stage} · ` : ''}${when}`}
                 value={d.price == null ? '—' : d.price === 0 ? 'Free' : `${trimNum(d.price)} ${d.currency}`}
                 change={d.priceUsd ? `$${d.priceUsd >= 100 ? d.priceUsd.toFixed(0) : d.priceUsd.toFixed(2)}` : undefined}
                 onPress={() => go({ pathname: '/drop/[slug]', params: { slug: d.slug } })} />

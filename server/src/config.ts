@@ -97,7 +97,7 @@ export const COLLECTIONS: { symbol: string; name: string; category: Category }[]
 
 export const LIVE_TIER_SIZE = 20;
 
-export type Chain = "solana" | "ethereum" | "base" | "polygon" | "abstract" | "ink" | "arbitrum" | "hyperevm" | "ronin" | "apechain" | "monad";
+export type Chain = "solana" | "ethereum" | "base" | "polygon" | "abstract" | "ink" | "arbitrum" | "hyperevm" | "ronin" | "apechain" | "monad" | "robinhood";
 
 // EVM chains FloorFeed tracks.
 // - native: the chain's gas token (what a wallet's balance is in).
@@ -117,6 +117,7 @@ export const EVM_CHAINS: Record<Exclude<Chain, "solana">, EvmChainInfo> = {
   ronin: { name: "Ronin", id: 2020, explorer: "https://app.roninchain.com", native: "RON", units: ["RON", "ETH"], discover: 10 },
   apechain: { name: "ApeChain", id: 33139, explorer: "https://apescan.io", native: "APE", units: ["APE"], discover: 10, os: "ape_chain" },
   monad: { name: "Monad", id: 143, explorer: "https://monadscan.com", native: "MON", units: ["MON"], discover: 10 },
+  robinhood: { name: "Robinhood Chain", id: 4663, explorer: "https://robinhoodchain.blockscout.com", native: "ETH", units: ["ETH"], discover: 10 },
   polygon: { name: "Polygon", id: 137, explorer: "https://polygonscan.com", native: "POL", units: [], discover: 0, os: "matic" },
 };
 

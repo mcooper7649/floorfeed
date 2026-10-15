@@ -15,7 +15,7 @@ import { track } from '@/lib/analytics';
 // route, the wallet signs one deposit on the origin chain, and Relay pays out
 // on the destination (usually seconds). `amount` is what should arrive.
 
-const EVM = ['ethereum', 'base', 'abstract', 'ink', 'arbitrum', 'hyperevm', 'ronin', 'apechain', 'monad'] as const;
+const EVM = ['ethereum', 'base', 'abstract', 'ink', 'arbitrum', 'hyperevm', 'ronin', 'apechain', 'monad', 'robinhood'] as const;
 const unitOf = (c: string) => CHAINS[c as keyof typeof CHAINS]?.symbol ?? 'ETH';
 const usd = (n: number | null) => (n == null ? '—' : n < 0.01 ? '< $0.01' : `$${n.toFixed(2)}`);
 

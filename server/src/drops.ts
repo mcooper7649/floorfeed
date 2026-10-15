@@ -11,7 +11,6 @@ import { formatEther } from "viem";
 const ZERO = "0x0000000000000000000000000000000000000000";
 // Chains OpenSea drops use that FloorFeed doesn't trade on (names for display).
 const OTHER_CHAINS: Record<string, { name: string; native: string }> = {
-  robinhood: { name: "Robinhood Chain", native: "ETH" },
   polygon: { name: "Polygon", native: "POL" },
   shape: { name: "Shape", native: "ETH" },
   zora: { name: "Zora", native: "ETH" },

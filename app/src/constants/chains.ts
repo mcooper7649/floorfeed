@@ -14,6 +14,7 @@ export const CHAINS: Record<Chain, { name: string; badge: string; id?: number; e
   ronin: { name: 'Ronin', badge: 'RON', id: 2020, explorer: 'https://app.roninchain.com', rpc: 'https://api.roninchain.com/rpc', symbol: 'RON' },
   apechain: { name: 'ApeChain', badge: 'APE', id: 33139, explorer: 'https://apescan.io', rpc: 'https://rpc.apechain.com/http', symbol: 'APE' },
   monad: { name: 'Monad', badge: 'MON', id: 143, explorer: 'https://monadscan.com', rpc: 'https://rpc.monad.xyz', symbol: 'MON' },
+  robinhood: { name: 'Robinhood Chain', badge: 'HOOD', id: 4663, explorer: 'https://robinhoodchain.blockscout.com', rpc: 'https://rpc.mainnet.chain.robinhood.com' },
 };
 
 export const chainName = (c: string) => CHAINS[c as Chain]?.name ?? c;
