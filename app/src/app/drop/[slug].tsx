@@ -30,7 +30,12 @@ const inWords = (sec: number) => {
   if (d >= 3600) return `${Math.floor(d / 3600)}h ${Math.floor((d % 3600) / 60)}m`;
   return `${Math.max(1, Math.floor(d / 60))}m`;
 };
-const when = (t: number) => new Date(t * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+// The year shows when it isn't this year (stages can run a year or more).
+const when = (t: number) => {
+  const d = new Date(t * 1000);
+  const year = d.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined;
+  return d.toLocaleString(undefined, { year, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+};
 
 type Step = { kind: 'idle' } | { kind: 'preparing' } | { kind: 'confirm' } | { kind: 'sent'; url: string; quantity: number } | { kind: 'error'; message: string };
 
