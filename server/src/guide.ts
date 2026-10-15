@@ -3,24 +3,48 @@ import { config } from "./config.ts";
 // "How FloorFeed works": one source for the in-app guide (GET /guide) and the
 // server-rendered /how-it-works page (seo.ts). Keep every claim true to the
 // code: tier thresholds match feed.ts tierOf, fees match fees.ts, polling
-// matches config.ts.
+// matches config.ts, the paper exit matches config.paperSellHaircut, bridging
+// matches bridge.ts, buy/sell/approve match trade-evm.ts, mints match drops.ts.
+//
+// Sections belong to one of three parts: the basics everyone needs, paper
+// trading, and real trading. Screenshots live in app/public/guide/ (captured at
+// 390px wide, 2x, with an illustrative demo wallet); `w`/`h` are their pixel
+// sizes so pages can reserve the space before they load.
 
-export type GuideBlock = { p: string } | { list: { term: string; text: string }[] };
-export type GuideSection = { id: string; title: string; blocks: GuideBlock[] };
+export type GuidePart = "basics" | "paper" | "real";
+export type GuideBlock =
+  | { p: string }
+  | { list: { term: string; text: string }[] }
+  | { steps: string[] }
+  | { tip: string }
+  | { img: string; alt: string; caption?: string; w: number; h: number };
+export type GuideSection = { id: string; part: GuidePart; title: string; blocks: GuideBlock[] };
+
+export const GUIDE_PARTS: { id: GuidePart; title: string; blurb: string }[] = [
+  { id: "basics", title: "The basics", blurb: "The feed, the badges, profit after fees, alerts and finding collections." },
+  { id: "paper", title: "Paper trading", blurb: "Practice with simulated money at live prices. No wallet, no sign-up." },
+  { id: "real", title: "Real trading", blurb: "Your own wallet, real NFTs, and money that moves between networks." },
+];
 
 const minutes = Math.round(config.activityPollMs / 60_000);
+const haircut = Math.round(config.paperSellHaircut * 100);
+const img = (name: string, alt: string, w: number, h: number, caption?: string): GuideBlock =>
+  ({ img: `/guide/${name}.webp`, alt, w, h, ...(caption ? { caption } : {}) });
 
 export const GUIDE: GuideSection[] = [
+  // --- the basics ---------------------------------------------------------------
   {
     id: "what",
+    part: "basics",
     title: "What FloorFeed is",
     blocks: [
       { p: "A live feed of NFT trades from wallets with a track record, on Solana, Ethereum and 9 more chains. We read every sale in the collections we track, match each wallet's buys to its later sales, and score traders on what they actually made." },
-      { p: "Use it to see who is buying right now, judge whether they're any good, and follow the ones who keep winning." },
+      { p: "Use it to see who is buying right now, judge whether they're any good, and follow the ones who keep winning. When you want to act on a trade, you can do it on paper (practice money) or for real (your own wallet). The switch between the two is on the Portfolio tab." },
     ],
   },
   {
     id: "feed",
+    part: "basics",
     title: "Reading the feed",
     blocks: [
       { list: [
@@ -29,11 +53,15 @@ export const GUIDE: GuideSection[] = [
         { term: "Sweep", text: "One wallet bought 3 or more from the same collection within 15 minutes." },
         { term: "Cluster", text: "3 or more different wallets bought the same collection within 6 hours." },
       ] },
+      { p: "Buy, Sweep and Cluster cards end in a Copy button: buy that collection's floor yourself, on paper or for real depending on your mode. Flip cards end in \"See <collection>\" instead. A flip is a sale, so there's nothing to copy; the link opens the collection, where Buy floor is one tap away." },
+      img("feed-flip-card", "A Win card: a Proven wallet flipped Argonauts for +0.568 ETH after fees, with a See Argonauts button", 780, 640,
+        "A flip card. The profit is after fees, and the button opens the collection rather than copying a sale."),
       { p: "Top ranks the last 72 hours by who traded, how much and how recently. Latest is every trade as it lands. Wins is profitable flips only. Filter by chain, or switch to Following to see only the wallets you follow." },
     ],
   },
   {
     id: "badges",
+    part: "basics",
     title: "Trader badges",
     blocks: [
       { list: [
@@ -47,6 +75,7 @@ export const GUIDE: GuideSection[] = [
   },
   {
     id: "fees",
+    part: "basics",
     title: "Profit is after fees",
     blocks: [
       { p: "Every P&L on FloorFeed counts what the wallet really paid and received: marketplace fees and creator royalties come off each flip. For Solana we read the amounts from the transaction itself; when we can't, we use the marketplace's 2% fee plus the collection's royalty. On Ethereum and other chains the seller pays the collection's required OpenSea fees. Gas isn't counted." },
@@ -54,6 +83,7 @@ export const GUIDE: GuideSection[] = [
   },
   {
     id: "alerts",
+    part: "basics",
     title: "Follow wallets and get alerts",
     blocks: [
       { p: "Tap Follow on any trader. Their buys and sales go to your Alerts inbox (the bell), and sales show the profit after fees. Turn on notifications to get a ping in your browser the moment they trade." },
@@ -62,6 +92,7 @@ export const GUIDE: GuideSection[] = [
   },
   {
     id: "discover",
+    part: "basics",
     title: "Find collections",
     blocks: [
       { list: [
@@ -69,32 +100,205 @@ export const GUIDE: GuideSection[] = [
         { term: "Smart money", text: "Collections that Top Flipper and Proven wallets bought in the last 30 days and still hold." },
         { term: "Breakouts", text: "The biggest 24-hour floor gains among collections with real volume. Thin markets can fall as fast as they rise." },
         { term: "Blue chips", text: "The collections with the most trading volume over 7 days." },
+        { term: "Minting", text: "Drops that are minting now or opening soon, each with its own mint page." },
       ] },
-      { p: "On a computer these lists live in the panel on the left. On a phone, the Markets tab lists every collection with its floor, volume and change, and lets you star the ones to watch. Every collection page has floor charts, the cheapest listings with rarity, and its best flippers." },
+      { p: "On a computer these lists live in the panel on the left. On a phone, the Markets tab lists every collection with its floor, volume and change, and lets you star the ones to watch. Every collection page has floor charts, the cheapest listings with rarity, and its best flippers. The Minting list there shows drops that are live or coming up." },
+    ],
+  },
+
+  // --- paper ----------------------------------------------------------------------
+  {
+    id: "paper",
+    part: "paper",
+    title: "How paper trading works",
+    blocks: [
+      { p: "Paper mode is practice with simulated money at live prices. It's the default, and it needs no wallet and no sign-up. Every paper button is purple, so you always know which mode you're in. Your positions are kept on this device; sign in and they move to your account." },
+      { steps: [
+        "Find a trade you like in the feed and tap \"Copy · paper buy floor\".",
+        "FloorFeed records one NFT bought at that collection's current floor. The button confirms the price you got.",
+        "Open Portfolio to watch the position. Open positions are marked at what you'd get selling now.",
+        "Tap Sell when you're done. The profit or loss is locked in, after fees.",
+      ] },
+      img("paper-copy-card", "A Cluster card: 128 wallets bought SurfBoard in 6 hours, with a purple Copy · paper buy floor · 0.048 ETH button", 780, 796),
+      img("paper-copied", "The same card after tapping: the button now reads Bought floor @ 0.048 ETH", 780, 190,
+        "One tap: the button turns into your fill price."),
     ],
   },
   {
-    id: "paper",
-    title: "Paper first, real when you're ready",
+    id: "paper-pricing",
+    part: "paper",
+    title: "How paper prices and fees are counted",
     blocks: [
-      { p: "Paper mode is practice with simulated money: tap Copy on any trade to buy that collection's floor on paper, then sell later and see how you'd have done. Fees are counted like a real trade. No wallet or sign-up needed." },
-      { p: "Real mode uses your own wallet: connect Phantom, Solflare or Backpack on Solana, or MetaMask and other browser wallets on Ethereum chains. No wallet? Sign in with email or Google and you get one. Ethereum-chain purchases happen right in FloorFeed; Solana purchases open on Magic Eden for now. Add funds with a card or by sending from an exchange." },
+      { p: "Paper trades are built to come out the way a real trade would, so a paper win means something." },
+      { list: [
+        { term: "Buying", text: "One NFT fills at the collection's floor. On a collection page you can paper-buy ×3, ×5 or ×10 at once: that walks up the live listings, so the 2nd, 3rd and later items cost what they really would." },
+        { term: "Fees on the buy", text: "The marketplace taker fee and the creator royalty are added on top of the price, like a real purchase." },
+        { term: "Selling", text: `Sales go into the best bid, which sits below the floor, so a paper sale fills at the floor minus ${haircut}%, and the seller's fees come off that.` },
+        { term: "Currencies", text: "Positions stay in the collection's own coin (SOL, ETH, HYPE, RON, APE or MON) and are totalled per coin. Collections priced in anything else are browse-only on paper." },
+      ] },
+      img("paper-portfolio", "Paper portfolio: Paper profit and loss after fees −0.0080 ETH, with open positions in Minds Dot Games and RH MACHINES, each with a Sell button", 780, 1200),
+      { tip: "That small red number right after a buy is normal: fees, plus the gap between the floor and the bid. A paper position has to beat it to show a profit, just like a real one." },
+      { p: "Reset (on the Positions header) clears every paper position, open and closed, for a fresh start. Paper trading is free and stays free." },
+    ],
+  },
+
+  // --- real -----------------------------------------------------------------------
+  {
+    id: "wallets",
+    part: "real",
+    title: "Going real: your wallets",
+    blocks: [
+      { p: "Real mode uses your own wallet. On the Portfolio tab, switch Paper to Real. The switch unlocks once there's a wallet to use, and every real button turns lime green." },
+      { list: [
+        { term: "Connect one you have", text: "Phantom, Solflare or Backpack for Solana; MetaMask, Rabby, Coinbase Wallet and other browser wallets for Ethereum and its networks." },
+        { term: "Or get one with FloorFeed", text: "Sign in with email or Google and you get a Solana wallet and an Ethereum wallet, secured by Privy. Nothing to install." },
+      ] },
+      { p: "If you have both, a connected extension wins. The Portfolio shows the total across your wallets in dollars, each wallet with its balance, and Move and Deposit buttons." },
+      img("real-wallet", "Real portfolio: $144.17 total across your wallets, in coins on 4 networks, and an Ethereum wallet with 0.0418 ETH and Move and Deposit buttons", 780, 630),
+    ],
+  },
+  {
+    id: "networks",
+    part: "real",
+    title: "One address, many networks",
+    blocks: [
+      { p: "This is the part that trips people up. Your Ethereum wallet has one address, and that address works on every Ethereum-style network FloorFeed supports: Ethereum, Base, Abstract, Ink, Arbitrum, HyperEVM, Ronin, ApeChain, Monad and Robinhood Chain. But each network keeps its own balance. ETH on Ethereum can't pay for an NFT on Robinhood Chain until it's moved there." },
+      { p: "Each network also has a coin that pays for its NFTs and its gas: ETH on Ethereum, Base, Abstract, Ink, Arbitrum and Robinhood Chain, HYPE on HyperEVM, RON on Ronin, APE on ApeChain and MON on Monad. Solana is separate again, with its own wallet and SOL." },
+      { p: "\"Money by network\" on the Portfolio lists every network where you hold something, with its coin, any WETH, and the dollar value. Move on any row starts a transfer from there." },
+      img("real-networks", "Money by network: Ethereum 0.042 ETH, Ink 0.0015 ETH plus WETH with Unwrap and Move buttons, Base 0.0062 ETH, Robinhood Chain 0.0012 ETH", 780, 720),
+    ],
+  },
+  {
+    id: "funding",
+    part: "real",
+    title: "Adding money",
+    blocks: [
+      { p: "Tap Deposit on a wallet. There are two ways in:" },
+      { list: [
+        { term: "Card or Apple Pay", text: "Buy SOL or ETH through MoonPay, right in FloorFeed. MoonPay handles the payment and any ID checks; the coins land in your wallet." },
+        { term: "From an exchange or another wallet", text: "Copy the address or scan the QR code and send from Coinbase, Kraken, Phantom, MetaMask or anywhere else. The sheet watches your balance every few seconds and shows \"Received\" the moment it lands." },
+      ] },
+      { tip: "Sending from an exchange? Pick the network you plan to buy on (for example Base rather than Ethereum) and you'll skip the move later. If it lands on the wrong network, that's fine: move it in FloorFeed." },
+    ],
+  },
+  {
+    id: "real-buy",
+    part: "real",
+    title: "Buying for real",
+    blocks: [
+      { p: "Tap Copy on a feed card, or Buy floor on a collection page. What happens next depends on the chain." },
+      { p: "On Ethereum and its networks, the whole purchase happens in FloorFeed:" },
+      { steps: [
+        "FloorFeed finds the cheapest OpenSea listing priced in the network's coin and shows the NFT, its price in coin and dollars, and your balance on that network.",
+        "It checks you can cover the price plus gas. Gas is estimated for a real purchase, including the extra data fee on networks like Base and Ink.",
+        "It builds the purchase and runs it against the chain as you, without sending anything. A listing that just sold, or a balance that's short, shows up here instead of failing in your wallet and costing gas.",
+        "Your wallet opens with the exact transaction. Nothing is sent until you confirm.",
+        "The buy appears in Activity and is followed until it confirms. The NFT then shows up under Holdings.",
+      ] },
+      { p: "If your coin is on a different network, the sheet says where it is and how much more you need, and offers to move it for you:" },
+      img("real-buy-short", "Buy floor sheet for Minds Dot Games #3130 at 0.0181 ETH on Robinhood Chain. It says: Not enough ETH on Robinhood Chain; your ETH is on Ethereum and Base; Move ETH to Robinhood Chain", 780, 1435),
+      { p: "On Solana, the sheet shows the cheapest Magic Eden listing, what it costs and whether your SOL covers it, then the purchase finishes on Magic Eden. If you're short, Deposit opens with the shortfall filled in." },
+      { tip: "Listings priced in wrapped coins (WETH and similar) need an extra approval, so FloorFeed only buys listings priced in the network's own coin. Real buys are one NFT at a time; sweeps are paper-only for now." },
+    ],
+  },
+  {
+    id: "bridging",
+    part: "real",
+    title: "Moving money between networks",
+    blocks: [
+      { p: "Moving (bridging) is how ETH on Ethereum becomes ETH on Robinhood Chain, or SOL becomes ETH on Base, without leaving FloorFeed. It runs on Relay, a bridge network: you send one deposit on the network you're leaving, and Relay's solvers pay you out on the other side from their own funds, usually within seconds. FloorFeed never holds the money; it only fetches the quote and checks the deposit." },
+      { p: "Open it from Move on any wallet or network row, or let a buy or a mint open it for you with the right amount filled in." },
+      { img: "/guide/bridge-flow.svg", alt: "Diagram: your wallet on Ethereum signs one deposit to Relay; a Relay solver sees it confirm and pays the same amount out to your wallet on Robinhood Chain from its own funds. FloorFeed only gets the quote, checks the deposit and follows it.", w: 720, h: 1080 },
+      { steps: [
+        "Pick where the money should go. From a buy or a mint, that's already set.",
+        "Pick where it comes from. FloorFeed lists the networks where you have a balance and a wallet that can sign, the same coin first and the biggest balance first.",
+        "Enter how much should arrive. FloorFeed asks Relay for an exact-output quote: the amount you type is what lands, and the fees are added to what you send.",
+        "Read the quote: what you send, what you receive, Relay's fee, the network fee, and the expected time.",
+        "Before the button appears, FloorFeed checks your balance and runs the deposit against the chain as you. A deposit that would fail is caught here.",
+        "Confirm the one deposit in your wallet.",
+      ] },
+      img("real-bridge", "Move funds to Robinhood Chain: from Ethereum, receive 0.0188 ETH. You send 0.018828 ETH on Ethereum, bridge fee $0.04, network fee about $0.08, 1–3 minutes", 780, 1260,
+        "Opened from the buy above: the amount is the shortfall plus a cushion."),
+      { p: "After you confirm, the sheet follows the transfer through its stages: waiting for your deposit to confirm, delivering on the other network, then arrived. If it came from a buy or a mint, you go straight back to it with your new balance, ready to tap Buy." },
+      img("real-bridge-moving", "Deposit confirmed. Delivering on Robinhood Chain, with a timer and a link to the deposit transaction", 780, 445),
+      { list: [
+        { term: "How long", text: "From Ethereum, usually 1–3 minutes: Relay waits for the deposit to confirm on mainnet first. Between faster networks, and from Solana, it's usually seconds. You can close the sheet; the money still arrives." },
+        { term: "Why move a bit extra", text: "When a buy or a mint opens the transfer, it suggests a little more than you're short (10% of the price for a buy, 5% for a mint). Cheap listings sell fast, and if the cheapest goes while the money moves, the next one still fits. Whatever's left stays in your wallet on that network." },
+        { term: "Changing coins", text: "Moving between networks with different coins is a swap and a transfer in one step: SOL to ETH on Base, or ETH to APE on ApeChain. The quote shows what arrives." },
+        { term: "From Solana", text: "Relay hands FloorFeed the deposit as Solana instructions. FloorFeed assembles them into one transaction where your wallet is the only signer and pays the fee, checks it against the chain, and your Solana wallet signs it. These quotes expire after about a minute, so FloorFeed fetches a fresh one if you wait too long before confirming." },
+        { term: "If something goes wrong", text: "If your deposit fails on the chain, nothing was moved and only the network fee was spent. If your wallet says it sent the deposit but it never reaches the chain, FloorFeed tells you after a minute and a half; nothing left your wallet. If Relay can't deliver, it refunds you on the network you sent from." },
+      ] },
+    ],
+  },
+  {
+    id: "selling",
+    part: "real",
+    title: "Selling for real",
+    blocks: [
+      { p: "Holdings on the Portfolio lists your NFTs from tracked collections, valued at the estimated bid, with what you paid and your profit so far. Tap Sell on one." },
+      { p: "On Ethereum and its networks you sell in FloorFeed, into the best offer on OpenSea for that NFT. That might be an offer on the item itself, on one of its traits, or on the whole collection; FloorFeed takes whichever pays most. The sheet shows the offer, the fees and royalty that come off it, and what you receive. If the offer is far below the floor, it says so, because that's usually a lowball bid." },
+      { steps: [
+        "The first time you sell from a collection, approve OpenSea to transfer NFTs from it. It's one transaction, needed once per collection.",
+        "FloorFeed waits until the chain shows the approval, then the Sell button appears.",
+        "Confirm the sale in your wallet. The NFT leaves and the payment arrives in the same transaction.",
+      ] },
+      { p: "Offers are paid in WETH, wrapped ETH (see the next section). On Solana, Sell opens the NFT on Magic Eden to finish there." },
+    ],
+  },
+  {
+    id: "weth",
+    part: "real",
+    title: "WETH and unwrapping",
+    blocks: [
+      { p: "WETH is ETH in token form, always worth exactly 1 ETH. Offers on OpenSea are made in WETH, so money from a sale arrives as WETH. Plain wallet balances often don't show it, which can make it look like the sale paid nothing." },
+      { p: "\"Money by network\" shows WETH next to the ETH on each network. Buys and gas need plain ETH, so tap Unwrap: one transaction turns the WETH back into the same amount of ETH, on the same network. You only pay gas, which is cents on Base, Ink and similar networks." },
+    ],
+  },
+  {
+    id: "minting",
+    part: "real",
+    title: "Minting drops",
+    blocks: [
+      { p: "Live and upcoming drops are in the Minting list (the left panel on a computer, Markets → Discover on a phone). Each has its own page with the art, every stage with its times, price and per-wallet limit, and how much of the supply is minted." },
+      { steps: [
+        "Pick a quantity. The page shows the total and your coin balance on the drop's network.",
+        "If you're short on that network, it says how much, and \"Move ETH to <network>\" opens a transfer with the shortfall plus a small cushion for gas.",
+        "Tap Mint. OpenSea builds the mint transaction and FloorFeed runs it against the chain as you first. Allowlist stages are checked against your wallet here.",
+        "Confirm in your wallet. Activity follows the mint, and the NFT appears in your real portfolio when it confirms.",
+      ] },
+      img("real-mint", "Mooncats drop on Robinhood Chain: minting now at 0.010 ETH, 255 of 4,444 minted, quantity 1, your ETH on Robinhood Chain 0.0012, Move ETH to Robinhood Chain", 780, 1000),
+      { p: "Minting works in FloorFeed on every network it trades on, Robinhood Chain included. Drops on other networks, or stages priced in another token, get the same page and finish on OpenSea." },
+    ],
+  },
+  {
+    id: "activity",
+    part: "real",
+    title: "Activity: did it go through?",
+    blocks: [
+      { p: "Every buy, sale, approval, transfer between networks, unwrap, mint and send you make in FloorFeed is logged in Activity on the Portfolio the moment your wallet hands back the transaction. FloorFeed then follows each one on the chain and updates it: Pending, Delivering (a transfer on its way to the other network), Confirmed, Failed, Dropped (never reached the chain) or Refunded. Every row links to the transaction on the network's explorer." },
+      img("real-activity", "Activity list: a transfer to Robinhood Chain still delivering, an unwrap, a sale and its approval confirmed, and a failed buy", 780, 1120),
     ],
   },
   {
     id: "safety",
+    part: "real",
     title: "Your keys stay yours",
     blocks: [
-      { p: "FloorFeed never holds your keys, your funds or your NFTs. A connected wallet asks before signing anything, and the built-in wallet's key is secured by Privy, not by us. Before you sign an Ethereum purchase, we simulate it so a failing transaction shows up before you pay gas." },
-      { p: "Withdraw any time: Send moves SOL, ETH or an Ethereum-chain NFT from your FloorFeed wallet to any address, and Export hands you the wallet's key so you can open it in Phantom or MetaMask with everything in it. There are no holds or limits." },
+      { p: "FloorFeed never holds your keys, your funds or your NFTs. A connected wallet asks before signing anything, and the built-in wallet's key is secured by Privy, not by us. Every purchase, sale, mint and transfer is checked against the chain before your wallet sees it, so a failing transaction shows up before you pay gas." },
+      { p: "Withdraw any time: Send moves SOL, ETH (or a network's own coin) or an NFT on Ethereum's networks from your FloorFeed wallet to any address, and Export hands you the wallet's key so you can open it in Phantom or MetaMask with everything in it. There are no holds or limits." },
     ],
   },
+
+  // --- questions (basics) ---------------------------------------------------------
   {
     id: "faq",
+    part: "basics",
     title: "Questions",
     blocks: [
       { list: [
-        { term: "Is it free?", text: "Yes. Browsing, following, alerts and paper trading are free." },
+        { term: "Is it free?", text: "Yes. Browsing, following, alerts and paper trading are free. Real trades pay the usual marketplace fees, royalties and network gas, and transfers between networks pay Relay's fee, all shown before you confirm." },
+        { term: "Why does a card say \"See …\" instead of Copy?", text: "It's a flip card: someone sold. Copy is on buy, sweep and cluster cards. Open the collection to buy its floor." },
+        { term: "I have ETH but the buy says I don't.", text: "Your ETH is on a different network than the NFT. The buy sheet tells you where it is; tap Move to bring it over." },
         { term: "Where does the data come from?", text: "Public marketplace data from Magic Eden and OpenSea, Solana transactions via Helius, and coin prices from CoinGecko." },
         { term: "Which collections are tracked?", text: "40 Solana collections plus the busiest collections on each EVM chain, refreshed daily. Over 140 in total." },
         { term: "Is this financial advice?", text: "No. FloorFeed shows what wallets did. Past flips don't predict future ones, and NFTs can lose most of their value quickly." },
@@ -102,3 +306,14 @@ export const GUIDE: GuideSection[] = [
     ],
   },
 ];
+
+// The guide before images, steps and parts existed, for app builds that only
+// know paragraphs and lists (GET /guide without ?v=2).
+export const GUIDE_V1 = GUIDE.map(({ id, title, blocks }) => ({
+  id, title,
+  blocks: blocks.flatMap((b): ({ p: string } | { list: { term: string; text: string }[] })[] =>
+    "steps" in b ? [{ list: b.steps.map((text, i) => ({ term: `Step ${i + 1}`, text })) }]
+      : "tip" in b ? [{ p: b.tip }]
+      : "img" in b ? []
+      : [b]),
+}));

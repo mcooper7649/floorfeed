@@ -398,8 +398,15 @@ export type TakeItem = UserTake | AiTake;
 // The live thesis feed across collections.
 export type FeedColl = { symbol: string; name: string; image: string | null; currency: string; chain: Chain };
 export type ThesisFeedItem = (UserTake & { collection: FeedColl }) | (AiTake & { collection: FeedColl });
-export type GuideBlock = { p: string } | { list: { term: string; text: string }[] };
-export type GuideSection = { id: string; title: string; blocks: GuideBlock[] };
+export type GuideBlock =
+  | { p: string }
+  | { list: { term: string; text: string }[] }
+  | { steps: string[] }
+  | { tip: string }
+  | { img: string; alt: string; caption?: string; w: number; h: number }; // img: site path; w/h in pixels (2x)
+export type GuidePart = 'basics' | 'paper' | 'real';
+export type GuideSection = { id: string; part: GuidePart; title: string; blocks: GuideBlock[] };
+export type Guide = { parts: { id: GuidePart; title: string; blurb: string }[]; sections: GuideSection[] };
 export type TickerPrice = { symbol: string; usd: number; change24hPct: number | null };
 
 export const api = {
@@ -491,7 +498,7 @@ export const api = {
     req<{ smart: HolderRow[]; following: HolderRow[] }>(`/discover/holders${userId ? `?userId=${encodeURIComponent(userId)}` : ''}`),
   prices: () => req<TickerPrice[]>('/prices'),
   drops: () => req<Drop[]>('/drops'),
-  guide: () => req<GuideSection[]>('/guide'),
+  guide: () => req<Guide>('/guide?v=2'),
   collectionHolders: (symbol: string) => req<CollectionHolder[]>(`/collections/${encodeURIComponent(symbol)}/holders`),
   collectionSales: (symbol: string) => req<CollectionSale[]>(`/collections/${encodeURIComponent(symbol)}/sales`),
   collectionMarkers: (symbol: string, range: number, proven: boolean, wallets: string[], takes = false) => {

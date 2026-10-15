@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { GUIDE, type GuideBlock } from "./guide.ts";
+import { GUIDE, GUIDE_PARTS, type GuideBlock } from "./guide.ts";
 import http from "node:http";
 import { Resvg } from "@resvg/resvg-js";
 import { listCollections } from "./collections.ts";
@@ -150,19 +150,22 @@ const crumbs = (items: [string, string][]) => ({
 // --- pages -----------------------------------------------------------------
 
 function guidePage(): Page {
-  const block = (b: GuideBlock) => "p" in b
-    ? `<p>${esc(b.p)}</p>`
+  const block = (b: GuideBlock) => "p" in b ? `<p>${esc(b.p)}</p>`
+    : "tip" in b ? `<p><strong>Tip:</strong> ${esc(b.tip)}</p>`
+    : "steps" in b ? `<ol>${b.steps.map((t) => `<li>${esc(t)}</li>`).join("")}</ol>`
+    : "img" in b ? `<figure><img src="${esc(b.img)}" alt="${esc(b.alt)}" width="${b.w / 2}" height="${b.h / 2}" loading="lazy">${b.caption ? `<figcaption>${esc(b.caption)}</figcaption>` : ""}</figure>`
     : `<dl>${b.list.map((i) => `<dt>${esc(i.term)}</dt><dd>${esc(i.text)}</dd>`).join("")}</dl>`;
+  const section = (g: (typeof GUIDE)[number]) => `<section id="${g.id}"><h3>${esc(g.title)}</h3>${g.blocks.map(block).join("")}</section>`;
   const faq = GUIDE.find((g) => g.id === "faq")?.blocks.flatMap((b) => ("list" in b ? b.list : [])) ?? [];
   return {
     title: `How ${NAME} works: follow NFT traders who win`,
-    description: "How to read the FloorFeed NFT feed, what trader badges mean, how profit after fees is counted, wallet alerts, paper trading and real buys.",
+    description: "How to read the FloorFeed NFT feed, what trader badges mean, how profit after fees is counted, alerts, paper trading, and real buys, sales, mints and moving money between networks.",
     path: "/how-it-works",
     jsonLd: [crumbs([[NAME, "/"], ["How it works", "/how-it-works"]]), {
       "@context": "https://schema.org", "@type": "FAQPage",
       mainEntity: faq.map((q) => ({ "@type": "Question", name: q.term, acceptedAnswer: { "@type": "Answer", text: q.text } })),
     }],
-    body: doc(`<h1>How ${NAME} works</h1>${GUIDE.map((g) => `<section id="${g.id}"><h2>${esc(g.title)}</h2>${g.blocks.map(block).join("")}</section>`).join("")}`),
+    body: doc(`<h1>How ${NAME} works</h1>${GUIDE_PARTS.map((p) => `<section id="part-${p.id}"><h2>${esc(p.title)}</h2><p>${esc(p.blurb)}</p>${GUIDE.filter((g) => g.part === p.id).map(section).join("")}</section>`).join("")}`),
   };
 }
 

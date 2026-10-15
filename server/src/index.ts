@@ -4,7 +4,7 @@ import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import { z } from "zod";
 import { cachedTake, getTake } from "./ai.ts";
 import { followingHoldings, mintingDrops, smartMoney } from "./discover.ts";
-import { GUIDE } from "./guide.ts";
+import { GUIDE, GUIDE_PARTS, GUIDE_V1 } from "./guide.ts";
 import { refreshPrices, tickerPrices } from "./prices.ts";
 import { dashboard, record, startAnalytics, summary, type Hit } from "./analytics.ts";
 import { checkAlerts, hasPush, inbox, markRead, pushKey, startAlerts, subscribe, syncWebhook, unreadCount, unsubscribe } from "./alerts.ts";
@@ -575,7 +575,12 @@ app.get("/admin/stats.json", async (req, reply) => {
 });
 
 // The in-app guide (guide.ts); /how-it-works serves the same text as HTML.
-app.get("/guide", async (_req, reply) => reply.header("cache-control", "public, max-age=600").send(GUIDE));
+// v=2 adds parts (basics/paper/real), screenshots, steps and tips; older app
+// builds get paragraphs and lists only.
+app.get("/guide", async (req, reply) => {
+  const v2 = (req.query as { v?: string }).v === "2";
+  return reply.header("cache-control", "public, max-age=600").send(v2 ? { parts: GUIDE_PARTS, sections: GUIDE } : GUIDE_V1);
+});
 
 // --- Discovery panel (discover.ts): who holds what, and native coin prices ---
 app.get("/discover/holders", async (req, reply) => {

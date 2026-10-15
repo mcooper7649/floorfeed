@@ -37,7 +37,7 @@ export const EVENTS = [
   "paper_buy", "paper_sell", "copy_tap",
   "buy_open", "buy_click", "buy_signed", "sell_open", "sell_approved", "sell_signed", "bridge_click", "bridge_open", "bridge_signed", "unwrap_signed", "mint_signed", "mint_out", "deposit_open",
   "wallet_connect", "mode_real",
-  "welcome_shown", "welcome_cta", "welcome_dismiss", "suggested_follow", "guide_open", "take_post",
+  "welcome_shown", "welcome_cta", "welcome_dismiss", "suggested_follow", "guide_open", "guide_part", "take_post",
 ] as const;
 
 const BOT = /bot|crawl|spider|slurp|headless|lighthouse|preview|fetch|python|curl|wget|monitor/i;
