@@ -820,6 +820,30 @@ app.post("/drops/:slug/mint-tx", async (req, reply) => {
 });
 
 // --- Withdrawals from the Privy wallets (the user's wallet signs every one) ---
+// Solana JSON-RPC for Privy's Solana confirm screen (balance, fee, simulation),
+// forwarded to our RPC so its key stays here. Read and simulate methods only;
+// sends go through /chain/sol/send. Per-IP limit.
+const RPC_ALLOW = new Set(["getBalance", "getAccountInfo", "getMultipleAccounts", "getLatestBlockhash", "getFeeForMessage",
+  "simulateTransaction", "getSignatureStatuses", "getMinimumBalanceForRentExemption", "getRecentPrioritizationFees",
+  "getTokenAccountsByOwner", "getTokenAccountBalance", "getGenesisHash", "getSlot", "getBlockHeight", "getEpochInfo",
+  "isBlockhashValid", "getTransaction", "getHealth", "getVersion"]);
+const rpcHits = new Map<string, number[]>();
+app.post("/solana-rpc", async (req, reply) => {
+  const now = Date.now();
+  const recent = (rpcHits.get(req.ip) ?? []).filter((t) => now - t < 60_000);
+  if (recent.length >= 240) return reply.code(429).send({ jsonrpc: "2.0", id: null, error: { code: 429, message: "Too many requests" } });
+  rpcHits.set(req.ip, [...recent, now]);
+  const body = req.body as { method?: string } | { method?: string }[];
+  const calls = Array.isArray(body) ? body : [body];
+  if (!calls.length || calls.length > 20 || calls.some((c) => !c || typeof c.method !== "string" || !RPC_ALLOW.has(c.method))) {
+    return reply.code(400).send({ jsonrpc: "2.0", id: null, error: { code: -32601, message: "Method not available here" } });
+  }
+  const res = await fetch(config.solanaRpcUrl, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(15_000) })
+    .catch(() => null);
+  if (!res) return reply.code(502).send({ jsonrpc: "2.0", id: null, error: { code: -32000, message: "RPC unavailable" } });
+  return reply.code(res.status).header("content-type", "application/json").send(await res.text());
+});
+
 // Broadcast a Solana transaction the user's wallet signed (the Privy wallet
 // signs only). Signed bytes only, ≤1232 bytes; light per-IP limit, since it
 // spends our RPC credits.

@@ -292,6 +292,7 @@ function Sheet({ open, onClose, onDone, to: toProp, from: fromProp, amount: amou
               )}
               {q?.problem && <Text style={s.err}>{q.problem}</Text>}
               {step.kind === 'error' && <Text style={s.err}>{step.message}</Text>}
+              {step.kind === 'confirm' && <SlowWallet onStop={() => setStep({ kind: 'idle' })} />}
 
               {q && ((q.tx && w.send) || (q.solTx && sw.sendTransaction)) && (
                 <Pressable accessibilityRole="button" onPress={bridge} disabled={step.kind === 'confirm'}
@@ -312,6 +313,23 @@ function Sheet({ open, onClose, onDone, to: toProp, from: fromProp, amount: amou
         </Pressable>
       </Pressable>
     </Modal>
+  );
+}
+
+// A wallet that never answers shouldn't strand the sheet: after a while, say
+// where the prompt might be and let the user stop waiting (nothing was sent).
+function SlowWallet({ onStop }: { onStop: () => void }) {
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setSlow(true), 25_000);
+    return () => clearTimeout(t);
+  }, []);
+  if (!slow) return null;
+  return (
+    <View style={{ gap: 6 }}>
+      <Text style={s.meta}>Still waiting for your wallet. If no window opened, check your browser extension (it may be locked or behind this window), then try again. Nothing has been sent.</Text>
+      <Pressable accessibilityRole="button" onPress={onStop}><Text style={s.link}>Stop waiting</Text></Pressable>
+    </View>
   );
 }
 

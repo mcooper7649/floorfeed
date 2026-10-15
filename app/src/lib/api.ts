@@ -1,6 +1,8 @@
 // Point EXPO_PUBLIC_API_URL at the server's LAN address when running on a
 // phone (localhost only works for web/simulators on the same machine).
 const BASE = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8030';
+// Absolute API URL (BASE may be relative, e.g. '/api'), for code outside fetch helpers.
+export const apiUrl = (path: string) => new URL(BASE + path, typeof location !== 'undefined' ? location.href : 'http://localhost').toString();
 
 export type WalletStats = {
   wallet: string;

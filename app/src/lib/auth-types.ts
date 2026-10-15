@@ -51,6 +51,7 @@ export type PrivyState = Omit<AuthState, 'supported' | 'sendSol' | 'sendSolTx' |
 
 export type PrivyMountOptions = {
   appId: string;
+  solanaRpcUrl: string; // our API's Solana RPC proxy: Privy's Solana confirm screen reads balances and simulates through it
   theme: `#${string}`;
   accent: `#${string}`;
   onState: (s: PrivyState) => void;

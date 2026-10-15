@@ -7,6 +7,7 @@ import {
 import { getTransferSolInstruction } from '@solana-program/system';
 import {
   address as solAddress, appendTransactionMessageInstruction, blockhash as solBlockhash, compileTransaction, createNoopSigner,
+  createSolanaRpc, createSolanaRpcSubscriptions,
   createTransactionMessage, getTransactionEncoder, pipe, setTransactionMessageFeePayerSigner,
   setTransactionMessageLifetimeUsingBlockhash,
 } from '@solana/kit';
@@ -19,7 +20,7 @@ import type { EvmTx, PreparedEvm, PrivyMountOptions, PrivyState, SolTransfer } f
 // Privy's SDK is several MB, so it is built on its own (scripts/build-privy.mjs)
 // and only fetched when someone signs in, or is already signed in. It runs in
 // its own React root next to the app and reports its state through onState.
-export function mount({ appId, theme, accent, onState }: PrivyMountOptions) {
+export function mount({ appId, solanaRpcUrl, theme, accent, onState }: PrivyMountOptions) {
   const el = document.createElement('div');
   el.id = 'privy-root';
   document.body.appendChild(el);
@@ -32,6 +33,18 @@ export function mount({ appId, theme, accent, onState }: PrivyMountOptions) {
         embeddedWallets: {
           solana: { createOnLogin: 'users-without-wallets' },
           ethereum: { createOnLogin: 'users-without-wallets' },
+        },
+        // Privy's Solana confirm screen reads the balance and simulates the
+        // transaction itself; without RPCs here it failed and spun forever.
+        // Ours is a proxy on our API (method allowlist, key stays server-side).
+        solana: {
+          rpcs: {
+            'solana:mainnet': {
+              rpc: createSolanaRpc(solanaRpcUrl),
+              rpcSubscriptions: createSolanaRpcSubscriptions('wss://api.mainnet-beta.solana.com'),
+              blockExplorerUrl: 'https://solscan.io',
+            },
+          },
         },
         defaultChain: mainnet,
         supportedChains: [mainnet, base, abstract, ink, arbitrum, hyperEvm, ronin, apeChain, monad, robinhood],

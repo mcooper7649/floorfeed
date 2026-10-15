@@ -3,7 +3,7 @@ import { createContext, use, useCallback, useEffect, useRef, useState, type Reac
 
 import { C } from '@/constants/brand';
 
-import { api, setTokenGetter } from './api';
+import { api, apiUrl, setTokenGetter } from './api';
 import type { AuthState, PrivyMountOptions, PrivyState } from './auth-types';
 import { track } from '@/lib/analytics';
 
@@ -63,7 +63,7 @@ function PrivyLoader({ children }: { children: ReactNode }) {
       setPrivy(s);
     };
     mounting.current ??= importUrl(`/privy/${ENTRY}`).then((b) =>
-      b.mount({ appId: APP_ID, theme: C.bg as `#${string}`, accent: C.accent as `#${string}`, onState }),
+      b.mount({ appId: APP_ID, solanaRpcUrl: apiUrl('/solana-rpc'), theme: C.bg as `#${string}`, accent: C.accent as `#${string}`, onState }),
     );
     return mounting.current;
   }, []);
