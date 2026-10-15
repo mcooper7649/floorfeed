@@ -328,6 +328,7 @@ export type BridgeQuote = {
   send: number; sendUnit: string; sendUsd: number | null;
   receive: number; receiveUnit: string;
   feeUsd: number | null; gasUsd: number | null; seconds: number | null;
+  appFeeUsd: number | null; appFeePct: number | null; // FloorFeed's fee, when one is set
   balance: number | null; problem: string | null;
   tx: EvmTxOut | null;                                      // EVM origin
   solTx: { transaction: string; explorerTx: string } | null; // Solana origin (unsigned, base64; blockhash lasts ~1 min)

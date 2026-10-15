@@ -253,6 +253,7 @@ function Sheet({ open, onClose, onDone, to: toProp, from: fromProp, amount: amou
                     <Row label="You send" value={`${sol(q.send, 5, q.sendUnit)} on ${chainName(q.from)}`} />
                     <Row label="You receive" value={`${sol(q.receive, 5, q.receiveUnit)} on ${chainName(q.to)}`} strong />
                     <Row label="Bridge fee" value={usd(q.feeUsd)} />
+                    {q.appFeePct != null && <Row label={`FloorFeed fee (${q.appFeePct}%)`} value={usd(q.appFeeUsd)} />}
                     <Row label="Network fee" value={`≈ ${usd(q.gasUsd)}`} />
                     <Row label="Time" value={q.from === 'ethereum' ? '1–3 minutes' : q.seconds != null && q.seconds <= 60 ? 'Seconds' : q.seconds != null ? `About ${Math.ceil(q.seconds / 60)} min` : '—'} />
                   </View>
@@ -270,7 +271,7 @@ function Sheet({ open, onClose, onDone, to: toProp, from: fromProp, amount: amou
               {q && recipient && q.from === 'solana' !== (q.to === 'solana') && (
                 <Text style={s.fine}>Arrives in your {q.to === 'solana' ? 'Solana' : 'Ethereum'} wallet {recipient.slice(0, 4)}…{recipient.slice(-4)}.</Text>
               )}
-              <Text style={s.fine}>Routed by Relay. Your wallet signs one deposit; FloorFeed never holds your funds.</Text>
+              <Text style={s.fine}>Routed by Relay. Your wallet signs one deposit; FloorFeed never holds your funds.{q?.appFeePct != null ? ' The fees above are already included in what you send.' : ''}</Text>
             </>
           )}
 

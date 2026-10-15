@@ -21,6 +21,13 @@ const RELAY = "https://api.relay.link";
 const NATIVE = "0x0000000000000000000000000000000000000000";
 const SOL_NATIVE = "11111111111111111111111111111111";
 const SOLANA_ID = 792703809; // Relay's id for Solana
+// FloorFeed's own fee on bridges (Relay "app fee", basis points of the input,
+// shown in the sheet). Relay credits it to an off-chain USDC balance for this
+// EVM address; the owner claims it with a signature (Relay app or /app-fees API).
+const APP_FEE_RECIPIENT = process.env.RELAY_FEE_RECIPIENT ?? "";
+const APP_FEE_BPS = Number(process.env.RELAY_FEE_BPS ?? 0);
+const appFees = /^0x[0-9a-fA-F]{40}$/.test(APP_FEE_RECIPIENT) && APP_FEE_BPS > 0 && APP_FEE_BPS <= 100
+  ? [{ recipient: APP_FEE_RECIPIENT, fee: String(Math.round(APP_FEE_BPS)) }] : undefined;
 const SOL_FEE_RESERVE = 0.00002; // base fee + a priority fee the wallet may add
 type Chain = keyof typeof EVM_CHAINS | "solana";
 const isEvm = (c: string): c is keyof typeof EVM_CHAINS => c in EVM_CHAINS && !!evmChainOf(EVM_CHAINS[c as keyof typeof EVM_CHAINS].id);
@@ -133,6 +140,7 @@ export async function bridgeQuote(p: { user: string; recipient?: string; from: s
     originChainId: src.id, destinationChainId: dst.id,
     originCurrency: src.currency, destinationCurrency: dst.currency,
     amount: parseUnits(p.amount.toFixed(dst.decimals), dst.decimals).toString(), tradeType: "EXACT_OUTPUT",
+    ...(appFees ? { appFees } : {}),
   }).catch((err: Error) => {
     throw new Error(/amount|small|minimum/i.test(err.message) ? `Relay can't move that amount: ${err.message}` : `No route right now: ${err.message}`);
   });
@@ -184,6 +192,8 @@ export async function bridgeQuote(p: { user: string; recipient?: string; from: s
     send, sendUnit: src.native, sendUsd: Number(q.details?.currencyIn?.amountUsd ?? 0) || null,
     receive, receiveUnit: dst.native,
     feeUsd: usd("relayer") || null, // Relay's fee (solver + destination gas)
+    appFeeUsd: usd("app") || null,  // FloorFeed's fee
+    appFeePct: appFees ? APP_FEE_BPS / 100 : null,
     gasUsd: usd("gas") || null,     // origin network fee
     seconds: q.details?.timeEstimate ?? null,
     balance,
