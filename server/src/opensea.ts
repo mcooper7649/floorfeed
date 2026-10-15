@@ -238,7 +238,10 @@ export async function getOsAccountNfts(chain: string, address: string, pages = 6
   const out: { collection: string; contract: string; identifier: string; name: string | null; image: string | null }[] = [];
   let next: string | undefined;
   for (let i = 0; i < pages; i++) {
-    const q = new URLSearchParams({ limit: "100" });
+    // OpenSea's CDN caches this by exact URL for minutes, so a wallet that just
+    // bought showed its old (empty) list. A 30s bucket keeps every read fresh
+    // enough while still letting repeat reads share one fetch.
+    const q = new URLSearchParams({ limit: "100", cb: String(Math.floor(Date.now() / 30_000)) });
     if (next) q.set("next", next);
     const r = await get<{ nfts: { collection: string; contract: string; identifier: string; name?: string | null;
       display_image_url?: string | null; image_url?: string | null }[]; next?: string | null }>(

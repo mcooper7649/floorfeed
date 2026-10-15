@@ -1,5 +1,6 @@
 import { db } from "./db.ts";
 import { bridgeStatus, solTxInfo } from "./bridge.ts";
+import { forgetHoldings } from "./chain.ts";
 import { EVM_CHAINS } from "./config.ts";
 import { evmTxInfo, forgetBalances } from "./trade-evm.ts";
 
@@ -84,7 +85,7 @@ async function refresh(rows: Row[]) {
     } else status = "confirmed";
     if (status !== r.status || outTx) {
       setStatus.run(status, outTx, now(), r.hash);
-      if (status !== "pending" && status !== "delivering") forgetBalances(r.wallet);
+      if (status !== "pending" && status !== "delivering") { forgetBalances(r.wallet); if (r.chain === "solana") forgetHoldings(r.wallet); }
       r.status = status;
       if (outTx) r.out_tx = outTx;
     }

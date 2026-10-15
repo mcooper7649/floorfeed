@@ -81,6 +81,7 @@ export type Holding = {
 };
 
 const holdingsCache = new Map<string, { at: number; data: Awaited<ReturnType<typeof loadHoldings>> }>();
+export const forgetHoldings = (owner: string) => holdingsCache.delete(owner);
 export async function holdings(owner: string) {
   const hit = holdingsCache.get(owner);
   if (hit && Date.now() - hit.at < 60_000) return hit.data;
