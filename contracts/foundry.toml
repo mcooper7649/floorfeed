@@ -1,0 +1,15 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+solc_version = "0.8.28"
+# cancun: OpenZeppelin 5.7 needs MCOPY. Every launch chain supports it (checked per chain before deploying).
+evm_version = "cancun"
+optimizer = true
+optimizer_runs = 2000
+via_ir = true
+remappings = [
+  "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+  "@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/",
+  "forge-std/=lib/forge-std/src/",
+]
