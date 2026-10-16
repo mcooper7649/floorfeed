@@ -1,7 +1,7 @@
 import { EVM_CHAINS } from "./config.ts";
 import { fromOsChain, getOsDrop, getOsInfo, getOsMintTx, type OsStage } from "./opensea.ts";
 import { evmBalances, isTradableChain, simulateEvm } from "./trade-evm.ts";
-import { formatEther } from "viem";
+import { decodeFunctionData, formatEther, parseAbi } from "viem";
 
 // One drop, for FloorFeed's own drop page, and minting it in-app. OpenSea
 // (SeaDrop) has the stages and builds the mint transaction; FloorFeed
@@ -9,6 +9,25 @@ import { formatEther } from "viem";
 // can't send on yet still get the page, with the mint finishing on OpenSea.
 
 const ZERO = "0x0000000000000000000000000000000000000000";
+// Mints FloorFeed will pass to a wallet: SeaDrop's mintPublic for this drop's
+// contract, minting to the payer. Anything else (an approval, a transfer, a
+// different contract) is refused, whatever OpenSea returned.
+const SEADROP = new Set(["0x00005ea00ac477b1030ce78506496e8c2de24bf5"]);
+const SEADROP_ABI = parseAbi(["function mintPublic(address nftContract, address feeRecipient, address minterIfNotPayer, uint256 quantity) payable"]);
+function checkMint(tx: { to: string; data: string }, contract: string, minter: string, quantity: number) {
+  const to = tx.to.toLowerCase();
+  if (!SEADROP.has(to)) throw new Error("FloorFeed can't verify this mint. Finish it on OpenSea.");
+  let args: readonly unknown[];
+  try {
+    args = decodeFunctionData({ abi: SEADROP_ABI, data: tx.data as `0x${string}` }).args;
+  } catch {
+    throw new Error("FloorFeed can't verify this mint. Finish it on OpenSea.");
+  }
+  const [nft, , mintTo, qty] = args as [string, string, string, bigint];
+  if (nft.toLowerCase() !== contract.toLowerCase()) throw new Error("OpenSea returned a mint for a different collection.");
+  if (mintTo !== ZERO && mintTo.toLowerCase() !== minter.toLowerCase()) throw new Error("That mint would send the NFT to another wallet.");
+  if (qty !== BigInt(quantity)) throw new Error("OpenSea returned a different quantity.");
+}
 // Chains OpenSea drops use that FloorFeed doesn't trade on (names for display).
 const OTHER_CHAINS: Record<string, { name: string; native: string }> = {
   polygon: { name: "Polygon", native: "POL" },
@@ -77,6 +96,7 @@ export async function dropMintTx(p: { slug: string; minter: string; quantity: nu
       : /max|limit/i.test(m) ? `That's more than this wallet can mint in the current stage.` : m);
   });
   if (fromOsChain(tx.chain) !== d.chain) throw new Error("OpenSea returned a mint for a different network.");
+  checkMint(tx, d.contract, p.minter, p.quantity);
   const value = BigInt(tx.value);
   let gas: bigint;
   try {

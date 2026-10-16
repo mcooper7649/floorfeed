@@ -116,19 +116,31 @@ async function notify(alerts: NewAlert[]) {
           body: [...new Set(list.map((a) => collectionName(a.collection)))].slice(0, 3).join(", "),
           url: "/alerts", image: null, tag: `batch:${list[0].signature}`,
         }];
-    for (const sub of subs) {
-      for (const p of payloads) {
-        try {
-          await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-            JSON.stringify(p), { TTL: 3600 });
-        } catch (err) {
-          const code = (err as { statusCode?: number }).statusCode;
-          if (code === 404 || code === 410) { dropSub.run(sub.endpoint); break; } // unsubscribed / expired
-          console.warn("[push]", code ?? (err as Error).message);
-        }
+    await send(subs, payloads);
+  }
+}
+
+type Payload = { title: string; body: string; url: string; image: string | null; tag: string };
+async function send(subs: { endpoint: string; p256dh: string; auth: string }[], payloads: Payload[]) {
+  for (const sub of subs) {
+    for (const p of payloads) {
+      try {
+        await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+          JSON.stringify(p), { TTL: 3600 });
+      } catch (err) {
+        const code = (err as { statusCode?: number }).statusCode;
+        if (code === 404 || code === 410) { dropSub.run(sub.endpoint); break; } // unsubscribed / expired
+        console.warn("[push]", code ?? (err as Error).message);
       }
     }
   }
+}
+
+// Push to every browser a user turned notifications on in (mint reminders).
+export async function pushTo(userId: string, payloads: Payload[]) {
+  if (!pushReady) return;
+  const subs = subsOf.all(userId) as { endpoint: string; p256dh: string; auth: string }[];
+  if (subs.length) await send(subs, payloads);
 }
 
 export function subscribe(userId: string, s: { endpoint: string; keys: { p256dh: string; auth: string } }) {

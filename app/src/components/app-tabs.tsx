@@ -17,6 +17,10 @@ export default function AppTabs() {
         <NativeTabs.Trigger.Label>Markets</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="chart.xyaxis.line" md="monitoring" />
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="mint">
+        <NativeTabs.Trigger.Label>Mint</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="sparkles" md="auto_awesome" />
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="leaderboard">
         <NativeTabs.Trigger.Label>Leaders</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="trophy.fill" md="trophy" />

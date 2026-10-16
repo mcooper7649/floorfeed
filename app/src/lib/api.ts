@@ -188,6 +188,18 @@ export type Drop = {
   stage: string | null; price: number | null; currency: string; priceUsd: number | null; startsAt: number | null; endsAt: number | null;
 };
 
+// The Mint hub (GET /mints): a drop plus what FloorFeed measures on chain.
+export type MintWallet = { wallet: string; name: string | null; avatar: string | null; tier: 'elite' | 'pro' | 'mm' | 'new' | null };
+export type HubDrop = Drop & {
+  contract: string | null;
+  section: 'live' | 'upcoming' | 'done';
+  chainName: string; supported: boolean; verified: boolean | null;
+  minted: number | null; max: number | null; openEdition: boolean;
+  mints10m: number | null; mints1h: number | null; minters: number;
+  proven: { count: number; wallets: MintWallet[] };
+};
+export type DropActivity = Pick<HubDrop, 'mints10m' | 'mints1h' | 'minters' | 'proven' | 'verified'>;
+
 export type DropStage = {
   id: string | null; label: string; kind: string | null; price: number | null; nativePriced: boolean;
   startsAt: number | null; endsAt: number | null; maxPerWallet: number | null; allowlist: boolean;
@@ -558,6 +570,10 @@ export const api = {
     req<{ smart: HolderRow[]; following: HolderRow[] }>(`/discover/holders${userId ? `?userId=${encodeURIComponent(userId)}` : ''}`),
   prices: () => req<TickerPrice[]>('/prices'),
   drops: () => req<Drop[]>('/drops'),
+  mints: () => req<{ drops: HubDrop[]; at: number }>('/mints'),
+  dropActivity: (slug: string) => req<DropActivity>(`/drops/${encodeURIComponent(slug)}/activity`),
+  mintReminders: (userId: string) => req<{ reminders: { slug: string; startsAt: number }[] }>(`/mints/reminders/${encodeURIComponent(userId)}`),
+  remind: (userId: string, slug: string, on: boolean) => send('POST', '/mints/remind', { userId, slug, on }) as Promise<{ ok: true; on: boolean }>,
   guide: () => req<Guide>('/guide?v=2'),
   collectionHolders: (symbol: string) => req<CollectionHolder[]>(`/collections/${encodeURIComponent(symbol)}/holders`),
   collectionSales: (symbol: string) => req<CollectionSale[]>(`/collections/${encodeURIComponent(symbol)}/sales`),

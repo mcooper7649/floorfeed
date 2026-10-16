@@ -63,7 +63,7 @@ export function followingHoldings(wallets: Set<string>, limit = 40) {
 
 
 export type Drop = {
-  slug: string; name: string; chain: string; image: string | null; url: string; minting: boolean; featured: boolean;
+  slug: string; name: string; chain: string; contract: string | null; image: string | null; url: string; minting: boolean; featured: boolean;
   stage: string | null; price: number | null; currency: string; priceUsd: number | null; startsAt: number | null; endsAt: number | null;
 };
 let dropCache: { at: number; data: Drop[] } | null = null;
@@ -82,7 +82,7 @@ async function loadDrops(): Promise<Drop[]> {
       const start = stage?.start_time ? Date.parse(stage.start_time) / 1000 : null;
       const end = d.active_stage?.end_time ? Date.parse(d.active_stage.end_time) / 1000 : null;
       out.push({
-        slug: d.collection_slug, name: d.collection_name, chain: fromOsChain(d.chain), image: d.image_url, url: d.opensea_url,
+        slug: d.collection_slug, name: d.collection_name, chain: fromOsChain(d.chain), contract: d.contract_address?.toLowerCase() ?? null, image: d.image_url, url: d.opensea_url,
         minting: d.is_minting, featured: src === "featured",
         stage: stage?.label ?? stage?.stage_type ?? null, price, currency: native, priceUsd: price != null ? (usdPrice(native) ?? 0) * price || null : null,
         startsAt: start, endsAt: end,

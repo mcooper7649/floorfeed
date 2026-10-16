@@ -1,6 +1,6 @@
 import { Tabs, TabList, TabTrigger, TabSlot, type TabTriggerSlotProps, type TabListProps } from 'expo-router/ui';
 import { usePathname } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { YourNftsPill } from '@/components/your-nfts-sheet';
 import { C } from '@/constants/brand';
@@ -20,6 +20,7 @@ export default function AppTabs() {
         <PillBar hidden={wide}>
           <TabTrigger name="index" href="/" asChild><TabButton>Feed</TabButton></TabTrigger>
           <TabTrigger name="markets" href="/markets" asChild><TabButton>Markets</TabButton></TabTrigger>
+          <TabTrigger name="mint" href="/mint" asChild><TabButton>Mint</TabButton></TabTrigger>
           <TabTrigger name="leaderboard" href="/leaderboard" asChild><TabButton>Leaders</TabButton></TabTrigger>
           <TabTrigger name="portfolio" href="/portfolio" asChild><TabButton>Portfolio</TabButton></TabTrigger>
         </PillBar>
@@ -31,9 +32,11 @@ export default function AppTabs() {
 }
 
 function TabButton({ children, isFocused, ...props }: TabTriggerSlotProps) {
+  // Five tabs: the smallest phones get a tighter fit.
+  const tight = useWindowDimensions().width < 400;
   return (
-    <Pressable {...props} style={[s.btn, isFocused && s.btnOn]}>
-      <Text style={[s.txt, isFocused && { color: C.accentInk }]}>{children}</Text>
+    <Pressable {...props} style={[s.btn, tight && { paddingHorizontal: 10 }, isFocused && s.btnOn]}>
+      <Text style={[s.txt, tight && { fontSize: 13 }, isFocused && { color: C.accentInk }]}>{children}</Text>
     </Pressable>
   );
 }
@@ -47,12 +50,12 @@ function PillBar({ hidden, ...props }: TabListProps & { hidden?: boolean }) {
 }
 
 const s = StyleSheet.create({
-  wrap: { position: 'absolute', bottom: 16, left: 0, right: 0, alignItems: 'center', paddingHorizontal: 16 },
+  wrap: { position: 'absolute', bottom: 16, left: 0, right: 0, alignItems: 'center', paddingHorizontal: 12 },
   bar: {
-    flexDirection: 'row', gap: 4, padding: 5, borderRadius: 999, backgroundColor: '#15151CEE',
+    flexDirection: 'row', gap: 2, padding: 4, borderRadius: 999, backgroundColor: '#15151CEE',
     borderWidth: 1, borderColor: C.border, maxWidth: MaxContentWidth,
   },
-  btn: { paddingHorizontal: 18, paddingVertical: 9, borderRadius: 999 },
+  btn: { paddingHorizontal: 13, paddingVertical: 9, borderRadius: 999 },
   btnOn: { backgroundColor: C.accent },
-  txt: { color: C.dim, fontWeight: '600', fontSize: 15 },
+  txt: { color: C.dim, fontWeight: '600', fontSize: 14 },
 });

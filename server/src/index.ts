@@ -31,6 +31,7 @@ import { walletStats } from "./pnl.ts";
 import { card, renderPage, robots, sitemap } from "./seo.ts";
 import { nameFor, startNames } from "./sns.ts";
 import { listReports, setReportStatus, submitReport, SupportError } from "./support.ts";
+import { dropActivity, mintHub, reminders, setReminder, startMints } from "./mints.ts";
 import { traderLeaderboard, traderProfile, walletUnits } from "./traders.ts";
 import { unitOf } from "./units.ts";
 
@@ -876,6 +877,22 @@ app.get("/portfolio/marks", async (req, reply) => {
 });
 
 // One drop (stages, supply, links) and an in-app mint transaction for it.
+// Mint hub (mints.ts): drops with progress, mint speed and proven minters.
+app.get("/mints", async (_req, reply) => reply.header("cache-control", "public, max-age=20").send(await mintHub()));
+app.get("/mints/reminders/:userId", async (req, reply) => {
+  const { userId } = req.params as { userId: string };
+  if (!(await authorize(req, reply, userId))) return;
+  return { reminders: reminders(userId) };
+});
+app.post("/mints/remind", async (req, reply) => {
+  const b = z.object({ userId: z.string().min(1).max(100), slug: z.string().min(1).max(200), on: z.boolean() }).parse(req.body);
+  if (!(await authorize(req, reply, b.userId))) return;
+  try { return await setReminder(b.userId, b.slug, b.on); } catch (err) { return reply.code(400).send({ error: (err as Error).message }); }
+});
+app.get("/drops/:slug/activity", async (req) => {
+  const { slug } = req.params as { slug: string };
+  return (await dropActivity(slug)) ?? { mints10m: null, mints1h: null, minters: 0, proven: { count: 0, wallets: [] }, verified: null };
+});
 app.get("/drops/:slug", async (req, reply) => {
   const { slug } = req.params as { slug: string };
   const q = z.object({ minter: z.string().regex(EVM_ADDRESS_RE).optional() }).parse(req.query);
@@ -1031,6 +1048,7 @@ startSocial();
 startNames();
 startAlerts();
 startAnalytics();
+startMints();
 // Smart-money holdings take a few seconds to compute: keep them warm.
 setTimeout(() => smartMoney(), 60_000).unref();
 setInterval(() => smartMoney(), 4 * 60_000).unref();

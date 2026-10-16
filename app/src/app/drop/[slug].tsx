@@ -10,7 +10,10 @@ import { Card, Stat } from '@/components/ui';
 import { C } from '@/constants/brand';
 import { T, display } from '@/constants/type';
 import { recordTx } from '@/lib/activity';
-import { api, type DropDetail, type DropStage } from '@/lib/api';
+import { api, type DropActivity, type DropDetail, type DropStage } from '@/lib/api';
+import { useAlerts } from '@/lib/alerts';
+import { useSession } from '@/lib/session';
+import { Avatar } from '@/components/event-card';
 import { useAuth } from '@/lib/auth';
 import { useEvmWallet } from '@/lib/evm-wallet';
 import { amt, usd } from '@/lib/format';
@@ -66,6 +69,45 @@ export default function DropScreen() {
   const error = loaded?.key === key ? loaded.error ?? null : null;
 
   const [now, setNow] = useState(() => Date.now() / 1000);
+  // Mint speed and proven minters (server mints.ts), refreshed every minute.
+  const [activity, setActivity] = useState<{ slug: string; a: DropActivity } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const load = () => api.dropActivity(slug).then((a) => alive && setActivity({ slug, a })).catch(() => {});
+    load();
+    const t = setInterval(load, 60_000);
+    return () => { alive = false; clearInterval(t); };
+  }, [slug]);
+  const act = activity?.slug === slug ? activity.a : null;
+  // "Remind me" before the next stage opens (push).
+  const { userId } = useSession();
+  const { push, enablePush } = useAlerts();
+  const [reminded, setReminded] = useState<{ slug: string; on: boolean } | null>(null);
+  const [remindErr, setRemindErr] = useState<string | null>(null);
+  useEffect(() => {
+    if (!userId) return;
+    let alive = true;
+    api.mintReminders(userId).then((r) => alive && setReminded({ slug, on: r.reminders.some((x) => x.slug === slug) })).catch(() => {});
+    return () => { alive = false; };
+  }, [userId, slug]);
+  const isReminded = reminded?.slug === slug && reminded.on;
+  const toggleRemind = async () => {
+    if (!userId) return;
+    const on = !isReminded;
+    setReminded({ slug, on });
+    setRemindErr(null);
+    try {
+      await api.remind(userId, slug, on);
+      if (on) {
+        track('mint_remind', { from: 'drop' });
+        if (push === 'off') await enablePush().catch(() => {});
+        if (push === 'blocked' || push === 'unsupported') setRemindErr('Saved, but notifications are off in this browser, so the reminder can’t reach you.');
+      }
+    } catch (e) {
+      setReminded({ slug, on: !on });
+      setRemindErr((e as Error).message);
+    }
+  };
   useEffect(() => { const t = setInterval(() => setNow(Date.now() / 1000), 30_000); return () => clearInterval(t); }, []);
 
   useTitle(d && `${d.name}: mint on ${d.chainName} | FloorFeed`);
@@ -133,6 +175,29 @@ export default function DropScreen() {
         <View style={{ gap: 6 }}>
           <View style={s.bar}><View style={[s.barFill, { width: `${Math.max(2, pct)}%` }]} /></View>
           <Text style={T.metaNum}>{d.minted!.toLocaleString()} of {d.max!.toLocaleString()} minted ({pct.toFixed(0)}%)</Text>
+        </View>
+      )}
+      {d.minting && act && (act.mints10m != null || act.mints1h != null) && (
+        <Text style={[T.metaNum, { fontWeight: '600' }, (act.mints10m ?? 0) > 0 && { color: C.accent }]}>
+          {(act.mints10m ?? 0) > 0 ? '🔥 ' : ''}{act.mints10m ?? 0} minted in the last 10 min · {act.mints1h ?? 0} in the last hour
+        </Text>
+      )}
+      {act && act.proven.count > 0 && (
+        <View style={s.statusRow}>
+          <View style={{ flexDirection: 'row' }}>
+            {act.proven.wallets.map((pw, i) => <View key={pw.wallet} style={i ? { marginLeft: -8 } : null}><Avatar t={pw} size={22} ring /></View>)}
+          </View>
+          <Text style={[T.meta, { color: C.up, flex: 1 }]}>
+            {act.proven.count} proven flipper{act.proven.count === 1 ? '' : 's'} minted{act.minters ? ` (of ${act.minters.toLocaleString()} minters)` : ''}
+          </Text>
+        </View>
+      )}
+      {!d.minting && !d.soldOut && d.next?.startsAt != null && d.next.startsAt > now && (
+        <View style={{ gap: 6 }}>
+          <Pressable accessibilityRole="button" onPress={toggleRemind} style={[s.secondary, isReminded && { backgroundColor: C.accent, borderColor: C.accent }]}>
+            <Text style={[s.secondaryTxt, isReminded && { color: C.accentInk }]}>{isReminded ? 'Reminder set ✓' : 'Remind me 5 min before'}</Text>
+          </Pressable>
+          {remindErr && <Text style={[T.meta, { color: C.down }]}>{remindErr}</Text>}
         </View>
       )}
 

@@ -11,6 +11,7 @@ import { useLayout } from '@/lib/layout';
 const LINKS = [
   { href: '/', label: 'Feed' },
   { href: '/markets', label: 'Markets' },
+  { href: '/mint', label: 'Mint' },
   { href: '/leaderboard', label: 'Leaders' },
   { href: '/portfolio', label: 'Portfolio' },
   { href: '/how-it-works', label: 'How it works' },
@@ -55,7 +56,7 @@ export function TopNav({ back }: { back?: boolean }) {
         {wide && (
           <>
             <View style={s.links}>
-              {LINKS.map((l) => {
+              {LINKS.filter((l) => roomy || l.href !== '/support').map((l) => {
                 const on = l.href === '/' ? path === '/' : path.startsWith(l.href);
                 return (
                   <Link key={l.href} href={l.href} asChild>

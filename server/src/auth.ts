@@ -52,5 +52,7 @@ export function adoptDevice(userId: string, deviceId: string) {
     db.prepare("UPDATE OR IGNORE alerts SET user_id = ? WHERE user_id = ?").run(userId, deviceId);
     db.prepare("DELETE FROM alerts WHERE user_id = ?").run(deviceId);
     db.prepare("UPDATE push_subs SET user_id = ? WHERE user_id = ?").run(userId, deviceId);
+    db.prepare("UPDATE OR IGNORE drop_reminders SET user_id = ? WHERE user_id = ?").run(userId, deviceId);
+    db.prepare("DELETE FROM drop_reminders WHERE user_id = ?").run(deviceId);
   })();
 }
