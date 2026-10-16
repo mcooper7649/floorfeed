@@ -1,6 +1,8 @@
 import { Tabs, TabList, TabTrigger, TabSlot, type TabTriggerSlotProps, type TabListProps } from 'expo-router/ui';
+import { usePathname } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { YourNftsPill } from '@/components/your-nfts-sheet';
 import { C } from '@/constants/brand';
 import { MaxContentWidth } from '@/constants/theme';
 import { useLayout } from '@/lib/layout';
@@ -10,6 +12,7 @@ import { useLayout } from '@/lib/layout';
 // mounted (it registers the routes) but hidden.
 export default function AppTabs() {
   const { wide } = useLayout();
+  const path = usePathname();
   return (
     <Tabs style={{ flex: 1 }}>
       <TabSlot style={{ flex: 1 }} />
@@ -21,6 +24,8 @@ export default function AppTabs() {
           <TabTrigger name="portfolio" href="/portfolio" asChild><TabButton>Portfolio</TabButton></TabTrigger>
         </PillBar>
       </TabList>
+      {/* Phones' stand-in for the desktop Your NFTs panel (not on Portfolio, which lists them). */}
+      {!wide && !path.startsWith('/portfolio') && <YourNftsPill bottom={80} />}
     </Tabs>
   );
 }

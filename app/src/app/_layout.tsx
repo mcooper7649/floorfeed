@@ -7,6 +7,7 @@ import { StatusBar } from 'expo-status-bar';
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { DiscoveryPanel } from '@/components/discovery-panel';
 import { PortfolioPanel } from '@/components/portfolio-panel';
+import { YourNftsPill } from '@/components/your-nfts-sheet';
 import { PriceTicker } from '@/components/price-ticker';
 import { UpdateBanner } from '@/components/update-banner';
 import { TopNav } from '@/components/top-nav';
@@ -85,6 +86,7 @@ function Pageviews() {
 function Shell({ children }: { children: React.ReactNode }) {
   const { wide } = useLayout();
   const panel = usePanel();
+  const path = usePathname();
   if (!web || !wide) return <>{children}</>;
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
@@ -95,6 +97,8 @@ function Shell({ children }: { children: React.ReactNode }) {
         {panel.right.available && <PortfolioPanel />}
       </View>
       <PriceTicker />
+      {/* Too narrow for the right panel: the floating pill instead. */}
+      {!panel.right.available && !path.startsWith('/portfolio') && <YourNftsPill bottom={48} />}
     </View>
   );
 }

@@ -42,7 +42,9 @@ export function PortfolioPanel() {
   return <Panel onCollapse={right.toggle} />;
 }
 
-function Panel({ onCollapse }: { onCollapse: () => void }) {
+// Holdings + live values for the connected wallets; shared by the desktop
+// panel and the phone sheet (your-nfts-sheet.tsx).
+export function useYourNfts() {
   const sw = useWallet();
   const ew = useEvmWallet();
   const { toUsd } = usePrices();
@@ -149,59 +151,74 @@ function Panel({ onCollapse }: { onCollapse: () => void }) {
   const before = rows.reduce((a, r) => a + (r.usd != null && r.change != null ? r.usd / (1 + r.change / 100) : r.usd ?? 0), 0);
   const totalChange = before > 0 && rows.some((r) => r.change != null) ? ((totalUsd - before) / before) * 100 : null;
 
+  const priced = rows.some((r) => r.usd != null);
+  return { wallets, list, error, checkedAt, rows, totalUsd, priced, plUsd, plPct, totalChange };
+}
+
+export type YourNfts = ReturnType<typeof useYourNfts>;
+
+function Panel({ onCollapse }: { onCollapse: () => void }) {
+  const nfts = useYourNfts();
   return (
     <View style={s.panel}>
       <View style={s.head}>
         <Text style={[T.label, { flex: 1 }]}>Your NFTs</Text>
-        {checkedAt && <Live at={checkedAt} />}
+        {nfts.checkedAt && <Live at={nfts.checkedAt} />}
         <Pressable onPress={onCollapse} accessibilityLabel="Collapse your NFTs panel" hitSlop={8}>
           <Text style={s.collapse}>»</Text>
         </Pressable>
       </View>
-
-      {!wallets ? (
-        <View style={s.empty}>
-          <Text style={T.meta}>Connect a wallet to watch what your NFTs are worth, live.</Text>
-          <Pressable onPress={() => router.push('/portfolio')}><Text style={s.link}>Go to Portfolio →</Text></Pressable>
-        </View>
-      ) : list == null ? (
-        error ? <Text style={[T.meta, s.empty]}>{error}</Text> : <ActivityIndicator color={C.accent} style={{ marginTop: 24 }} />
-      ) : (
-        <>
-          <View style={s.total}>
-            <Text style={s.totalNum}>{usd(totalUsd)}</Text>
-            <Text style={T.metaNum}>
-              {rows.length} NFT{rows.length === 1 ? '' : 's'}
-              {plPct != null
-                ? <Text style={{ color: plUsd >= 0 ? C.up : C.down }}> · {signedUsd(plUsd)} ({pct(plPct)}) since bought</Text>
-                : totalChange != null && <Text style={{ color: totalChange >= 0 ? C.up : C.down }}> · {pct(totalChange)} 24h</Text>}
-            </Text>
-          </View>
-          {rows.length === 0 ? (
-            <Text style={[T.meta, s.empty]}>No NFTs from collections FloorFeed tracks in your wallets yet.</Text>
-          ) : (
-            <ScrollView contentContainerStyle={s.list}>
-              {rows.map((r) => <NftRow key={`${r.n.chain}:${r.n.mint}`} {...r} />)}
-            </ScrollView>
-          )}
-          <Text style={s.foot}>Valued at the estimated bid (floor −3%). Prices update every 30s.</Text>
-        </>
-      )}
+      <YourNftsBody nfts={nfts} />
     </View>
+  );
+}
+
+// Total, rows and footnote. `onOpen` runs before a row opens its NFT (the phone sheet closes).
+export function YourNftsBody({ nfts, onOpen }: { nfts: YourNfts; onOpen?: () => void }) {
+  const { wallets, list, error, rows, totalUsd, priced, plUsd, plPct, totalChange } = nfts;
+  if (!wallets) {
+    return (
+      <View style={s.empty}>
+        <Text style={T.meta}>Connect a wallet to watch what your NFTs are worth, live.</Text>
+        <Pressable onPress={() => { onOpen?.(); router.push('/portfolio'); }}><Text style={s.link}>Go to Portfolio →</Text></Pressable>
+      </View>
+    );
+  }
+  if (list == null) return error ? <Text style={[T.meta, s.empty]}>{error}</Text> : <ActivityIndicator color={C.accent} style={{ marginTop: 24 }} />;
+  return (
+    <>
+      <View style={s.total}>
+        <Text style={s.totalNum}>{priced ? usd(totalUsd) : '—'}</Text>
+        <Text style={T.metaNum}>
+          {rows.length} NFT{rows.length === 1 ? '' : 's'}
+          {plPct != null
+            ? <Text style={{ color: plUsd >= 0 ? C.up : C.down }}> · {signedUsd(plUsd)} ({pct(plPct)}) since bought</Text>
+            : totalChange != null && <Text style={{ color: totalChange >= 0 ? C.up : C.down }}> · {pct(totalChange)} 24h</Text>}
+        </Text>
+      </View>
+      {rows.length === 0 ? (
+        <Text style={[T.meta, s.empty]}>No NFTs from collections FloorFeed tracks in your wallets yet.</Text>
+      ) : (
+        <ScrollView contentContainerStyle={s.list}>
+          {rows.map((r) => <NftRow key={`${r.n.chain}:${r.n.mint}`} {...r} onOpen={onOpen} />)}
+        </ScrollView>
+      )}
+      <Text style={s.foot}>Valued at the estimated bid (floor −3%). Prices update every 30s.</Text>
+    </>
   );
 }
 
 // One NFT. Flashes green/red when its value moves, and pulses "+N sales" when
 // its collection trades (a quick read on volume).
-function NftRow({ n, unit, value, usd: dollars, change, sales, pl, plUsd }: {
-  n: Item; unit: string; value: number | null; usd: number | null; change: number | null; sales: number | null;
+function NftRow({ n, unit, value, usd: dollars, change, sales, pl, plUsd, onOpen }: {
+  onOpen?: () => void; n: Item; unit: string; value: number | null; usd: number | null; change: number | null; sales: number | null;
   pl: { pct: number; amt: number } | null; plUsd: number | null;
 }) {
   const { tick, at } = useTick(value);
   const bump = useBump(sales);
   return (
     <Pressable style={({ hovered }: { hovered?: boolean }) => [s.row, hovered && { backgroundColor: C.card }]}
-      onPress={() => router.push({ pathname: '/item/[symbol]/[id]', params: { symbol: n.collection.symbol, id: n.mint } })}>
+      onPress={() => { onOpen?.(); router.push({ pathname: '/item/[symbol]/[id]', params: { symbol: n.collection.symbol, id: n.mint } }); }}>
       <FlashBg tick={tick} at={at} />
       <View style={{ width: 40, height: 40 }}>
         <CollIcon uri={n.image} name={n.name ?? n.collection.name} size={40} radius={8} />
@@ -238,7 +255,7 @@ function NftRow({ n, unit, value, usd: dollars, change, sales, pl, plUsd }: {
 }
 
 // "Live" with a pulse while values are fresh; the time since the last check otherwise.
-function Live({ at }: { at: number }) {
+export function Live({ at }: { at: number }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 5_000);
