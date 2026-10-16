@@ -424,6 +424,23 @@ export type ActivityItem = {
   status: 'pending' | 'confirmed' | 'delivering' | 'failed' | 'dropped' | 'refunded';
   createdAt: number; explorerUrl: string; outUrl: string | null;
 };
+export type HistoryType =
+  | 'buy' | 'sale' | 'listing' | 'mint' | 'launch' | 'transfer_in' | 'transfer_out'
+  | 'bridge' | 'send' | 'approve' | 'unwrap';
+// One row of a wallet's history: FloorFeed txs merged with the marketplace record.
+// Tx statuses as ActivityItem; listings: active | sold | cancelled | expired | inactive.
+export type HistoryEntry = {
+  id: string; at: number; type: HistoryType; status: string; wallet: string; chain: string;
+  title: string; name: string; collection: string | null; symbol: string | null;
+  mint: string | null; tokenId: string | null; image: string | null;
+  price: number | null; unit: string | null; counterparty: string | null;
+  via: 'floorfeed' | 'opensea' | 'magiceden'; saleKind: 'listing' | 'offer' | null;
+  tx: string | null; explorerUrl: string | null; marketUrl: string | null;
+  toChain: string | null; outUrl: string | null;
+  listing: { orderHash: string; listedAt: number; expiresAt: number | null; closedAt: number | null; soldTx: string | null; buyer: string | null } | null;
+};
+export type History = { entries: HistoryEntry[]; more: boolean; partial: boolean };
+
 export type EvmBuyTx = {
   chainId: number; to: string; data: string; value: string; valueEth: number; gas: string; gasCostEth: number | null;
   explorerTx?: string;
@@ -535,6 +552,10 @@ export const api = {
   evmUnwrapTx: (b: { chain: string; owner: string; token: string; amount?: number }) =>
     send('POST', '/chain/evm/unwrap-tx', b) as Promise<EvmTxOut & { amount: number; symbol: string; unit: string }>,
   activity: (wallet: string) => req<ActivityItem[]>(`/activity/${wallet}`),
+  history: (wallets: string[]) => req<History>(`/history?w=${wallets.join(',')}`),
+  historyCsvUrl: (wallets: string[], o: { types?: string[]; since?: number } = {}) =>
+    `${BASE}/history?${new URLSearchParams({ w: wallets.join(','), format: 'csv',
+      ...(o.types?.length ? { types: o.types.join(',') } : {}), ...(o.since ? { since: String(o.since) } : {}) })}`,
   recordActivity: (a: {
     hash: string; wallet: string; chain: string; kind: ActivityKind; title: string;
     amount?: number | null; unit?: string | null; symbol?: string | null; mint?: string | null;

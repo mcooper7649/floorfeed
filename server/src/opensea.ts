@@ -439,3 +439,30 @@ export async function cancelOsOrder(chain: string, protocolAddress: string, orde
   return post<{ last_signature_issued_valid_until?: string | null }>(
     `/orders/chain/${osChain(chain)}/protocol/${protocolAddress}/${orderHash}/cancel`, { offererSignature });
 }
+
+// A wallet's marketplace history on OpenSea, all chains, newest first: sales
+// (either side), listings it made, and transfers/mints. Up to `pages` x 50.
+export type OsAccountEvent = {
+  event_type: string; event_timestamp: number; chain: string;
+  transaction?: string; order_hash?: string; order_type?: string;
+  payment?: { quantity: string; decimals: number; symbol: string };
+  seller?: string; buyer?: string; maker?: string;
+  from_address?: string; to_address?: string; transfer_type?: string;
+  start_date?: number; expiration_date?: number; quantity?: number;
+  nft?: OsEventNft; asset?: OsEventNft;
+};
+type OsEventNft = { identifier: string; collection: string; contract: string; name: string | null; image_url: string | null; display_image_url?: string | null };
+export async function getOsAccountEvents(address: string, pages = 4) {
+  const events: OsAccountEvent[] = [];
+  let next: string | null | undefined;
+  for (let i = 0; i < pages; i++) {
+    const q = new URLSearchParams({ limit: "50" });
+    for (const t of ["sale", "listing", "transfer", "mint"]) q.append("event_type", t);
+    if (next) q.set("next", next);
+    const r = await get<{ asset_events?: OsAccountEvent[]; next?: string | null }>(`/events/accounts/${address}?${q}`);
+    events.push(...(r.asset_events ?? []));
+    next = r.next;
+    if (!next) break;
+  }
+  return { events, more: !!next };
+}

@@ -19,6 +19,7 @@ import { feedEvents, traders } from "./feed.ts";
 import { loadDiscovered } from "./discovery.ts";
 import { itemDetail, warmRarity } from "./items.ts";
 import { ACTIVITY_KINDS, recordActivity, walletActivity } from "./activity.ts";
+import { historyCsv, walletHistory } from "./history.ts";
 import { bridgeQuote, bridgeStatus } from "./bridge.ts";
 import { dropDetail, dropMintTx } from "./drops.ts";
 import { marks } from "./marks.ts";
@@ -868,6 +869,25 @@ app.get("/activity/:wallet", async (req, reply) => {
   const { wallet } = req.params as { wallet: string };
   if (!EVM_ADDRESS_RE.test(wallet) && !ADDRESS_RE.test(wallet)) return reply.code(400).send({ error: "Not a wallet address" });
   return walletActivity(wallet);
+});
+
+// Full history (FloorFeed txs + marketplace record, listings with outcomes) for
+// up to 3 wallets; ?format=csv downloads it, filtered like the History page.
+app.get("/history", async (req, reply) => {
+  const q = z.object({
+    w: z.string().max(400), format: z.enum(["json", "csv"]).default("json"),
+    types: z.string().max(200).optional(), since: z.coerce.number().int().min(0).optional(),
+  }).parse(req.query);
+  const wallets = [...new Set(q.w.split(",").map((a) => a.trim()).filter(Boolean))].slice(0, 3);
+  if (!wallets.length || wallets.some((a) => !EVM_ADDRESS_RE.test(a) && !ADDRESS_RE.test(a))) return reply.code(400).send({ error: "Not a wallet address" });
+  const h = await walletHistory(wallets);
+  if (q.format === "json") return reply.header("cache-control", "no-store").send(h);
+  const types = q.types ? new Set(q.types.split(",")) : null;
+  const rows = h.entries.filter((e) => (!types || types.has(e.type)) && (!q.since || e.at >= q.since));
+  const day = new Date().toISOString().slice(0, 10);
+  return reply.header("content-type", "text/csv; charset=utf-8")
+    .header("content-disposition", `attachment; filename="floorfeed-history-${day}.csv"`)
+    .header("cache-control", "no-store").send(historyCsv(rows));
 });
 
 // Portfolio panel: current values for the collections a wallet holds (DB only).

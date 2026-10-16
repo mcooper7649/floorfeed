@@ -58,6 +58,7 @@ export default function RootLayout() {
             <Stack.Screen name="create/index" options={{ title: 'Launch', headerBackTitle: 'Back', headerShown: !web }} />
             <Stack.Screen name="create/[id]" options={{ title: 'Collection', headerBackTitle: 'Back', headerShown: !web }} />
             <Stack.Screen name="c/[chain]/[address]" options={{ title: 'Mint', headerBackTitle: 'Back', headerShown: !web }} />
+            <Stack.Screen name="history" options={{ title: 'History', headerBackTitle: 'Back', headerShown: !web }} />
             <Stack.Screen name="support" options={{ title: 'Support', headerBackTitle: 'Back', headerShown: !web }} />
             <Stack.Screen name="how-it-works" options={{ title: 'How it works', headerBackTitle: 'Back', headerShown: !web }} />
           </Stack>

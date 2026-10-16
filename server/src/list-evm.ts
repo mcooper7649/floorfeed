@@ -1,6 +1,7 @@
 import { formatEther, parseAbiItem, parseEther, type Hex } from "viem";
 import { EVM_CHAINS, EVM_SALES } from "./config.ts";
 import { db } from "./db.ts";
+import { noteCancelled, noteListed } from "./history.ts";
 import { cancelOsOrder, getOsBestOffer, getOsFees, getOsMyListings, getOsNft, getOsOrder, postOsListing, type OsOrderParams } from "./opensea.ts";
 import { evmHolds, evmPublicClient, isTradableChain, osConduit } from "./trade-evm.ts";
 
@@ -216,6 +217,7 @@ export async function evmListSubmit(p: { chain: string; parameters: OsOrderParam
       : `OpenSea didn't accept the listing: ${err.message.slice(0, 200)}`);
   });
   forgetListings(p.parameters.offerer);
+  if (r.order?.order_hash) noteListed(r.order.order_hash, p.chain);
   return { orderHash: r.order?.order_hash ?? null };
 }
 
@@ -256,6 +258,7 @@ export async function evmCancelSubmit(p: { chain: string; protocolAddress: strin
   await cancelOsOrder(p.chain, p.protocolAddress, p.orderHash, p.signature).catch((err: Error) => {
     throw new Error(/recent/i.test(err.message) ? "OpenSea can't cancel a listing this new for free yet. Try again in a few minutes." : `OpenSea didn't cancel it: ${err.message}`);
   });
+  noteCancelled(p.orderHash, p.chain);
   return { ok: true };
 }
 
