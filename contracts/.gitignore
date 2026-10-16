@@ -1,4 +1,5 @@
 out/
 cache/
 lib/
-broadcast/*/31337/
+# fork/test runs; real deployments are recorded in README
+broadcast/
