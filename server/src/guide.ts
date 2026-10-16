@@ -1,10 +1,12 @@
 import { config } from "./config.ts";
+import { launchConfig, MAX_ITEMS } from "./launch.ts";
 
 // "How FloorFeed works": one source for the in-app guide (GET /guide) and the
 // server-rendered /how-it-works page (seo.ts). Keep every claim true to the
 // code: tier thresholds match feed.ts tierOf, fees match fees.ts, polling
 // matches config.ts, the paper exit matches config.paperSellHaircut, bridging
-// matches bridge.ts, buy/sell/approve match trade-evm.ts, mints match drops.ts.
+// matches bridge.ts, buy/sell/approve match trade-evm.ts, mints match drops.ts
+// and mints.ts, launching matches launch.ts and contracts/.
 //
 // Sections belong to one of three parts: the basics everyone needs, paper
 // trading, and real trading. Screenshots live in app/public/guide/ (captured at
@@ -27,6 +29,9 @@ export const GUIDE_PARTS: { id: GuidePart; title: string; blurb: string }[] = [
 ];
 
 const minutes = Math.round(config.activityPollMs / 60_000);
+// Networks the launchpad is deployed on (LAUNCH_CHAINS), as "Base, Robinhood Chain and Ethereum".
+const names = (xs: string[]) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
+const launchNets = () => names(launchConfig().chains.map((c) => c.name)) || "a few networks";
 const haircut = Math.round(config.paperSellHaircut * 100);
 const img = (name: string, alt: string, w: number, h: number, caption?: string): GuideBlock =>
   ({ img: `/guide/${name}.webp`, alt, w, h, ...(caption ? { caption } : {}) });
@@ -259,7 +264,9 @@ export const GUIDE: GuideSection[] = [
     part: "real",
     title: "Minting drops",
     blocks: [
-      { p: "Live and upcoming drops are in the Minting list (the left panel on a computer, Markets → Discover on a phone). Each has its own page with the art, every stage with its times, price and per-wallet limit, and how much of the supply is minted." },
+      { p: "The Mint tab lists drops across networks: live ones first, fastest-minting at the top, then upcoming stages by day, then what just ended. Each card shows how much of the supply is minted, how fast it's going (mints in the last 10 minutes and the last hour, read from the chain every 2 minutes) and how many proven flippers have minted. Filter by network and price. Verified only is on by default: it shows collections OpenSea has reviewed, and unverified drops (which can be copies) are one tap away." },
+      { tip: "Upcoming stages have Remind me: FloorFeed sends a notification 5 minutes before the stage opens. Turn on notifications in your browser to get it." },
+      { p: "Each drop has its own page with the art, every stage with its times, price and per-wallet limit, how much is minted and how fast." },
       { steps: [
         "Pick a quantity. The page shows the total and your coin balance on the drop's network.",
         "If you're short on that network, it says how much, and \"Move ETH to <network>\" opens a transfer with the shortfall plus a small cushion for gas.",
@@ -269,6 +276,29 @@ export const GUIDE: GuideSection[] = [
       img("real-mint", "Mooncats drop on Robinhood Chain: minting now at 0.010 ETH, 255 of 4,444 minted, quantity 1, your ETH on Robinhood Chain 0.0012, Move ETH to Robinhood Chain", 780, 1000),
       { p: "Minting works in FloorFeed on every network it trades on, Robinhood Chain included. Drops on other networks, or stages priced in another token, get the same page and finish on OpenSea." },
     ],
+  },
+  {
+    id: "launch",
+    part: "real",
+    title: "Launch your own collection",
+    get blocks(): GuideBlock[] {
+      return [
+        { p: `Creators can launch a whole collection on FloorFeed: upload the art, set prices and mint phases, and launch from their own wallet on ${launchNets()}. Start from the Mint tab with "+ Launch a collection", on the website.` },
+        { steps: [
+          "Details: name, symbol, network, your earnings on resales (0 to 10%), whether the art is revealed after the mint or right away, and a cover, banner and placeholder image.",
+          `Art: pick a folder of images numbered 1, 2, 3… (up to ${MAX_ITEMS.toLocaleString("en-US")}). Traits come from the JSON files most generators write next to each image (1.json), or from one CSV with a "file" column and a column per trait. You see a preview and how rare each trait is before uploading; the files go to IPFS.`,
+          "Mint phases: up to four, each public or allowlist, with its own start and end, price and per-wallet limit. Paste allowlist wallets into the phase.",
+          "Launch: a checklist, then FloorFeed pins your metadata and your wallet sends one transaction. That wallet owns the contract and pays only the network fee to launch.",
+          "Manage: follow the mint, withdraw what you've earned any time, reveal when you're ready, and freeze the metadata for good.",
+        ] },
+        { p: "Collectors find new launches in the Launched on FloorFeed section at the top of the Mint tab. Each collection has a mint page with every phase, whether their wallet is on the list, and the total before they pay. If they're short on that network, Move tops them up. FloorFeed adds a small fee per NFT minted (0.0001 ETH), paid by the collector and shown before they mint; creators receive the full price they set." },
+        { list: [
+          { term: "Fair reveal", text: "With reveal after the mint, everyone sees a placeholder until the creator reveals. The reveal shuffles which artwork each token gets, so nobody, the creator included, can steer rare pieces to particular numbers. Reveal once the mint ends." },
+          { term: "Fixed promises", text: "After launch the art and allowlists are set, supply can only be lowered, and the fee per NFT can never change. Prices and phase dates can still be adjusted." },
+          { term: "Your contract", text: "The collection is a standard NFT contract owned by the creator's wallet. FloorFeed never holds the keys or the mint money, and every mint is checked against the contract before the collector's wallet sees it. Once it's out, the collection trades on OpenSea like any other." },
+        ] },
+      ];
+    },
   },
   {
     id: "activity",
@@ -296,7 +326,8 @@ export const GUIDE: GuideSection[] = [
     title: "Questions",
     blocks: [
       { list: [
-        { term: "Is it free?", text: "Yes. Browsing, following, alerts and paper trading are free. Real trades pay the usual marketplace fees, royalties and network gas, and transfers between networks pay Relay's fee, all shown before you confirm." },
+        { term: "Is it free?", text: "Yes. Browsing, following, alerts and paper trading are free. Real trades pay the usual marketplace fees, royalties and network gas, transfers between networks pay Relay's fee, and minting a collection launched on FloorFeed includes a small FloorFeed fee, all shown before you confirm." },
+        { term: "Can I launch my own NFTs?", text: "Yes, from the Mint tab: + Launch a collection. You need your art and a wallet with a little of the network's coin for the launch fee." },
         { term: "Why does a card say \"See …\" instead of Copy?", text: "It's a flip card: someone sold. Copy is on buy, sweep and cluster cards. Open the collection to buy its floor." },
         { term: "I have ETH but the buy says I don't.", text: "Your ETH is on a different network than the NFT. The buy sheet tells you where it is; tap Move to bring it over." },
         { term: "Where does the data come from?", text: "Public marketplace data from Magic Eden and OpenSea, Solana transactions via Helius, and coin prices from CoinGecko." },
