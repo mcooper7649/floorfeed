@@ -361,7 +361,7 @@ function RealPortfolio({ solAddress, evmAddress }: { solAddress: string | null; 
           : openseaAsset(n.evmChain ?? 'ethereum', n.mint);
         return (
           <ListRow
-            onPress={() => router.push({ pathname: '/item/[symbol]/[id]', params: { symbol: n.collection.symbol, id: n.mint } })}
+            onPress={() => router.push(n.drop ? { pathname: '/c/[chain]/[address]', params: n.drop } : { pathname: '/item/[symbol]/[id]', params: { symbol: n.collection.symbol, id: n.mint } })}
             art={<NftImage uri={n.image} name={n.collection.name} radius={10} px={120} style={{ width: 44 }} />}
             title={n.name || n.collection.name}
             meta={[n.collection.name, n.boughtAt != null ? `bought at ${sol(n.boughtAt, 2, n.unit)}` : null,
@@ -372,7 +372,8 @@ function RealPortfolio({ solAddress, evmAddress }: { solAddress: string | null; 
             subColor={p != null ? (p >= 0 ? C.up : C.down) : undefined}
             // Ethereum-family NFTs sell in-app into the best offer; Solana still finishes on Magic Eden.
             // EVM NFTs can also be listed at your price (OpenSea), from here.
-            action={n.chain === 'evm' ? (
+            // Launchpad collections aren't on FloorFeed's market data yet: sell or list them on OpenSea.
+            action={n.drop ? <RowAction label="OpenSea" onPress={() => Linking.openURL(sellUrl)} /> : n.chain === 'evm' ? (
               <View style={{ flexDirection: 'row', gap: 6 }}>
                 <RowAction label="Sell" onPress={() => setSelling(n)} />
                 <RowAction label={n.listing ? 'Listed' : 'List'} onPress={() => setListing(n)} />

@@ -320,6 +320,7 @@ export type Holding = {
   estValue: number | null; // floor minus the sell haircut (est. bid)
   boughtAt: number | null; // this wallet's last on-chain buy price, if we saw it
   listing?: { price: number; expiresAt: number; orderHash: string } | null; // live OpenSea listing (EVM)
+  drop?: { chain: string; address: string }; // from a FloorFeed launchpad collection: no floor yet, opens its mint page
 };
 // A collection's live value for the portfolio panel (server/src/marks.ts).
 export type Mark = {

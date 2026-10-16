@@ -6,6 +6,7 @@ import { abstract, apeChain, arbitrum, base, hyperEvm, ink, mainnet, monad, poly
 import { EVM_CHAINS, EVM_SALES, config, normalizeUnit } from "./config.ts";
 import { unitOf } from "./units.ts";
 import { db } from "./db.ts";
+import type Database from "better-sqlite3";
 import { getOsAccountNfts, getOsBestListing, getOsBestListings, getOsBestOffer, getOsFulfillment, getOsOfferFulfillment } from "./opensea.ts";
 
 // Real buys on Ethereum and Base. FloorFeed never holds keys or funds: it
@@ -85,17 +86,40 @@ const lastBuy = db.prepare("SELECT price FROM trades WHERE buyer = ? AND mint = 
 // Fallback cost basis: a buy made in FloorFeed (activity log), for sales our ingest didn't see.
 const appBuy = db.prepare("SELECT amount FROM wallet_activity WHERE wallet = ? AND mint = ? AND kind = 'buy' AND status = 'confirmed' ORDER BY created_at DESC LIMIT 1");
 
+// Collections launched on FloorFeed's launchpad: shown in their holders' wallets even though
+// they aren't on the tracked list (no floor or sales ingest yet), keyed by contract address.
+// Prepared on first use: launch.ts creates the table, and may be imported after this module.
+let launchedRows: Database.Statement<[], { address: string; chain: string; name: string }> | null = null;
+function launchedCollections() {
+  try {
+    launchedRows ??= db.prepare(`SELECT lower(address) AS address, chain, name FROM launches WHERE status = 'live' AND address IS NOT NULL`);
+    return new Map((launchedRows.all() as { address: string; chain: string; name: string }[]).map((r) => [r.address, r]));
+  } catch {
+    return new Map<string, { address: string; chain: string; name: string }>(); // launches table not created yet
+  }
+}
+
 async function loadEvmHoldings(address: string) {
   const tracked = new Map(EVM_SALES.map((c) => [c.slug, c]));
-  const chains = [...new Set(EVM_SALES.map((c) => c.chain))].filter(isTradable);
+  const launched = launchedCollections();
+  const chains = [...new Set([...EVM_SALES.map((c) => c.chain), ...[...launched.values()].map((l) => l.chain)])].filter(isTradable);
   const [nftLists, balances] = await Promise.all([
     Promise.all(chains.map((ch) => getOsAccountNfts(ch, address).catch(() => []))),
     evmBalances(address),
   ]);
   const all = nftLists.flat();
-  const nfts = all.filter((n) => tracked.has(n.collection)).map((n) => {
-    const floor = (floorOf.get(n.collection) as { floor: number | null } | undefined)?.floor ?? null;
+  const nfts = all.filter((n) => tracked.has(n.collection) || launched.has(n.contract)).map((n) => {
     const mint = `${n.contract}:${n.identifier}`;
+    const drop = !tracked.has(n.collection) ? launched.get(n.contract)! : null;
+    if (drop) {
+      const native = (EVM_CHAINS as Record<string, { native: string }>)[drop.chain]?.native ?? "ETH";
+      return {
+        mint, chain: drop.chain, unit: normalizeUnit(native) ?? "ETH", name: n.name, image: n.image,
+        collection: { symbol: n.collection, name: drop.name, floor: null },
+        estValue: null, boughtAt: null, drop: { chain: drop.chain, address: drop.address },
+      };
+    }
+    const floor = (floorOf.get(n.collection) as { floor: number | null } | undefined)?.floor ?? null;
     return {
       mint,
       chain: tracked.get(n.collection)!.chain,
