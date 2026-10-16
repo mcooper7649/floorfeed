@@ -108,22 +108,24 @@ export function traitCounts(items: { attributes: Attr[] }[]) {
   return out;
 }
 
-async function uploadOne(url: string, file: File): Promise<string> {
-  const form = new FormData();
-  form.append('file', file);
-  form.append('network', 'public');
+/** Each attempt gets a fresh signed URL (`getUrl`): Pinata can refuse a URL that has already been tried. */
+async function uploadOne(getUrl: () => Promise<string>, file: File): Promise<string> {
   for (let attempt = 0; ; attempt++) {
-    const res = await fetch(url, { method: 'POST', body: form }).catch(() => null);
+    const form = new FormData();
+    form.append('file', file);
+    form.append('network', 'public');
+    const res = await fetch(await getUrl(), { method: 'POST', body: form }).catch(() => null);
     if (res?.ok) return ((await res.json()) as { data: { cid: string } }).data.cid;
-    if (attempt >= 2) throw new Error(`Upload failed for ${file.name}${res ? ` (${res.status})` : ''}.`);
+    const why = res ? (await res.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 160) : '';
+    if (res) console.warn('[upload]', file.name, file.type, file.size, res.status, why);
+    if (attempt >= 3) throw new Error(`Upload failed for ${file.name}${res ? ` (${res.status}${why ? `: ${why}` : ''})` : ''}.`);
     await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
   }
 }
 
 /** Upload one file (cover, banner, placeholder) and return its CID. */
 export async function uploadSingle(userId: string, launchId: string, file: File) {
-  const { urls } = await api.launchSign(userId, launchId, 1, 'image');
-  return uploadOne(urls[0], file);
+  return uploadOne(async () => (await api.launchSign(userId, launchId, 1, 'image')).urls[0], file);
 }
 
 /**
@@ -145,7 +147,7 @@ export async function uploadArt(userId: string, launchId: string, items: PickedI
       if (signal?.stop) return;
       const it = queue.shift();
       if (!it) return;
-      const cid = await uploadOne(await nextUrl(), it.file);
+      const cid = await uploadOne(nextUrl, it.file);
       out[it.idx - 1] = { idx: it.idx, cid, mime: it.file.type || undefined, name: it.name, attributes: it.attributes };
       onProgress(++done, total);
     }
