@@ -15,3 +15,15 @@ git clone --depth 1 -b v5.7.0 https://github.com/OpenZeppelin/openzeppelin-contr
 Test: `forge test`. Deploy (same addresses on every chain via the CREATE2 deployer):
 `FF_OWNER=<owner> FF_FEE_TO=<fee wallet> FF_FEE=<wei per token> forge script script/Deploy.s.sol --rpc-url <rpc> --account <keystore> --broadcast`.
 Fork smoke test: `forge script script/Smoke.s.sol --sig "run(address)" <factory> --rpc-url <fork> --broadcast`.
+
+## Deployments (2026-10-16)
+
+Same addresses on every chain (CREATE2, salt `floorfeed.launchpad.v1`, constructor owner = deployer, then ownership transferred):
+
+| Contract | Address |
+|---|---|
+| FloorFeedStore | `0xF1656b4145982eE90bc9C4A96F5ba7044B1C83aa` |
+| FloorFeedFactory | `0xcF7908632ce0adeeC1CE5c445BF85ae38B5b9A4E` |
+| FloorFeedDrop (implementation) | `0xE3eD3Ac4aC7B1BFc1201541e3344f010AFf26976` |
+
+Live on Ethereum (1), Base (8453), Robinhood Chain (4663). Fee 0.0001 ETH per token to the FloorFeed fee wallet; factory owner = FloorFeed fee wallet. Sourcify-verified on Ethereum and Base (Robinhood's Blockscout API sits behind a Cloudflare challenge). To add a chain: fund the deployer there, run Deploy.s.sol with `FF_OWNER=<deployer>` (keeps the address), set its fee, transfer ownership, add the chain to `LAUNCH_CHAINS`. Base mainnet test collection: `0xbc013217988891d1a526d156a836bbbf0e7bdb4c` (3 items, 1 minted, revealed).
