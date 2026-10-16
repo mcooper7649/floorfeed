@@ -102,8 +102,10 @@ export default function MintScreen() {
     (!chain || d.chain === chain)
     && (price === 'any' || (price === 'free' ? d.price === 0 : price === 'paid' ? (d.price ?? 0) > 0 : d.price === 0 || (d.priceUsd != null && d.priceUsd < 10)));
   const filtered = all.filter(passes);
-  const shown = filtered.filter((d) => !verifiedOnly || d.verified);
-  const hiddenUnverified = filtered.length - shown.length;
+  // Collections launched on FloorFeed always show (their own section); the verified filter is for OpenSea drops.
+  const launches = filtered.filter((d) => d.launched && d.section !== 'done');
+  const shown = filtered.filter((d) => !d.launched && (!verifiedOnly || d.verified));
+  const hiddenUnverified = filtered.filter((d) => !d.launched).length - shown.length;
   const live = shown.filter((d) => d.section === 'live');
   const upcoming = shown.filter((d) => d.section === 'upcoming');
   const done = shown.filter((d) => d.section === 'done').slice(0, 12);
@@ -125,7 +127,8 @@ export default function MintScreen() {
   }
 
   return (
-    <Screen title="Mint" subtitle="Live and upcoming drops across chains. Mint them right here.">
+    <Screen title="Mint" subtitle="Live and upcoming drops across chains. Mint them right here, or launch your own."
+      right={<Pressable accessibilityRole="button" onPress={() => router.push('/create')} style={s.launch}><Text style={s.launchTxt}>+ Launch a collection</Text></Pressable>}>
       <ChipRow pad={pad} groups={[
         [<Chip key="all" label="All chains" on={!chain} onPress={() => setChain(null)} />,
           ...chains.map((c) => <Chip key={c} label={all.find((d) => d.chain === c)?.chainName ?? c} on={chain === c} onPress={() => setChain(chain === c ? null : c)} />)],
@@ -148,6 +151,14 @@ export default function MintScreen() {
           error ? <Empty text={`Couldn’t load drops: ${error}`} /> : <ActivityIndicator color={C.accent} style={{ marginTop: 32 }} />
         ) : (
           <>
+            {launches.length > 0 && (
+              <>
+                <SectionHeader title="Launched on FloorFeed" count={launches.length} />
+                {grid(launches.map((d) => (d.section === 'upcoming'
+                  ? <UpcomingCard key={d.slug} d={d} now={now} reminded={reminders.has(d.slug)} onRemind={() => toggleRemind(d)} />
+                  : <LiveCard key={d.slug} d={d} now={now} />)))}
+              </>
+            )}
             <SectionHeader title="Live now" count={live.length || undefined} />
             {live.length ? grid(live.map((d) => <LiveCard key={d.slug} d={d} now={now} />))
               : <Text style={T.meta}>Nothing minting that matches these filters.</Text>}
@@ -188,7 +199,8 @@ export default function MintScreen() {
 
 const open = (d: HubDrop) => {
   track('mint_open', { from: 'hub', chain: d.chain });
-  router.push({ pathname: '/drop/[slug]', params: { slug: d.slug } });
+  if (d.launched && d.contract) router.push({ pathname: '/c/[chain]/[address]', params: { chain: d.chain, address: d.contract } });
+  else router.push({ pathname: '/drop/[slug]', params: { slug: d.slug } });
 };
 
 function Head({ d, sub }: { d: HubDrop; sub: string }) {
@@ -198,7 +210,7 @@ function Head({ d, sub }: { d: HubDrop; sub: string }) {
       <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
         <View style={s.row}>
           <Text style={[T.bodyStrong, { flexShrink: 1 }]} numberOfLines={1}>{d.name}</Text>
-          {d.verified ? <Text style={s.check}>✓</Text> : d.verified === false ? <Text style={s.unverified}>Unverified</Text> : null}
+          {d.launched ? <Text style={s.ours}>FloorFeed</Text> : d.verified ? <Text style={s.check}>✓</Text> : d.verified === false ? <Text style={s.unverified}>Unverified</Text> : null}
         </View>
         <View style={s.row}>
           {d.chain in CHAINS ? <ChainBadge chain={d.chain as Chain} /> : <Text style={T.caption}>{d.chainName}</Text>}
@@ -295,6 +307,7 @@ const s = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   check: { color: C.accent, fontSize: 13, fontWeight: '700' },
   unverified: { ...T.caption, color: C.down },
+  ours: { ...T.caption, color: C.accent, fontWeight: '700' },
   bar: { height: 6, borderRadius: 3, backgroundColor: C.cardHi, overflow: 'hidden' },
   fill: { height: 6, borderRadius: 3, backgroundColor: C.accent },
   speed: { ...T.metaNum, fontWeight: '600' },
@@ -304,4 +317,6 @@ const s = StyleSheet.create({
   doneRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
   more: { alignSelf: 'center', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 12, borderWidth: 1, borderColor: C.border },
   moreTxt: { ...T.bodyStrong },
+  launch: { alignSelf: 'flex-start', paddingVertical: 10, paddingHorizontal: 14, borderRadius: 12, backgroundColor: C.accent },
+  launchTxt: { ...T.button, color: C.accentInk },
 });

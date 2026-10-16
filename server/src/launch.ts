@@ -3,6 +3,8 @@ import { decodeErrorResult, encodeAbiParameters, encodeFunctionData, formatEther
 import { z } from "zod";
 import { dropAbi, factoryAbi } from "./abi/launchpad.ts";
 import { EVM_CHAINS } from "./config.ts";
+import type { Drop } from "./discover.ts";
+import { usdPrice } from "./prices.ts";
 import { db } from "./db.ts";
 import { evmPublicClient, isTradableChain, simulateEvm } from "./trade-evm.ts";
 
@@ -533,4 +535,38 @@ export async function manageTx(id: string, userId: string, b: { action: "reveal"
 /** For the Mint hub: launched collections with their on-chain progress. */
 export function liveLaunches() {
   return db.prepare(`SELECT * FROM launches WHERE status = 'live' ORDER BY updated_at DESC LIMIT 100`).all() as Row[];
+}
+
+// Launched collections as Mint-hub drops (cached a minute): current or next phase from the contract.
+let hubCache: { at: number; v: (Drop & { launched: true })[] } | null = null;
+export async function hubLaunches() {
+  if (hubCache && Date.now() - hubCache.at < 60_000) return hubCache.v;
+  const now = Math.floor(Date.now() / 1000);
+  const rows = liveLaunches();
+  const v = (await Promise.all(rows.map(async (r) => {
+    try {
+      const c = evmPublicClient(r.chain);
+      const a = r.address as Hex;
+      const [minted, max, phases] = await Promise.all([
+        c.readContract({ address: a, abi: dropAbi, functionName: "totalMinted" }) as Promise<number>,
+        c.readContract({ address: a, abi: dropAbi, functionName: "maxSupply" }) as Promise<number>,
+        c.readContract({ address: a, abi: dropAbi, functionName: "phases" }) as Promise<readonly { start: bigint; end: bigint; price: bigint }[]>,
+      ]);
+      const names = JSON.parse(r.phases) as PhaseIn[];
+      const list = phases.map((p, i) => ({ i, start: Number(p.start), end: Number(p.end), price: Number(formatEther(p.price)) }));
+      const active = list.find((p) => now >= p.start && (p.end === 0 || now < p.end));
+      const next = list.filter((p) => p.start > now).sort((x, y) => x.start - y.start)[0];
+      const ph = active ?? next ?? list[list.length - 1];
+      const native = (EVM_CHAINS as Record<string, { native: string }>)[r.chain]?.native ?? "ETH";
+      return {
+        slug: `ff:${r.chain}:${r.address}`, name: r.name, chain: r.chain, contract: r.address, launched: true as const,
+        image: r.cover_cid ? `${GATEWAY}${r.cover_cid}` : null, url: `/c/${r.chain}/${r.address}`,
+        minting: !!active && Number(minted) < Number(max), featured: false, stage: names[ph.i]?.name ?? null,
+        price: ph.price, currency: native, priceUsd: ph.price ? (usdPrice(native) ?? 0) * ph.price || null : null,
+        startsAt: ph.start, endsAt: active?.end || null,
+      };
+    } catch { return null; }
+  }))).filter((x) => x != null);
+  hubCache = { at: Date.now(), v };
+  return v;
 }

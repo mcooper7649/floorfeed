@@ -5,6 +5,7 @@ import { mintingDrops, type Drop } from "./discover.ts";
 import { pushTo } from "./alerts.ts";
 import { provenWallets, traders } from "./feed.ts";
 import { getOsInfo } from "./opensea.ts";
+import { hubLaunches } from "./launch.ts";
 import { evmPublicClient, isTradableChain } from "./trade-evm.ts";
 
 // The Mint hub: OpenSea drops (discover.ts mintingDrops) plus what FloorFeed
@@ -129,7 +130,7 @@ async function tick() {
   if (running) return;
   running = true;
   try {
-    const drops = await mintingDrops();
+    const drops = [...(await mintingDrops()), ...(await hubLaunches())];
     const live = drops.filter((d): d is Drop & { contract: string } => d.minting && !!d.contract && isTradableChain(d.chain));
     for (const d of live) {
       await snapshot(d).catch(() => {});
@@ -145,6 +146,7 @@ async function tick() {
     // Verified badges: a few OpenSea lookups per run, kept for 12h.
     let n = 0;
     for (const d of drops) {
+      if (d.slug.startsWith("ff:")) continue; // launched here: no OpenSea badge to look up
       const v = verified.get(d.slug);
       if (v && Date.now() - v.at < 12 * 3_600_000) continue;
       if (n++ >= 12) break;
@@ -166,6 +168,7 @@ async function tick() {
 const mintersOf = db.prepare(`SELECT minter, n, last_at FROM drop_minters WHERE chain = ? AND contract = ? ORDER BY last_at DESC`);
 
 export type HubDrop = Drop & {
+  launched?: boolean;
   section: "live" | "upcoming" | "done";
   chainName: string;
   supported: boolean;
@@ -180,7 +183,7 @@ export type HubDrop = Drop & {
 };
 
 export async function mintHub() {
-  const drops = await mintingDrops();
+  const drops = [...(await mintingDrops()), ...(await hubLaunches())];
   const now = Math.floor(Date.now() / 1000);
   const proven = provenWallets();
   const out: HubDrop[] = drops.map((d) => {
@@ -247,7 +250,7 @@ export async function setReminder(userId: string, slug: string, on: boolean) {
     return { ok: true, on: false };
   }
   // The start time comes from the drop list, not the client.
-  const d = (await mintingDrops()).find((x) => x.slug === slug);
+  const d = [...(await mintingDrops()), ...(await hubLaunches())].find((x) => x.slug === slug);
   const now = Math.floor(Date.now() / 1000);
   if (!d || !d.startsAt || d.startsAt <= now) throw new Error("This drop has no upcoming stage to remind you about.");
   db.prepare(`INSERT OR IGNORE INTO drop_reminders (user_id, slug, starts_at, name, image, stage) VALUES (?, ?, ?, ?, ?, ?)`)
@@ -266,7 +269,7 @@ async function sendReminders() {
     await pushTo(r.user_id, [{
       title: mins > 0 ? `${r.name} mints in ${mins} min` : `${r.name} is minting now`,
       body: `${r.stage ?? "Next stage"} opens${mins > 0 ? " soon" : ""}. Tap to mint on FloorFeed.`,
-      url: `/drop/${encodeURIComponent(r.slug)}`, image: r.image, tag: `remind:${r.slug}:${r.starts_at}`,
+      url: r.slug.startsWith("ff:") ? `/c/${r.slug.split(":")[1]}/${r.slug.split(":")[2]}` : `/drop/${encodeURIComponent(r.slug)}`, image: r.image, tag: `remind:${r.slug}:${r.starts_at}`,
     }]).catch((err) => console.warn("[mints] remind", (err as Error).message));
   }
 }

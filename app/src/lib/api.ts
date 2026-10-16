@@ -192,6 +192,7 @@ export type Drop = {
 export type MintWallet = { wallet: string; name: string | null; avatar: string | null; tier: 'elite' | 'pro' | 'mm' | 'new' | null };
 export type HubDrop = Drop & {
   contract: string | null;
+  launched?: boolean; // launched on FloorFeed (open /c/[chain]/[address])
   section: 'live' | 'upcoming' | 'done';
   chainName: string; supported: boolean; verified: boolean | null;
   minted: number | null; max: number | null; openEdition: boolean;
@@ -199,6 +200,34 @@ export type HubDrop = Drop & {
   proven: { count: number; wallets: MintWallet[] };
 };
 export type DropActivity = Pick<HubDrop, 'mints10m' | 'mints1h' | 'minters' | 'proven' | 'verified'>;
+
+// Launchpad (server launch.ts): creators' collections.
+export type LaunchConfig = {
+  enabled: boolean; uploads: boolean; chains: { id: string; name: string; native: string }[];
+  factory: string | null; maxItems: number; gateway: string;
+};
+export type LaunchPhaseIn = { name: string; start: number; end: number; price: string; maxPerWallet: number; allowlist: boolean };
+export type LaunchDraftIn = {
+  chain: string; name: string; symbol: string; description: string; website?: string | null; twitter?: string | null;
+  royaltyBps: number; royaltyTo?: string | null; storage: 'ipfs' | 'onchain'; reveal: 'instant' | 'later';
+  coverCid?: string | null; bannerCid?: string | null; placeholderCid?: string | null; phases: LaunchPhaseIn[];
+};
+export type LaunchDraft = Omit<LaunchDraftIn, 'storage' | 'reveal'> & {
+  id: string; storage: string; reveal: string; allowlists: Record<string, number>; items: number;
+  metaCid: string | null; contractUri: string | null; creator: string | null; address: string | null; deployTx: string | null;
+  status: 'draft' | 'live'; createdAt: number; updatedAt: number;
+};
+export type LaunchItemIn = { idx: number; cid: string; mime?: string; name?: string; attributes?: { trait_type: string; value: string | number }[] };
+export type LaunchedPhase = {
+  index: number; name: string; start: number; end: number; price: number; maxPerWallet: number; allowlist: boolean;
+  allowlistSize: number | null; eligible: boolean | null; mintedByWallet: number | null; active: boolean;
+};
+export type LaunchedCollection = {
+  id: string; chain: string; chainName: string; native: string; address: string; name: string; symbol: string; description: string;
+  website: string | null; twitter: string | null; image: string | null; banner: string | null; creator: string;
+  minted: number; max: number; soldOut: boolean; mintFee: number; revealed: boolean; phases: LaunchedPhase[];
+  royaltyBps: number; balance: number | null; explorer: string;
+};
 
 export type DropStage = {
   id: string | null; label: string; kind: string | null; price: number | null; nativePriced: boolean;
@@ -571,6 +600,30 @@ export const api = {
   prices: () => req<TickerPrice[]>('/prices'),
   drops: () => req<Drop[]>('/drops'),
   mints: () => req<{ drops: HubDrop[]; at: number }>('/mints'),
+  launchConfig: () => req<LaunchConfig>('/launch/config'),
+  myLaunches: (userId: string) => req<{ launches: LaunchDraft[] }>(`/launch/mine?userId=${encodeURIComponent(userId)}`),
+  createLaunch: (userId: string, draft: LaunchDraftIn) => send('POST', '/launch/drafts', { userId, draft }) as Promise<LaunchDraft>,
+  getLaunch: (userId: string, id: string) => req<LaunchDraft>(`/launch/drafts/${id}?userId=${encodeURIComponent(userId)}`),
+  updateLaunch: (userId: string, id: string, draft: LaunchDraftIn) => send('PUT', `/launch/drafts/${id}`, { userId, draft }) as Promise<LaunchDraft>,
+  deleteLaunch: (userId: string, id: string) => send('DELETE', `/launch/drafts/${id}`, { userId }) as Promise<{ ok: true }>,
+  launchSign: (userId: string, id: string, count: number, kind: 'art' | 'image') =>
+    send('POST', `/launch/drafts/${id}/sign`, { userId, count, kind }) as Promise<{ urls: string[] }>,
+  launchItems: (userId: string, id: string, items: LaunchItemIn[]) => send('POST', `/launch/drafts/${id}/items`, { userId, items }) as Promise<{ items: number }>,
+  launchTrim: (userId: string, id: string, n: number) => send('POST', `/launch/drafts/${id}/trim`, { userId, n }) as Promise<{ items: number }>,
+  launchListItems: (userId: string, id: string, offset = 0, limit = 48) =>
+    req<{ items: (LaunchItemIn & { attributes: { trait_type: string; value: string | number }[] })[] }>(`/launch/drafts/${id}/items?userId=${encodeURIComponent(userId)}&offset=${offset}&limit=${limit}`),
+  launchAllowlist: (userId: string, id: string, phase: number, wallets: string[]) =>
+    send('POST', `/launch/drafts/${id}/allowlist`, { userId, phase, wallets }) as Promise<{ phase: number; wallets: number; skipped: number }>,
+  launchMetadata: (userId: string, id: string) => send('POST', `/launch/drafts/${id}/metadata`, { userId }) as Promise<LaunchDraft>,
+  launchDeployTx: (userId: string, id: string, creator: string) =>
+    send('POST', `/launch/drafts/${id}/deploy-tx`, { userId, creator }) as Promise<EvmTxOut & { predicted: string; mintFee: number }>,
+  launchDeployed: (userId: string, id: string, hash: string) => send('POST', `/launch/drafts/${id}/deployed`, { userId, hash }) as Promise<LaunchDraft>,
+  launchManageTx: (userId: string, id: string, action: 'reveal' | 'withdraw' | 'freeze') =>
+    send('POST', `/launch/drafts/${id}/manage-tx`, { userId, action }) as Promise<EvmTxOut & { owner: string }>,
+  launched: (chain: string, address: string, wallet?: string) =>
+    req<LaunchedCollection>(`/launch/c/${chain}/${address}${wallet ? `?wallet=${wallet}` : ''}`),
+  launchMintTx: (chain: string, address: string, b: { minter: string; phase: number; quantity: number }) =>
+    send('POST', `/launch/c/${chain}/${address}/mint-tx`, b) as Promise<EvmTxOut & { total: number; unit: string }>,
   dropActivity: (slug: string) => req<DropActivity>(`/drops/${encodeURIComponent(slug)}/activity`),
   mintReminders: (userId: string) => req<{ reminders: { slug: string; startsAt: number }[] }>(`/mints/reminders/${encodeURIComponent(userId)}`),
   remind: (userId: string, slug: string, on: boolean) => send('POST', '/mints/remind', { userId, slug, on }) as Promise<{ ok: true; on: boolean }>,
