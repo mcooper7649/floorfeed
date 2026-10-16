@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -158,6 +158,15 @@ export default function LaunchedMint() {
           )}
         </View>
       )}
+      {/* The creator lands here after launch: reveal, withdraw and freeze live on the manage page. */}
+      {w.address?.toLowerCase() === c.creator && (
+        <View style={s.owner}>
+          <Text style={T.meta}>You own this collection.{c.revealed ? '' : ' Reveal the art when the mint ends.'}</Text>
+          <Pressable onPress={() => router.push({ pathname: '/create/[id]', params: { id: c.id } })} style={s.secondary}>
+            <Text style={s.secondaryTxt}>Manage collection</Text>
+          </Pressable>
+        </View>
+      )}
     </Card>
   );
 
@@ -238,6 +247,7 @@ const s = StyleSheet.create({
   primaryTxt: { ...T.button, color: C.accentInk },
   secondary: { borderRadius: 12, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: C.border, backgroundColor: C.cardHi },
   secondaryTxt: { ...T.button, color: C.text },
+  owner: { gap: 8, paddingTop: 12, borderTopWidth: 1, borderTopColor: C.border },
   links: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   chip: { borderRadius: 999, borderWidth: 1, borderColor: C.border, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: C.cardHi },
 });
