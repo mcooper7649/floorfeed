@@ -9,14 +9,17 @@ import {FloorFeedStore} from "./FloorFeedStore.sol";
 /// @title FloorFeedFactory
 /// @notice Launches FloorFeedDrop collections as ERC-1167 clones. The creator's wallet
 /// sends the deploy and owns the collection; FloorFeed only sets the per-token fee that
-/// new collections lock in (existing collections keep the fee they launched with).
+/// new collections lock in (existing collections keep the fee they launched with), and which
+/// creators launch fee-free.
 contract FloorFeedFactory is Ownable {
     address public immutable implementation;
     uint256 public mintFee; // native wei per minted token, for collections created from now on
     address public feeRecipient;
+    mapping(address creator => bool) public feeExempt; // collections they launch lock in a fee of 0
 
     event CollectionCreated(address indexed creator, address indexed collection, string name, string symbol, uint256 mintFee);
     event FeeUpdated(uint256 mintFee, address feeRecipient);
+    event FeeExemptSet(address indexed creator, bool exempt);
 
     error ZeroRecipient();
 
@@ -29,12 +32,25 @@ contract FloorFeedFactory is Ownable {
         collection = Clones.cloneDeterministic(implementation, _salt(msg.sender, salt));
         FloorFeedDrop.Init memory init = p;
         init.owner = msg.sender; // the creator always owns what they launch
-        FloorFeedDrop(collection).initialize(init, mintFee, feeRecipient);
-        emit CollectionCreated(msg.sender, collection, p.name, p.symbol, mintFee);
+        uint256 fee = feeOf(msg.sender);
+        FloorFeedDrop(collection).initialize(init, fee, feeRecipient);
+        emit CollectionCreated(msg.sender, collection, p.name, p.symbol, fee);
     }
 
     function predictAddress(address creator, bytes32 salt) external view returns (address) {
         return Clones.predictDeterministicAddress(implementation, _salt(creator, salt));
+    }
+
+    /// @notice The per-token fee a collection launched by `creator` would lock in right now.
+    function feeOf(address creator) public view returns (uint256) {
+        return feeExempt[creator] ? 0 : mintFee;
+    }
+
+    function setFeeExempt(address[] calldata creators, bool exempt) external onlyOwner {
+        for (uint256 i; i < creators.length; ++i) {
+            feeExempt[creators[i]] = exempt;
+            emit FeeExemptSet(creators[i], exempt);
+        }
     }
 
     function setFee(uint256 mintFee_, address feeRecipient_) external onlyOwner {

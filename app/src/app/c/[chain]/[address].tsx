@@ -109,7 +109,7 @@ export default function LaunchedMint() {
         <View style={{ gap: 2 }}>
           <Text style={T.meta}>{phase.name}{phase.allowlist ? ` · allowlist (${phase.allowlistSize?.toLocaleString() ?? '?'} wallets)` : /public/i.test(phase.name) ? '' : ' · public'}{phase.maxPerWallet ? ` · ${phase.maxPerWallet} per wallet` : ''}</Text>
           <Text {...display} style={[T.hero, { color: C.text }]}>{phase.price === 0 ? 'Free' : amt(phase.price, c.native)}</Text>
-          <Text style={T.caption}>+ {amt(c.mintFee, c.native)} FloorFeed fee per NFT</Text>
+          {c.mintFee > 0 && <Text style={T.caption}>+ {amt(c.mintFee, c.native)} FloorFeed fee per NFT</Text>}
         </View>
       )}
 

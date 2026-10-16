@@ -23,7 +23,8 @@ Same addresses on every chain (CREATE2, salt `floorfeed.launchpad.v1`, construct
 | Contract | Address |
 |---|---|
 | FloorFeedStore | `0xF1656b4145982eE90bc9C4A96F5ba7044B1C83aa` |
-| FloorFeedFactory | `0xcF7908632ce0adeeC1CE5c445BF85ae38B5b9A4E` |
-| FloorFeedDrop (implementation) | `0xE3eD3Ac4aC7B1BFc1201541e3344f010AFf26976` |
+| FloorFeedFactory (v2, fee exemptions) | `0x0E8b96866119a7B75dDB63b7F1ba722FC7a5F46d` |
+| FloorFeedDrop (implementation, v2 factory) | `0x3E11C21809fB774563b5dc5329c5d93073D8c768` |
+| FloorFeedFactory v1 (retired, no fee exemptions) | `0xcF7908632ce0adeeC1CE5c445BF85ae38B5b9A4E` (impl `0xE3eD3Ac4aC7B1BFc1201541e3344f010AFf26976`) |
 
-Live on Ethereum (1), Base (8453), Robinhood Chain (4663). Fee 0.0001 ETH per token to the FloorFeed fee wallet; factory owner = FloorFeed fee wallet. Sourcify-verified on Ethereum and Base (Robinhood's Blockscout API sits behind a Cloudflare challenge). To add a chain: fund the deployer there, run Deploy.s.sol with `FF_OWNER=<deployer>` (keeps the address), set its fee, transfer ownership, add the chain to `LAUNCH_CHAINS`. Base mainnet test collection: `0xbc013217988891d1a526d156a836bbbf0e7bdb4c` (3 items, 1 minted, revealed).
+Live on Ethereum (1), Base (8453), Robinhood Chain (4663). Fee 0.0001 ETH per token to the FloorFeed fee wallet; factory owner = FloorFeed fee wallet, which is also fee-exempt (`setFeeExempt`, `feeOf`). Deploy with `FF_EXEMPT` / `FF_FINAL_OWNER` to set both in one run. Sourcify-verified on Ethereum and Base (Robinhood's Blockscout API sits behind a Cloudflare challenge). To add a chain: fund the deployer there, run Deploy.s.sol with `FF_OWNER=<deployer>` (keeps the address), set its fee, transfer ownership, add the chain to `LAUNCH_CHAINS`. Base mainnet test collection (v1 factory): `0xbc013217988891d1a526d156a836bbbf0e7bdb4c` (3 items, 1 minted, revealed).

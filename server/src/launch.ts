@@ -394,7 +394,7 @@ export async function deployTx(id: string, userId: string, creator: string) {
   const data = encodeFunctionData({ abi: factoryAbi, functionName: "createCollection", args: [salt(id), init] });
   const predicted = (await c.readContract({ address: FACTORY, abi: factoryAbi, functionName: "predictAddress", args: [addr(creator), salt(id)] })) as Hex;
   if ((await c.getCode({ address: predicted }))?.length) throw new LaunchError("This draft was already launched from that wallet.");
-  const fee = (await c.readContract({ address: FACTORY, abi: factoryAbi, functionName: "mintFee" })) as bigint;
+  const fee = (await c.readContract({ address: FACTORY, abi: factoryAbi, functionName: "feeOf", args: [addr(creator)] })) as bigint;
   let gas: bigint;
   try {
     gas = await simulateEvm(r.chain, { from: addr(creator), to: FACTORY, data, value: 0n });

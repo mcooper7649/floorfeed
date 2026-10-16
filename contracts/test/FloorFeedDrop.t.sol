@@ -81,6 +81,35 @@ contract FloorFeedDropTest is Test {
         assertEq(amt, 500);
     }
 
+    function test_feeExemptCreatorLaunchesFeeFree() public {
+        address[] memory list = new address[](1);
+        list[0] = creator;
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, alice));
+        factory.setFeeExempt(list, true);
+        vm.prank(admin);
+        factory.setFeeExempt(list, true);
+        assertEq(factory.feeOf(creator), 0);
+        assertEq(factory.feeOf(bob), FEE);
+        FloorFeedDrop d = _launch(10);
+        assertEq(d.mintFee(), 0);
+        vm.warp(block.timestamp + 1 hours);
+        bytes32[] memory none;
+        uint256 c = d.mintCost(1, 2);
+        assertEq(c, uint256(PRICE) * 2);
+        vm.prank(alice);
+        d.mint{value: c}(alice, 1, 2, none);
+        assertEq(feeTo.balance, 0);
+        assertEq(address(d).balance, uint256(PRICE) * 2);
+        // un-exempting affects only future launches
+        vm.prank(admin);
+        factory.setFeeExempt(list, false);
+        assertEq(d.mintFee(), 0);
+        vm.prank(creator);
+        FloorFeedDrop d2 = FloorFeedDrop(factory.createCollection(bytes32("s2"), _init(10)));
+        assertEq(d2.mintFee(), FEE);
+    }
+
     function test_onlyAdminSetsFactoryFee() public {
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, alice));

@@ -11,6 +11,8 @@ import {FloorFeedStore} from "../src/FloorFeedStore.sol";
 ///   FF_OWNER       factory owner (sets fees); must be the broadcaster to apply FF_FEE
 ///   FF_FEE_TO      fee recipient
 ///   FF_FEE         this chain's fee per minted token, in native wei
+///   FF_EXEMPT      optional comma-separated creators who launch fee-free
+///   FF_FINAL_OWNER optional: hand ownership to this address at the end
 contract Deploy is Script {
     bytes32 constant SALT = keccak256("floorfeed.launchpad.v1");
     uint256 constant DEFAULT_FEE = 0.0001 ether;
@@ -31,6 +33,14 @@ contract Deploy is Script {
         if (factoryAddr.code.length == 0) new FloorFeedFactory{salt: SALT}(FloorFeedStore(storeAddr), owner, DEFAULT_FEE, feeTo);
         FloorFeedFactory factory = FloorFeedFactory(factoryAddr);
         if (factory.mintFee() != fee || factory.feeRecipient() != feeTo) factory.setFee(fee, feeTo);
+        address[] memory exempt = vm.envOr("FF_EXEMPT", ",", new address[](0));
+        address[] memory toSet = new address[](exempt.length);
+        uint256 n;
+        for (uint256 i; i < exempt.length; ++i) if (!factory.feeExempt(exempt[i])) toSet[n++] = exempt[i];
+        assembly { mstore(toSet, n) }
+        if (n != 0) factory.setFeeExempt(toSet, true);
+        address finalOwner = vm.envOr("FF_FINAL_OWNER", address(0));
+        if (finalOwner != address(0) && factory.owner() != finalOwner) factory.transferOwnership(finalOwner);
         vm.stopBroadcast();
 
         console.log("store", storeAddr);
