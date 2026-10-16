@@ -310,10 +310,15 @@ export async function buildMetadata(id: string, userId: string) {
     { idx: number; cid: string; mime: string | null; name: string | null; attributes: string | null }[];
   if (!items.length) throw new LaunchError("Upload the artwork first.");
   if (items.some((it, i) => it.idx !== i + 1)) throw new LaunchError("Artwork numbers have gaps; re-upload the set.");
+  // The reveal shuffles which artwork each token shows (artworkOf), so artwork #12 can land on
+  // token #5: a number in the metadata name would contradict the token id. Numbered names
+  // ("Cool Cat #12", as generators write them) are dropped and marketplaces show the token id;
+  // unnumbered 1/1 titles describe the artwork and are kept.
+  const title = (n: string | null) => (n && !/#\s*\d+\s*$/.test(n) ? n.trim() : undefined);
   const tokens = items.map((it) => ({
     path: `${it.idx}.json`,
     body: JSON.stringify({
-      name: it.name || `${r.name} #${it.idx}`,
+      ...(title(it.name) ? { name: title(it.name) } : {}),
       description: r.description,
       image: `ipfs://${it.cid}`,
       ...(it.mime?.startsWith("video/") || it.mime?.startsWith("model/") ? { animation_url: `ipfs://${it.cid}` } : {}),
