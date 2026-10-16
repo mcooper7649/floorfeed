@@ -11,7 +11,7 @@ export type EventName =
   | 'paper_buy' | 'paper_sell' | 'copy_tap'
   | 'buy_open' | 'buy_click' | 'buy_signed' | 'sell_open' | 'sell_approved' | 'sell_signed' | 'bridge_click' | 'bridge_open' | 'bridge_signed' | 'unwrap_signed' | 'mint_signed' | 'mint_out' | 'list_open' | 'list_signed' | 'list_cancel' | 'deposit_open'
   | 'wallet_connect' | 'mode_real'
-  | 'welcome_shown' | 'welcome_cta' | 'welcome_dismiss' | 'suggested_follow' | 'guide_open' | 'guide_part' | 'take_post';
+  | 'welcome_shown' | 'welcome_cta' | 'welcome_dismiss' | 'suggested_follow' | 'guide_open' | 'guide_part' | 'take_post' | 'support_sent';
 
 const URL_BASE = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8030';
 const web = Platform.OS === 'web' && typeof window !== 'undefined';

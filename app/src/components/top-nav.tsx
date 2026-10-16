@@ -1,6 +1,6 @@
 import { Link, router, usePathname } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 
 import { AlertsBell } from '@/components/alerts-bell';
 import { WalletButton } from '@/components/wallet-button';
@@ -14,6 +14,7 @@ const LINKS = [
   { href: '/leaderboard', label: 'Leaders' },
   { href: '/portfolio', label: 'Portfolio' },
   { href: '/how-it-works', label: 'How it works' },
+  { href: '/support', label: 'Support' },
 ] as const;
 
 // Web header. Wide windows get the full bar (brand, sections, collection
@@ -21,6 +22,9 @@ const LINKS = [
 export function TopNav({ back }: { back?: boolean }) {
   const { wide, maxWidth, pad } = useLayout();
   const path = usePathname();
+  // Mid-width windows drop the search box so the links and wallet still fit;
+  // Markets has its own search.
+  const roomy = useWindowDimensions().width >= 1300;
   const [q, setQ] = useState('');
 
   // On wide web the root layout draws the one header; pages' own back bars step aside.
@@ -34,7 +38,7 @@ export function TopNav({ back }: { back?: boolean }) {
   return (
     <View style={s.bar}>
       {/* Wide: edge to edge, the logo lined up with the discovery panel. */}
-      <View style={[s.inner, wide ? { maxWidth: '100%', paddingHorizontal: 20 } : { maxWidth, paddingHorizontal: pad }]}>
+      <View style={[s.inner, wide && !roomy && { gap: 10 }, wide ? { maxWidth: '100%', paddingHorizontal: 20 } : { maxWidth, paddingHorizontal: pad }]}>
         {back && !wide && (
           <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} hitSlop={10} style={s.back}
             accessibilityLabel="Back">
@@ -56,14 +60,15 @@ export function TopNav({ back }: { back?: boolean }) {
                 return (
                   <Link key={l.href} href={l.href} asChild>
                     {/* Link asChild spreads the child's style on web: pass a flat object */}
-                    <Pressable style={StyleSheet.flatten([s.link, on && s.linkOn])}>
-                      <Text style={[s.linkTxt, on && { color: C.text }]}>{l.label}</Text>
+                    <Pressable style={StyleSheet.flatten([s.link, !roomy && { paddingHorizontal: 10 }, on && s.linkOn])}>
+                      <Text style={[s.linkTxt, on && { color: C.text }]}>{!roomy && l.href === '/how-it-works' ? 'Guide' : l.label}</Text>
                     </Pressable>
                   </Link>
                 );
               })}
             </View>
-            <TextInput
+            <View style={s.spacer} />
+            {roomy && <TextInput
               value={q}
               onChangeText={setQ}
               onSubmitEditing={search}
@@ -73,7 +78,7 @@ export function TopNav({ back }: { back?: boolean }) {
               autoCorrect={false}
               autoCapitalize="none"
               accessibilityLabel="Search collections"
-            />
+            />}
             <AlertsBell />
             <WalletButton />
           </>
@@ -92,12 +97,13 @@ const s = StyleSheet.create({
   mark: { width: 30, height: 30, borderRadius: 9, backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center' },
   markTxt: { color: C.accentInk, fontWeight: '700', fontSize: 18, lineHeight: 22 },
   brandTxt: { color: C.text, fontWeight: '700', fontSize: 21, letterSpacing: -0.4 },
-  links: { flexDirection: 'row', gap: 4, flex: 1 },
+  links: { flexDirection: 'row', gap: 4, flexShrink: 0 },
+  spacer: { flex: 1 },
   link: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
   linkOn: { backgroundColor: C.cardHi },
   linkTxt: { ...T.bodyStrong, color: C.dim },
   search: {
-    width: 280, backgroundColor: C.card, borderRadius: 12, borderWidth: 1, borderColor: C.border,
+    width: 280, minWidth: 150, flexShrink: 1, backgroundColor: C.card, borderRadius: 12, borderWidth: 1, borderColor: C.border,
     color: C.text, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15,
   },
 });

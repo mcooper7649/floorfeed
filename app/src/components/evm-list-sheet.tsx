@@ -3,6 +3,7 @@ import { ActivityIndicator, Linking, Modal, Pressable, ScrollView, StyleSheet, T
 
 import { ModeChip } from '@/components/mode-toggle';
 import { Chip } from '@/components/ui';
+import { ReportLink } from '@/components/report-link';
 import { C } from '@/constants/brand';
 import { chainName } from '@/constants/chains';
 import { T } from '@/constants/type';
@@ -279,6 +280,7 @@ export function EvmListSheet({ symbol, id, open, onClose, onDone }: {
                 <Text style={s.warn}>That&apos;s {Math.round(underFloor * 100)}% under the floor. It will likely sell fast, for less than others are asking.</Text>
               )}
               {step.kind === 'error' && <Text style={s.err}>{step.message}</Text>}
+              {step.kind === 'error' && <ReportLink topic="trade" detail={step.message} from="evm-list" onLeave={onClose} />}
 
               {!q.approved ? (
                 <View style={{ gap: 8 }}>

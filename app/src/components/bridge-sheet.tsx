@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Chip } from '@/components/ui';
+import { ReportLink } from '@/components/report-link';
 import { C } from '@/constants/brand';
 import { CHAINS, chainName } from '@/constants/chains';
 import { T } from '@/constants/type';
@@ -292,6 +293,7 @@ function Sheet({ open, onClose, onDone, to: toProp, from: fromProp, amount: amou
               )}
               {q?.problem && <Text style={s.err}>{q.problem}</Text>}
               {step.kind === 'error' && <Text style={s.err}>{step.message}</Text>}
+              {step.kind === 'error' && <ReportLink topic="trade" detail={step.message} from="bridge" onLeave={onClose} />}
               {step.kind === 'confirm' && <SlowWallet onStop={() => setStep({ kind: 'idle' })} />}
 
               {q && ((q.tx && w.send) || (q.solTx && sw.sendTransaction)) && (

@@ -54,6 +54,7 @@ export default function RootLayout() {
             <Stack.Screen name="item/[symbol]/[id]" options={{ title: 'NFT', headerBackTitle: 'Back', headerShown: !web }} />
             <Stack.Screen name="drop/[slug]" options={{ title: 'Mint', headerBackTitle: 'Back', headerShown: !web }} />
             <Stack.Screen name="alerts" options={{ title: 'Alerts', headerBackTitle: 'Back', headerShown: !web }} />
+            <Stack.Screen name="support" options={{ title: 'Support', headerBackTitle: 'Back', headerShown: !web }} />
             <Stack.Screen name="how-it-works" options={{ title: 'How it works', headerBackTitle: 'Back', headerShown: !web }} />
           </Stack>
         </Shell>

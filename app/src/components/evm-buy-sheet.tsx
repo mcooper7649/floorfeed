@@ -5,6 +5,7 @@ import { BridgeSheet } from '@/components/bridge-sheet';
 import { DepositSheet } from '@/components/deposit-sheet';
 import { ModeChip } from '@/components/mode-toggle';
 import { NftImage } from '@/components/nft-image';
+import { ReportLink } from '@/components/report-link';
 import { C } from '@/constants/brand';
 import { chainById, chainName } from '@/constants/chains';
 import { T } from '@/constants/type';
@@ -159,6 +160,7 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
               {arrived && <Text style={s.okLine}>✓ {sol(arrived.amount, 4, arrived.unit)} arrived on {chainName(arrived.chain)}. Prices are refreshed below.</Text>}
               {q.reason && <Text style={s.meta}>{q.reason}</Text>}
               {step.kind === 'error' && <Text style={s.err}>{step.message}</Text>}
+              {step.kind === 'error' && <ReportLink topic="trade" detail={step.message} from="evm-buy" onLeave={onClose} />}
 
               {short != null && short > 0 ? (
                 <>

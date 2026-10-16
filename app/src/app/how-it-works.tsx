@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -90,6 +90,11 @@ export default function HowItWorks() {
           <Pressable accessibilityRole="button" onPress={() => pick(part === 'basics' ? 'paper' : 'real')} style={s.next}>
             <Text style={s.nextTxt}>Next: {guide.parts.find((p) => p.id === (part === 'basics' ? 'paper' : 'real'))?.title} ›</Text>
           </Pressable>
+        )}
+        {guide && (
+          <Text style={[T.meta, { textAlign: 'center' }]}>
+            Still stuck? <Text style={{ color: C.accent }} onPress={() => router.push({ pathname: '/support', params: { from: 'guide' } })}>Contact support</Text>
+          </Text>
         )}
       </ScrollView>
     </View>

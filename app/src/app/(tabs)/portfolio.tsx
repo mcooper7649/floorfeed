@@ -14,6 +14,7 @@ import { Screen } from '@/components/screen';
 import { Button, Card, ListRow, RowAction, SectionHeader } from '@/components/ui';
 import { WalletSheet } from '@/components/wallet-button';
 import { WalletsCard } from '@/components/wallet-card';
+import { ReportLink } from '@/components/report-link';
 import { C } from '@/constants/brand';
 import { openseaAsset } from '@/constants/chains';
 import { T, display } from '@/constants/type';
@@ -346,6 +347,9 @@ function RealPortfolio({ solAddress, evmAddress }: { solAddress: string | null; 
               <ActivityList wallets={[evmAddress, solAddress].filter((a): a is string => !!a)} onSettled={fetchData} />
             </>
           )}
+          <View style={{ paddingTop: 12 }}>
+            <ReportLink from="portfolio" label="Something not right? Report a problem" />
+          </View>
         </View>
       }
       renderItem={({ item: n }) => {

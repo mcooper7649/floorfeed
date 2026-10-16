@@ -241,6 +241,12 @@ export type CollectionDetail = {
   about?: CollectionAbout;
 };
 
+export type SupportTopic = 'bug' | 'trade' | 'wallet' | 'idea' | 'other';
+export type SupportReport = {
+  topic: SupportTopic; message: string; contact?: string; tx?: string;
+  wallets?: string[]; userId?: string; page?: string; mode?: 'paper' | 'real';
+};
+
 // Signed-in (Privy) users send their access token; anonymous device ids don't.
 let tokenGetter: (() => Promise<string | null>) | null = null;
 export const setTokenGetter = (fn: typeof tokenGetter) => { tokenGetter = fn; };
@@ -464,6 +470,7 @@ export const api = {
     send('POST', '/trade/evm/list-build', b) as Promise<EvmListBuild>,
   evmListSubmit: (b: { chain: string; parameters: Record<string, unknown>; signature: string }) =>
     send('POST', '/trade/evm/list-submit', b) as Promise<{ orderHash: string | null }>,
+  support: (b: SupportReport) => send('POST', '/support', b) as Promise<{ ok: true; id: number }>,
   evmListings: (address: string) => req<{ listings: MyListing[] }>(`/trade/evm/listings/${address}`),
   evmCancelBuild: (b: { chain: string; orderHash: string; seller: string }) =>
     send('POST', '/trade/evm/cancel-build', b) as Promise<EvmCancelBuild>,

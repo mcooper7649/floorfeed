@@ -30,6 +30,7 @@ import { amountsFrom, feeRates } from "./fees.ts";
 import { walletStats } from "./pnl.ts";
 import { card, renderPage, robots, sitemap } from "./seo.ts";
 import { nameFor, startNames } from "./sns.ts";
+import { listReports, setReportStatus, submitReport, SupportError } from "./support.ts";
 import { traderLeaderboard, traderProfile, walletUnits } from "./traders.ts";
 import { unitOf } from "./units.ts";
 
@@ -574,6 +575,32 @@ app.get("/admin/stats.json", async (req, reply) => {
   const want = Buffer.from(config.adminToken);
   if (!config.adminToken || given.length !== want.length || !timingSafeEqual(given, want)) return reply.code(404).send();
   return summary(q.days);
+});
+
+// Support form (support.ts): anyone can report; the admin token lists / closes.
+app.post("/support", async (req, reply) => {
+  try { return await submitReport(req, req.body); } catch (err) {
+    if (err instanceof SupportError) return reply.code(err.status).send({ error: err.message });
+    throw err;
+  }
+});
+const adminOk = (req: FastifyRequest) => {
+  const given = Buffer.from(/(?:^|;\s*)ff_admin=([^;]+)/.exec(req.headers.cookie ?? "")?.[1] ?? /^Bearer (.+)$/.exec(req.headers.authorization ?? "")?.[1] ?? "");
+  const want = Buffer.from(config.adminToken);
+  return !!config.adminToken && given.length === want.length && timingSafeEqual(given, want);
+};
+app.get("/admin/support", async (req, reply) => {
+  if (!adminOk(req)) return reply.code(404).send();
+  const q = z.object({ status: z.enum(["open", "closed", "all"]).default("open"), limit: z.coerce.number().int().min(1).max(500).default(100) }).parse(req.query);
+  return reply.header("cache-control", "no-store").send({ reports: listReports(q.status, q.limit) });
+});
+app.post("/admin/support/:id/:action", async (req, reply) => {
+  if (!adminOk(req)) return reply.code(404).send();
+  const { id, action } = z.object({ id: z.coerce.number().int(), action: z.enum(["close", "reopen"]) }).parse(req.params);
+  try { return setReportStatus(id, action === "close" ? "closed" : "open"); } catch (err) {
+    if (err instanceof SupportError) return reply.code(err.status).send({ error: err.message });
+    throw err;
+  }
 });
 
 // The in-app guide (guide.ts); /how-it-works serves the same text as HTML.

@@ -4,6 +4,7 @@ import { ActivityIndicator, Linking, Modal, Pressable, StyleSheet, Text, View } 
 import { EvmListSheet } from '@/components/evm-list-sheet';
 import { ModeChip } from '@/components/mode-toggle';
 import { NftImage } from '@/components/nft-image';
+import { ReportLink } from '@/components/report-link';
 import { C } from '@/constants/brand';
 import { chainById, chainName } from '@/constants/chains';
 import { T } from '@/constants/type';
@@ -232,6 +233,7 @@ export function EvmSellSheet({ symbol, id, open, onClose, onSold }: {
               )}
               {q.reason && <Text style={s.meta}>{q.reason}</Text>}
               {step.kind === 'error' && <Text style={s.err}>{step.message}</Text>}
+              {step.kind === 'error' && <ReportLink topic="trade" detail={step.message} from="evm-sell" onLeave={onClose} />}
 
               {q.executable && w.send && (q.approved ? (
                 <View style={{ gap: 8 }}>
