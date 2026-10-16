@@ -440,6 +440,14 @@ function errorName(m: string) {
 
 // --- public: launched collections ---
 
+// The collection image: its cover, else artwork #1, the same fallback collection.json uses (so it
+// matches OpenSea's collection image).
+const firstArt = db.prepare(`SELECT cid FROM launch_items WHERE launch_id = ? ORDER BY idx LIMIT 1`);
+const coverOf = (r: Row) => {
+  const cid = r.cover_cid ?? (firstArt.get(r.id) as { cid: string } | undefined)?.cid;
+  return cid ? `${GATEWAY}${cid}` : null;
+};
+
 const byAddress = (chain: string, address: string) =>
   db.prepare(`SELECT * FROM launches WHERE chain = ? AND address = ? AND status = 'live'`).get(chain, address.toLowerCase()) as Row | undefined;
 
@@ -474,7 +482,7 @@ export async function launchedCollection(chain: string, address: string, wallet?
     id: r.id, chain, chainName: (EVM_CHAINS as Record<string, { name: string }>)[chain]?.name ?? chain,
     native: (EVM_CHAINS as Record<string, { native: string }>)[chain]?.native ?? "ETH",
     address: address.toLowerCase(), name: r.name, symbol: r.symbol, description: r.description, website: r.website, twitter: r.twitter,
-    image: r.cover_cid ? `${GATEWAY}${r.cover_cid}` : null, banner: r.banner_cid ? `${GATEWAY}${r.banner_cid}` : null,
+    image: coverOf(r), banner: r.banner_cid ? `${GATEWAY}${r.banner_cid}` : null,
     creator: owner.toLowerCase(), minted: Number(minted), max: Number(max), soldOut: Number(minted) >= Number(max),
     mintFee: Number(formatEther(fee)), revealed, phases: out, royaltyBps: r.royalty_bps, balance,
     explorer: explorer(chain),
@@ -565,7 +573,7 @@ export async function hubLaunches() {
       const native = (EVM_CHAINS as Record<string, { native: string }>)[r.chain]?.native ?? "ETH";
       return {
         slug: `ff:${r.chain}:${r.address}`, name: r.name, chain: r.chain, contract: r.address, launched: true as const,
-        image: r.cover_cid ? `${GATEWAY}${r.cover_cid}` : null, url: `/c/${r.chain}/${r.address}`,
+        image: coverOf(r), url: `/c/${r.chain}/${r.address}`,
         minting: !!active && Number(minted) < Number(max), featured: false, stage: names[ph.i]?.name ?? null,
         price: ph.price, currency: native, priceUsd: ph.price ? (usdPrice(native) ?? 0) * ph.price || null : null,
         startsAt: ph.start, endsAt: active?.end || null,
