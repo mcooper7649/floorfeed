@@ -361,7 +361,7 @@ function RealPortfolio({ solAddress, evmAddress }: { solAddress: string | null; 
           : openseaAsset(n.evmChain ?? 'ethereum', n.mint);
         return (
           <ListRow
-            onPress={() => router.push(n.drop ? { pathname: '/c/[chain]/[address]', params: n.drop } : { pathname: '/item/[symbol]/[id]', params: { symbol: n.collection.symbol, id: n.mint } })}
+            onPress={() => router.push({ pathname: '/item/[symbol]/[id]', params: { symbol: n.collection.symbol, id: n.mint } })}
             art={<NftImage uri={n.image} name={n.collection.name} radius={10} px={120} style={{ width: 44 }} />}
             title={n.name || n.collection.name}
             meta={[n.collection.name, n.boughtAt != null ? `bought at ${sol(n.boughtAt, 2, n.unit)}` : null,

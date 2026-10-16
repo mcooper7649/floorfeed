@@ -6,6 +6,7 @@ import { unitOf } from "./units.ts";
 import { traders } from "./feed.ts";
 import { getTokenListing } from "./magiceden.ts";
 import { getOsBestListing, getOsNft, getOsTraits, hasOsKey } from "./opensea.ts";
+import { launchedItem } from "./launch.ts";
 
 // NFT detail pages: one item's traits with how rare each is, a rarity rank,
 // the current owner, an active listing and every sale of it we've tracked.
@@ -171,6 +172,25 @@ const withTimeout = <T>(p: Promise<T>, ms: number, fallback: T) =>
   Promise.race([p.catch(() => fallback), new Promise<T>((r) => setTimeout(() => r(fallback), ms))]);
 
 export async function itemDetail(symbol: string, id: string) {
+  // NFTs from FloorFeed launchpad collections: not tracked markets, read from their contract.
+  if (id.includes(":")) {
+    const d = await launchedItem(id);
+    if (d) {
+      const traits = d.attrs.map((t) => {
+        const count = d.counts[t.type]?.[t.value] ?? null;
+        return { type: t.type, value: t.value, count, pct: count != null && d.total ? (count / d.total) * 100 : null };
+      }).sort((a, b) => (a.pct ?? 101) - (b.pct ?? 101));
+      const ids = traders([d.owner]);
+      return {
+        symbol, id, chain: d.chain, currency: d.currency,
+        collection: { symbol, ...d.collection },
+        name: d.name, image: d.image,
+        owner: { wallet: d.owner, name: ids.get(d.owner)?.name ?? null, tier: ids.get(d.owner)?.tier ?? null },
+        rarity: null, rarityPending: false, traits, listing: null, lastSale: null, history: [],
+        marketUrl: d.marketUrl, explorerUrl: d.explorerUrl, drop: d.drop,
+      };
+    }
+  }
   const evm = isEvm(symbol);
   if (!evm && !COLLECTIONS.some((c) => c.symbol === symbol)) return null;
   const chain = chainOf(symbol);

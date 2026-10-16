@@ -4,6 +4,7 @@ import { z } from "zod";
 import { dropAbi, factoryAbi } from "./abi/launchpad.ts";
 import { EVM_CHAINS } from "./config.ts";
 import type { Drop } from "./discover.ts";
+import { osChain } from "./opensea.ts";
 import { usdPrice } from "./prices.ts";
 import { db } from "./db.ts";
 import { evmPublicClient, isTradableChain, simulateEvm } from "./trade-evm.ts";
@@ -582,4 +583,63 @@ export async function hubLaunches() {
   }))).filter((x) => x != null);
   hubCache = { at: Date.now(), v };
   return v;
+}
+
+// --- one launched NFT (item page) ---
+
+const launchByContract = db.prepare(`SELECT * FROM launches WHERE address = ? AND status = 'live'`);
+const itemAttrs = db.prepare(`SELECT attributes FROM launch_items WHERE launch_id = ?`);
+const tokenCache = new Map<string, { at: number; data: Awaited<ReturnType<typeof loadLaunchedToken>> }>();
+
+const toHttp = (uri: string) => (uri.startsWith("ipfs://") ? `${GATEWAY}${uri.slice(7)}` : uri);
+
+async function loadLaunchedToken(r: Row, tokenId: bigint) {
+  const c = evmPublicClient(r.chain);
+  const a = r.address as Hex;
+  const [uri, owner] = await Promise.all([
+    c.readContract({ address: a, abi: dropAbi, functionName: "tokenURI", args: [tokenId] }) as Promise<string>,
+    c.readContract({ address: a, abi: dropAbi, functionName: "ownerOf", args: [tokenId] }) as Promise<string>,
+  ]);
+  // Read the metadata the contract points at right now (so a reveal shows at once, no marketplace cache).
+  let meta: { name?: string; image?: string; attributes?: { trait_type?: string; value?: unknown }[] } = {};
+  if (uri.startsWith("data:application/json;base64,")) meta = JSON.parse(Buffer.from(uri.slice(29), "base64").toString("utf8"));
+  else {
+    const res = await fetch(toHttp(uri), { signal: AbortSignal.timeout(8000) });
+    if (res.ok) meta = await res.json();
+  }
+  return {
+    name: typeof meta.name === "string" ? meta.name : null,
+    image: typeof meta.image === "string" ? toHttp(meta.image) : null,
+    attrs: (Array.isArray(meta.attributes) ? meta.attributes : [])
+      .filter((t) => t && t.trait_type != null && t.value != null)
+      .map((t) => ({ type: String(t.trait_type), value: String(t.value) })),
+    owner: owner.toLowerCase(),
+  };
+}
+
+/** Item-page data for an NFT from a live launchpad collection, or null if `id` (contract:tokenId) isn't one. */
+export async function launchedItem(id: string) {
+  const [contract, token] = id.toLowerCase().split(":");
+  if (!contract || !/^\d+$/.test(token ?? "")) return null;
+  const r = launchByContract.get(contract) as Row | undefined;
+  if (!r) return null;
+  const hit = tokenCache.get(id);
+  const t = hit && Date.now() - hit.at < 30_000 ? hit.data : await loadLaunchedToken(r, BigInt(token));
+  tokenCache.set(id, { at: Date.now(), data: t });
+  if (tokenCache.size > 2000) tokenCache.clear();
+  // Trait shares from the uploaded set (the whole supply), so they're right from the first mint.
+  const counts: Record<string, Record<string, number>> = {};
+  const rows = itemAttrs.all(r.id) as { attributes: string | null }[];
+  for (const row of rows) for (const a of (row.attributes ? JSON.parse(row.attributes) : []) as { trait_type: string; value: unknown }[]) {
+    (counts[a.trait_type] ??= {})[String(a.value)] = (counts[a.trait_type]?.[String(a.value)] ?? 0) + 1;
+  }
+  const chainName = r.chain;
+  return {
+    chain: r.chain, currency: (EVM_CHAINS as Record<string, { native: string }>)[chainName]?.native ?? "ETH",
+    collection: { name: r.name, floor: null, image: coverOf(r) },
+    name: t.name, image: t.image, owner: t.owner, attrs: t.attrs, total: rows.length, counts,
+    drop: { chain: r.chain, address: contract },
+    marketUrl: `https://opensea.io/assets/${osChain(r.chain)}/${contract}/${token}`,
+    explorerUrl: `${explorer(r.chain)}/token/${contract}/instance/${token}`,
+  };
 }

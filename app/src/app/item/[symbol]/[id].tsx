@@ -62,11 +62,12 @@ export default function ItemScreen() {
   if (!data) return <View style={s.fill}>{nav}<ActivityIndicator style={{ marginTop: 40 }} color={C.accent} /></View>;
 
   const u = data.currency;
-  const title = data.name ?? `${data.collection.name} ${shortAddr(data.id)}`;
+  const title = data.name ?? (data.drop ? `${data.collection.name} #${data.id.split(':')[1]}` : `${data.collection.name} ${shortAddr(data.id)}`);
   const b = data.rarity ? band(data.rarity.rank, data.rarity.total) : null;
   const market = data.chain === 'solana' ? 'Magic Eden' : 'OpenSea';
   // The connected Ethereum wallet holds this NFT: offer the in-app sale (the quote re-checks ownership on chain).
-  const mine = data.chain !== 'solana' && !!evmWallet.address && data.owner?.wallet?.toLowerCase() === evmWallet.address;
+  // (Not for launchpad drops yet: in-app selling needs a tracked market.)
+  const mine = !data.drop && data.chain !== 'solana' && !!evmWallet.address && data.owner?.wallet?.toLowerCase() === evmWallet.address;
   const vsFloor = data.listing && data.collection.floor
     ? ((data.listing.price - data.collection.floor) / data.collection.floor) * 100 : null;
 
@@ -79,7 +80,7 @@ export default function ItemScreen() {
   const facts = (
     <View style={{ gap: 14 }}>
       <View style={{ gap: 6 }}>
-        <Link href={{ pathname: '/collection/[symbol]', params: { symbol: data.symbol } }} asChild>
+        <Link href={data.drop ? { pathname: '/c/[chain]/[address]', params: data.drop } : { pathname: '/collection/[symbol]', params: { symbol: data.symbol } }} asChild>
           <Pressable style={s.collRow}>
             <ChainBadge chain={data.chain} />
             <Text style={s.collName}>{data.collection.name} ›</Text>
@@ -88,7 +89,7 @@ export default function ItemScreen() {
         <Text {...display} style={wide ? T.displayL : T.display}>{title}</Text>
       </View>
 
-      <View style={s.statRow}>
+      {!data.drop && <View style={s.statRow}>
         <Fact label="Rarity rank" value={data.rarity ? `#${data.rarity.rank.toLocaleString()}` : data.rarityPending ? 'Ranking…' : '—'}
           sub={data.rarity?.total ? `of ${data.rarity.total.toLocaleString()} · top ${pctLabel((data.rarity.rank / data.rarity.total) * 100)}` : undefined}
           color={b?.color} />
@@ -98,7 +99,8 @@ export default function ItemScreen() {
             ? (vsFloor != null ? `${vsFloor >= 0 ? '+' : '−'}${Math.abs(vsFloor).toFixed(1)}% vs floor` : `on ${market}`)
             : data.lastSale ? `${timeAgo(data.lastSale.t)} ago` : 'not tracked'} />
         <Fact label="Collection floor" value={data.collection.floor != null ? sol(data.collection.floor, 2, u) : '—'} />
-      </View>
+      </View>}
+      {data.drop && <Text style={s.note}>Launched on FloorFeed. Trait shares are out of the collection&apos;s full supply.</Text>}
 
       {data.owner && (
         <Link href={{ pathname: '/wallet/[address]', params: { address: data.owner.wallet } }} asChild>

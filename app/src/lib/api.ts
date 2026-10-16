@@ -155,6 +155,7 @@ export type ItemDetail = {
   }[];
   marketUrl: string;
   explorerUrl: string;
+  drop?: { chain: string; address: string }; // a FloorFeed launchpad collection (no market data yet)
 };
 export type MarketCategory = 'PFP' | 'Art' | 'Gaming' | 'Assets' | 'Domains' | 'Memberships' | 'Utility';
 

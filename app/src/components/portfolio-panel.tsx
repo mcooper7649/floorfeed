@@ -218,7 +218,7 @@ function NftRow({ n, unit, value, usd: dollars, change, sales, pl, plUsd, onOpen
   const bump = useBump(sales);
   return (
     <Pressable style={({ hovered }: { hovered?: boolean }) => [s.row, hovered && { backgroundColor: C.card }]}
-      onPress={() => { onOpen?.(); router.push(n.drop ? { pathname: '/c/[chain]/[address]', params: n.drop } : { pathname: '/item/[symbol]/[id]', params: { symbol: n.collection.symbol, id: n.mint } }); }}>
+      onPress={() => { onOpen?.(); router.push({ pathname: '/item/[symbol]/[id]', params: { symbol: n.collection.symbol, id: n.mint } }); }}>
       <FlashBg tick={tick} at={at} />
       <View style={{ width: 40, height: 40 }}>
         <CollIcon uri={n.image} name={n.name ?? n.collection.name} size={40} radius={8} />
