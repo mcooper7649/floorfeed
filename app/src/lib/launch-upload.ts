@@ -112,7 +112,9 @@ export function traitCounts(items: { attributes: Attr[] }[]) {
 async function uploadOne(getUrl: () => Promise<string>, file: File): Promise<string> {
   for (let attempt = 0; ; attempt++) {
     const form = new FormData();
-    form.append('file', file);
+    // Name it explicitly: files from a folder pick otherwise go up as "folder/1.gif", which Pinata
+    // reads as a directory upload and refuses ("detected MIME type: directory").
+    form.append('file', file, file.name);
     form.append('network', 'public');
     const res = await fetch(await getUrl(), { method: 'POST', body: form }).catch(() => null);
     if (res?.ok) return ((await res.json()) as { data: { cid: string } }).data.cid;
