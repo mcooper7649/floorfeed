@@ -24,7 +24,8 @@ import { bridgeQuote, bridgeStatus } from "./bridge.ts";
 import { dropDetail, dropMintTx } from "./drops.ts";
 import { marks } from "./marks.ts";
 import { evmCancelBuild, evmCancelSubmit, evmListBuild, evmListQuote, evmListSubmit, evmMyListings, evmWalletListings } from "./list-evm.ts";
-import { EVM_ADDRESS_RE, evmApproveTx, evmBroadcast, evmPrepare, evmBalances, evmBuyTx, evmHoldings, evmNetworks, evmNftTransferTx, evmQuote, evmSellQuote, evmSellTx, evmTransferFee, evmUnwrapTx, totalEth } from "./trade-evm.ts";
+import { EVM_ADDRESS_RE, evmApproveTx, evmBroadcast, evmPrepare, evmBalances, evmBuyTx, evmHoldings, evmNetworks, evmNftTransferTx, evmQuote, evmSellQuote, evmSellTx, evmSendTx, evmTransferFee, evmUnwrapTx, totalEth } from "./trade-evm.ts";
+import { solSendTx } from "./send.ts";
 import { startIngest } from "./ingest.ts";
 import { KINDS, generate, nextPost, postedSince, reportResult, startSocial, submitExternal, xLength } from "./social.ts";
 import { amountsFrom, feeRates } from "./fees.ts";
@@ -852,6 +853,22 @@ app.get("/chain/evm/networks/:address", async (req, reply) => {
 app.post("/chain/evm/unwrap-tx", async (req, reply) => {
   const b = z.object({ chain: z.string(), owner: z.string().regex(EVM_ADDRESS_RE), token: z.string().regex(EVM_ADDRESS_RE), amount: z.number().positive().optional() }).parse(req.body);
   try { return await evmUnwrapTx(b); } catch (err) { return reply.code(409).send({ error: (err as Error).message }); }
+});
+
+// Send coins from a network row to any address (another wallet, a deployer,
+// an exchange): an unsigned, simulated transaction for the user's wallet.
+app.post("/chain/send-tx", async (req, reply) => {
+  const b = z.object({
+    chain: z.string(), from: z.string(), to: z.string(), token: z.string().regex(EVM_ADDRESS_RE).optional(),
+    amount: z.string().regex(/^\d{0,20}(\.\d{0,18})?$/).refine((a) => /\d/.test(a), "Enter an amount").optional(), max: z.boolean().optional(),
+  }).refine((x) => x.amount != null || x.max, "Enter an amount").parse(req.body);
+  const solana = b.chain === "solana";
+  const re = solana ? ADDRESS_RE : EVM_ADDRESS_RE;
+  if (!re.test(b.from)) return reply.code(400).send({ error: "Not a wallet address" });
+  if (!re.test(b.to.trim())) return reply.code(409).send({ error: solana ? "That isn't a Solana address." : "That isn't an Ethereum-style address (0x…)." });
+  try {
+    return solana ? await solSendTx({ ...b, to: b.to.trim() }) : await evmSendTx({ ...b, to: b.to.trim() });
+  } catch (err) { return reply.code(409).send({ error: (err as Error).message }); }
 });
 
 // A wallet's FloorFeed transactions with their on-chain outcome.

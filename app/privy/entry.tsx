@@ -13,7 +13,7 @@ import {
 } from '@solana/kit';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
-import { abstract, apeChain, arbitrum, base, hyperEvm, ink, mainnet, monad, robinhood, ronin } from 'viem/chains';
+import { abstract, apeChain, arbitrum, base, hyperEvm, ink, mainnet, monad, polygon, robinhood, ronin } from 'viem/chains';
 
 import { EIP712_DOMAIN, type EvmTx, type PreparedEvm, type PrivyMountOptions, type PrivyState, type SolTransfer, type TypedData } from '../src/lib/auth-types';
 
@@ -47,7 +47,7 @@ export function mount({ appId, solanaRpcUrl, theme, accent, onState }: PrivyMoun
           },
         },
         defaultChain: mainnet,
-        supportedChains: [mainnet, base, abstract, ink, arbitrum, hyperEvm, ronin, apeChain, monad, robinhood],
+        supportedChains: [mainnet, base, abstract, ink, arbitrum, hyperEvm, ronin, apeChain, monad, robinhood, polygon],
       }}>
       <Bridge onState={onState} />
     </PrivyProvider>,

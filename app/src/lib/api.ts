@@ -417,6 +417,11 @@ export type EvmNetwork = {
   chain: string; name: string; chainId: number; native: string; balance: number | null;
   tokens: { address: string; symbol: string; unit: string; unwrappable: boolean; balance: number | null }[];
 };
+// A coin transfer to any address, built and simulated by the API: `tx` for an
+// EVM wallet, `solTx` (unsigned base64; blockhash lasts ~1 min) for Solana.
+export type SendTx = (Partial<EvmTxOut> & { solTx?: { transaction: string; explorerTx: string } }) & {
+  amount: number; amountExact: string; symbol: string; unit: string; fee: number; native: string;
+};
 export type ActivityKind = 'buy' | 'sell' | 'approve' | 'bridge' | 'send' | 'unwrap' | 'mint';
 export type ActivityItem = {
   hash: string; chain: string; kind: ActivityKind; title: string; amount: number | null; unit: string | null;
@@ -549,6 +554,8 @@ export const api = {
   dropMintTx: (slug: string, b: { minter: string; quantity: number }) =>
     send('POST', `/drops/${encodeURIComponent(slug)}/mint-tx`, b) as Promise<EvmTxOut & { total: number; unit: string }>,
   evmNetworks: (address: string) => req<EvmNetwork[]>(`/chain/evm/networks/${address}`),
+  sendTx: (b: { chain: string; from: string; to: string; token?: string; amount?: string; max?: boolean }) =>
+    send('POST', '/chain/send-tx', b) as Promise<SendTx>,
   evmUnwrapTx: (b: { chain: string; owner: string; token: string; amount?: number }) =>
     send('POST', '/chain/evm/unwrap-tx', b) as Promise<EvmTxOut & { amount: number; symbol: string; unit: string }>,
   activity: (wallet: string) => req<ActivityItem[]>(`/activity/${wallet}`),

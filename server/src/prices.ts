@@ -6,7 +6,7 @@ const change: Record<string, number> = {}; // 24h % change, for the price ticker
 export async function refreshPrices() {
   try {
     const res = await fetch(
-      "https://api.coingecko.com/api/v3/simple/price?ids=solana,ethereum,hyperliquid,ronin,apecoin,monad&vs_currencies=usd&include_24hr_change=true",
+      "https://api.coingecko.com/api/v3/simple/price?ids=solana,ethereum,hyperliquid,ronin,apecoin,monad,polygon-ecosystem-token&vs_currencies=usd&include_24hr_change=true",
       { signal: AbortSignal.timeout(10_000) },
     );
     if (!res.ok) throw new Error(`coingecko ${res.status}`);
@@ -14,6 +14,7 @@ export async function refreshPrices() {
     const ids: Record<string, string[]> = {
       solana: ["SOL"], ethereum: ["ETH", "WETH"], hyperliquid: ["HYPE", "WHYPE"],
       ronin: ["RON", "WRON"], apecoin: ["APE", "WAPE"], monad: ["MON", "WMON"],
+      "polygon-ecosystem-token": ["POL", "WPOL"],
     };
     for (const [id, syms] of Object.entries(ids)) {
       const p = d[id]?.usd;
@@ -34,5 +35,5 @@ export const toUsd = (amount: number | null, currency: string) => {
 
 // Native coins for the ticker: USD price and 24h change.
 export const tickerPrices = () =>
-  ["SOL", "ETH", "HYPE", "APE", "RON", "MON"].flatMap((sym) =>
+  ["SOL", "ETH", "HYPE", "APE", "RON", "MON", "POL"].flatMap((sym) =>
     usd[sym] ? [{ symbol: sym, usd: usd[sym], change24hPct: change[sym] ?? null }] : []);

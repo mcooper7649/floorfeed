@@ -65,7 +65,7 @@ async function relay<T>(path: string, body?: unknown): Promise<T> {
   return json;
 }
 
-const solRpc = createSolanaRpc(config.solanaRpcUrl);
+export const solRpc = createSolanaRpc(config.solanaRpcUrl);
 const hexBytes = (h: string) => Uint8Array.from((h.replace(/^0x/, "").match(/../g) ?? []).map((b) => parseInt(b, 16)));
 
 // Relay's Solana deposit -> an unsigned v0 transaction (base64) with a fresh
@@ -74,15 +74,15 @@ const hexBytes = (h: string) => Uint8Array.from((h.replace(/^0x/, "").match(/../
 // transactions when Solana is busy, so a compute budget goes in front: the
 // units a dry run uses (+30%) at the going "very high" priority price, capped.
 const COMPUTE_BUDGET = address("ComputeBudget111111111111111111111111111111");
-const MAX_PRIORITY_LAMPORTS = 100_000; // 0.0001 SOL, at most, on top of the 5000-lamport base fee
-const budgetIx = (op: 2 | 3, value: bigint, bytes: 4 | 8): Instruction => {
+export const MAX_PRIORITY_LAMPORTS = 100_000; // 0.0001 SOL, at most, on top of the 5000-lamport base fee
+export const budgetIx = (op: 2 | 3, value: bigint, bytes: 4 | 8): Instruction => {
   const data = new Uint8Array(1 + bytes);
   data[0] = op;
   const view = new DataView(data.buffer);
   if (bytes === 8) view.setBigUint64(1, value, true); else view.setUint32(1, Number(value), true);
   return { programAddress: COMPUTE_BUDGET, accounts: [], data };
 };
-async function priorityPrice(tx: string) {
+export async function priorityPrice(tx: string) {
   // Helius' estimate for this transaction; else recent fees on the network.
   const est = await rpc<{ priorityFeeEstimate?: number }>("getPriorityFeeEstimate", [{ transaction: tx, options: { transactionEncoding: "base64", priorityLevel: "VeryHigh" } }]).catch(() => null);
   if (est?.priorityFeeEstimate != null) return Math.ceil(est.priorityFeeEstimate);

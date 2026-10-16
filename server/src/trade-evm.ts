@@ -2,7 +2,7 @@ import {
   createPublicClient, encodeFunctionData, formatEther, http, parseAbiItem, parseEther, parseSignature, parseTransaction, recoverTransactionAddress,
   serializeTransaction, type Hex, type PublicClient, type TransactionSerializable,
 } from "viem";
-import { abstract, apeChain, arbitrum, base, hyperEvm, ink, mainnet, monad, robinhood, ronin } from "viem/chains";
+import { abstract, apeChain, arbitrum, base, hyperEvm, ink, mainnet, monad, polygon, robinhood, ronin } from "viem/chains";
 import { EVM_CHAINS, EVM_SALES, config, normalizeUnit } from "./config.ts";
 import { unitOf } from "./units.ts";
 import { db } from "./db.ts";
@@ -34,6 +34,7 @@ const clients = {
   apechain: createPublicClient({ chain: apeChain, transport: rpc(process.env.APECHAIN_RPC_URL || "https://rpc.apechain.com/http") }),
   monad: createPublicClient({ chain: monad, transport: rpc(process.env.MONAD_RPC_URL || "https://rpc.monad.xyz") }),
   robinhood: createPublicClient({ chain: robinhood, transport: rpc(process.env.ROBINHOOD_RPC_URL || "https://rpc.mainnet.chain.robinhood.com") }),
+  polygon: createPublicClient({ chain: polygon, transport: rpc(process.env.POLYGON_RPC_URL || "https://polygon-bor-rpc.publicnode.com") }),
 };
 type EvmChain = keyof typeof clients;
 const TRADABLE = Object.keys(clients) as EvmChain[];
@@ -493,9 +494,15 @@ const WRAPPED: Partial<Record<EvmChain, { address: Hex; symbol: string; unit: st
   apechain: [{ address: "0x48b62137EdfA95a428D35C09E44256a739F6B557", symbol: "WAPE", unit: "APE", unwrappable: true }],
   monad: [{ address: "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A", symbol: "WMON", unit: "MON", unwrappable: true }],
   robinhood: [{ address: "0x0bd7d308f8e1639fab988df18a8011f41eacad73", symbol: "WETH", unit: "ETH", unwrappable: true }],
+  // Polygon: WPOL unwraps to POL; its WETH is bridged ETH, like Ronin's.
+  polygon: [
+    { address: "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270", symbol: "WPOL", unit: "POL", unwrappable: true },
+    { address: "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619", symbol: "WETH", unit: "ETH", unwrappable: false },
+  ],
 };
 const ERC20_BALANCE = parseAbiItem("function balanceOf(address) view returns (uint256)");
 const WETH_WITHDRAW = parseAbiItem("function withdraw(uint256 wad)");
+const ERC20_TRANSFER = parseAbiItem("function transfer(address to, uint256 amount) returns (bool)");
 
 const networksCache = new Map<string, { at: number; v: unknown }>();
 export async function evmNetworks(address: string) {
@@ -547,6 +554,77 @@ export async function evmUnwrapTx(b: { chain: string; owner: string; token: stri
     chainId: EVM_CHAINS[b.chain].id, explorerTx: `${EVM_CHAINS[b.chain].explorer}/tx/`,
     to: t.address, data, value: "0", gas: ((gas * 12n) / 10n).toString(),
     amount: Number(formatEther(wad)), symbol: t.symbol, unit: t.unit,
+  };
+}
+
+// Sending coins to any address: the chain's coin, or one of its wrapped tokens
+// (WETH, WAPE...). Checks the balance, works out "Max" so the network fee still
+// fits, and simulates the transfer as the sender before anything is signed.
+// OP-stack chains add a small L1 data fee that gas estimates don't include.
+const L1_FEE_MARGIN: Partial<Record<EvmChain, bigint>> = { base: 2_000_000_000_000n, ink: 2_000_000_000_000n };
+export async function evmSendTx(b: { chain: string; from: string; to: string; token?: string; amount?: string; max?: boolean }) {
+  if (!isTradable(b.chain)) throw new Error("Unsupported network");
+  const chain = b.chain;
+  const info = EVM_CHAINS[chain];
+  const c = clients[chain] as unknown as PublicClient;
+  const from = b.from as Hex, to = b.to as Hex;
+  if (from.toLowerCase() === to.toLowerCase()) throw new Error("That's this wallet's own address.");
+  const token = b.token ? (WRAPPED[chain] ?? []).find((t) => t.address.toLowerCase() === b.token!.toLowerCase()) : null;
+  if (b.token && !token) throw new Error("That token can't be sent from here.");
+  const symbol = token?.symbol ?? info.native;
+  const asked = b.amount != null ? parseEther(b.amount) : null;
+  if (!b.max && !(asked != null && asked > 0n)) throw new Error("Enter an amount.");
+
+  // What one gas unit can cost: twice the base fee plus a tip, the same as
+  // evmPrepare signs with, so a Max send leaves exactly enough for it.
+  const [nativeBal, fees, baseFee] = await Promise.all([
+    c.getBalance({ address: from }),
+    c.estimateFeesPerGas().catch(() => null),
+    c.getBlock().then((x) => x.baseFeePerGas ?? null).catch(() => null),
+  ]);
+  const perGas = fees?.maxFeePerGas != null && baseFee != null
+    ? baseFee * 2n + ((fees.maxPriorityFeePerGas ?? 0n) > MIN_TIP(chain) ? fees.maxPriorityFeePerGas! : MIN_TIP(chain))
+    : ((await c.getGasPrice()) * 12n) / 10n;
+  const margin = L1_FEE_MARGIN[chain] ?? 0n;
+  const noGas = `Not enough ${info.native} on ${info.name} for the network fee.`;
+
+  let value = 0n, data: Hex = "0x", target = to, amount: bigint, gas: bigint;
+  if (token) {
+    const bal = await c.readContract({ address: token.address, abi: [ERC20_BALANCE], functionName: "balanceOf", args: [from] });
+    amount = b.max ? bal : asked!;
+    if (amount <= 0n || amount > bal) throw new Error(`You have ${formatEther(bal)} ${symbol} on ${info.name}.`);
+    data = encodeFunctionData({ abi: [ERC20_TRANSFER], functionName: "transfer", args: [to, amount] });
+    target = token.address;
+    gas = await c.estimateGas({ account: from, to: target, data }).catch((err: Error) => {
+      throw new Error(/insufficient funds/i.test(err.message) ? noGas : `The transfer would fail: ${err.message.split("\n")[0]}`);
+    });
+    gas = (gas * 12n) / 10n;
+    if (nativeBal < gas * perGas + margin) throw new Error(noGas);
+  } else {
+    // Estimated, not a flat 21k: Arbitrum-style chains add L1 gas, Abstract
+    // (zkSync) transfers cost far more, and a contract recipient (a safe, a
+    // smart wallet) runs code. A plain 21k transfer on Ethereum stays exact.
+    gas = await c.estimateGas({ account: from, to, value: 0n }).catch(() => null) ?? (chain === "abstract" ? 500_000n : 100_000n);
+    if (gas !== 21_000n) gas = (gas * 12n) / 10n;
+    const reserve = gas * perGas + margin;
+    amount = b.max ? nativeBal - reserve : asked!;
+    if (amount <= 0n) throw new Error(noGas);
+    if (amount + reserve > nativeBal) {
+      const most = nativeBal > reserve ? nativeBal - reserve : 0n;
+      throw new Error(`You can send up to ${formatEther(most)} ${symbol} on ${info.name} (the rest covers the network fee).`);
+    }
+    value = amount;
+    if (gas !== 21_000n && chain !== "abstract") {
+      await c.estimateGas({ account: from, to, value }).catch((err: Error) => {
+        throw new Error(`That address won't accept ${symbol}: ${err.message.split("\n")[0]}`);
+      });
+    }
+  }
+  return {
+    chainId: info.id, explorerTx: `${info.explorer}/tx/`,
+    to: target, data, value: value.toString(), gas: gas.toString(),
+    amount: Number(formatEther(amount)), amountExact: formatEther(amount), symbol, unit: token?.unit ?? info.native,
+    fee: Number(formatEther(gas * perGas + margin)), native: info.native,
   };
 }
 

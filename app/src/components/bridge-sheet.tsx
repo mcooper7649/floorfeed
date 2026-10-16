@@ -21,7 +21,7 @@ import { track } from '@/lib/analytics';
 // shortcuts that keep back the network fee), or, when a buy or mint asks for a
 // top-up, what should arrive.
 
-const NETWORKS = ['solana', 'ethereum', 'base', 'abstract', 'ink', 'arbitrum', 'hyperevm', 'ronin', 'apechain', 'monad', 'robinhood'] as const;
+const NETWORKS = ['solana', 'ethereum', 'base', 'abstract', 'ink', 'arbitrum', 'hyperevm', 'ronin', 'apechain', 'monad', 'robinhood', 'polygon'] as const;
 const unitOf = (c: string) => (c === 'solana' ? 'SOL' : CHAINS[c as keyof typeof CHAINS]?.symbol ?? 'ETH');
 // Typed-looking amount for the input when a % chip filled it.
 const trimAmt = (n: number) => String(Number(n.toFixed(n >= 1 ? 4 : 6)));
