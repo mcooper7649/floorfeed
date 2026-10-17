@@ -1,13 +1,10 @@
-import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { Link } from 'expo-router';
 import { useEffect, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { BuySheet } from '@/components/buy-sheet';
-import { EvmBuySheet } from '@/components/evm-buy-sheet';
+import { BuyFloorButton } from '@/components/buy-floor-button';
 import { CollIcon } from '@/components/coll-icon';
-import { MODE_COLOR } from '@/components/mode-toggle';
 import { NftImage, Pill } from '@/components/nft-image';
 import { FollowButton } from '@/components/ui';
 import { C } from '@/constants/brand';
@@ -17,9 +14,7 @@ import {
 } from '@/lib/api';
 import { holdTime, pct, shortAddr, signedSol, sol, timeAgo, unitFor } from '@/lib/format';
 import { thumb } from '@/lib/img';
-import { useTradeMode } from '@/lib/mode';
 import { useSession } from '@/lib/session';
-import { track } from '@/lib/analytics';
 import { useUsd, useWithUsd } from '@/lib/prices';
 
 // One card per feed event. `tile` is the desktop grid card: artwork on top,
@@ -33,9 +28,6 @@ export function EventCard({ e, tile }: { e: FeedEvent; tile?: boolean }) {
   }
 }
 
-const tap = () => {
-  if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-};
 
 // --- trader identity --------------------------------------------------------
 
@@ -117,45 +109,6 @@ function UsdTag({ n, unit, signed }: { n: number; unit: string; signed?: boolean
 
 function Kicker({ text, color }: { text: string; color: string }) {
   return <Text style={[s.kicker, { color }]}>{text}</Text>;
-}
-
-// Copy = buy the collection's floor (paper or real, per the wallet mode).
-function CopyCta({ coll, copiedFrom }: { coll: FeedEvent['collection']; copiedFrom?: string }) {
-  const withUsd = useWithUsd();
-  const { symbol, floor } = coll;
-  const { userId, bumpPortfolio } = useSession();
-  const { mode } = useTradeMode();
-  const [state, setState] = useState<'idle' | 'busy' | string>('idle');
-  const [open, setOpen] = useState(false);
-  const paperBuy = async () => {
-    if (!userId || state === 'busy') return;
-    tap();
-    setState('busy');
-    try {
-      const r = await api.buyFloor(userId, symbol, copiedFrom);
-      track('paper_buy', { from: 'feed' });
-      setState(`Bought floor @ ${sol(r.entryPrice, 2, coll.currency)}`);
-      bumpPortfolio();
-    } catch (err) {
-      setState((err as Error).message);
-    }
-  };
-  const f = floor ? ` · ${withUsd(sol(floor, 2, coll.currency), floor, coll.currency)}` : '';
-  return (
-    <>
-      <Pressable onPress={() => { track('copy_tap', { mode }); if (mode === 'real') { tap(); setOpen(true); } else void paperBuy(); }}
-        style={({ pressed }) => [s.cta, { backgroundColor: MODE_COLOR[mode] }, pressed && { opacity: 0.8 }]}>
-        <Text style={s.ctaTxt}>
-          {mode === 'real' ? `Copy · buy floor${f}`
-            : state === 'idle' ? `Copy · paper buy floor${f}`
-            : state === 'busy' ? 'Buying…' : state}
-        </Text>
-      </Pressable>
-      {coll.chain === 'solana'
-        ? <BuySheet symbol={symbol} open={open} onClose={() => setOpen(false)} onPaper={paperBuy} />
-        : <EvmBuySheet symbol={symbol} open={open} onClose={() => setOpen(false)} onPaper={paperBuy} />}
-    </>
-  );
 }
 
 const collHref = (symbol: string) => ({ pathname: '/collection/[symbol]' as const, params: { symbol } });
@@ -244,7 +197,7 @@ function BuyCard({ e, tile }: { e: BuyEvent; tile?: boolean }) {
           </View>
           {aiTake}
           <View style={{ flex: 1 }} />
-          <CopyCta coll={e.collection} copiedFrom={e.signature} />
+          <BuyFloorButton coll={e.collection} copiedFrom={e.signature} />
         </View>
       </Card>
     );
@@ -267,7 +220,7 @@ function BuyCard({ e, tile }: { e: BuyEvent; tile?: boolean }) {
         </Pressable>
       </Link>
       {aiTake}
-      <CopyCta coll={e.collection} copiedFrom={e.signature} />
+      <BuyFloorButton coll={e.collection} copiedFrom={e.signature} />
     </Card>
   );
 }
@@ -361,7 +314,7 @@ function SweepCard({ e, tile }: { e: SweepEvent; tile?: boolean }) {
           <TraderRow t={e.wallet} />
           {detail}
           <View style={{ flex: 1 }} />
-          <CopyCta coll={e.collection} />
+          <BuyFloorButton coll={e.collection} />
         </View>
       </Card>
     );
@@ -372,7 +325,7 @@ function SweepCard({ e, tile }: { e: SweepEvent; tile?: boolean }) {
       <TraderRow t={e.wallet} />
       {detail}
       {art}
-      <CopyCta coll={e.collection} />
+      <BuyFloorButton coll={e.collection} />
     </Card>
   );
 }
@@ -428,7 +381,7 @@ function ClusterCard({ e, tile }: { e: ClusterEvent; tile?: boolean }) {
         <View style={s.tileBody}>
           {body}
           <View style={{ flex: 1 }} />
-          <CopyCta coll={e.collection} />
+          <BuyFloorButton coll={e.collection} />
         </View>
       </Card>
     );
@@ -438,7 +391,7 @@ function ClusterCard({ e, tile }: { e: ClusterEvent; tile?: boolean }) {
       <Kicker text="Cluster" color={C.accent} />
       {body}
       {art}
-      <CopyCta coll={e.collection} />
+      <BuyFloorButton coll={e.collection} />
     </Card>
   );
 }
@@ -467,8 +420,6 @@ const s = StyleSheet.create({
   take: { backgroundColor: '#A78BFA14', borderRadius: 12, padding: 10, gap: 4, borderLeftWidth: 3, borderLeftColor: C.ai },
   takeLabel: { ...T.caption, color: C.ai, fontWeight: '600' },
   takeTxt: { ...T.meta, color: C.text },
-  cta: { backgroundColor: C.accent, borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
-  ctaTxt: { ...T.button, color: C.accentInk },
   ghost: { borderRadius: 12, paddingVertical: 11, alignItems: 'center', borderWidth: 1, borderColor: C.border },
   ghostTxt: { ...T.button, color: C.text },
   mosaic: { width: '100%', aspectRatio: 1, flexDirection: 'row', flexWrap: 'wrap' },
