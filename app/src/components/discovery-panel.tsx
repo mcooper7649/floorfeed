@@ -5,14 +5,13 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 
 import { CollIcon } from '@/components/coll-icon';
 import { FlashBg, SalePulse, TickArrow, useBump, useTick } from '@/components/flash';
-import { PushCard } from '@/components/push-card';
 import { useQuickMenu } from '@/components/quick-menu';
 import { ThesisFeedRow } from '@/components/thesis';
 import { C } from '@/constants/brand';
+import { display } from '@/constants/type';
 import { CHAINS } from '@/constants/chains';
-import { useAlerts } from '@/lib/alerts';
 import {
-  api, type Alert, type Chain, type CollectionSummary, type Drop, type FeedEvent, type HolderRow, type LeaderWindow, type ThesisFeedItem, type Trader, type Unit,
+  api, type Chain, type CollectionSummary, type Drop, type FeedEvent, type HolderRow, type LeaderWindow, type ThesisFeedItem, type Trader, type Unit,
 } from '@/lib/api';
 import { shortAddr, signedSol, sol, timeAgo, usdGlance } from '@/lib/format';
 import { thumb } from '@/lib/img';
@@ -21,22 +20,29 @@ import { useSignedUsd, useUsd } from '@/lib/prices';
 import { PANEL_GAP, PANEL_WIDTH, usePanel } from '@/lib/panel';
 import { useSession } from '@/lib/session';
 
-// Desktop discovery panel, left of every page on wide web: Alerts,
-// Collections (watchlist, blue chips, trending, smart money, breakouts,
-// following), Leaders, and a live Feed. Dense rows: art with a chain badge,
-// name and one fact on the left; floor and 24h change on the right.
+// Radar: the desktop discovery panel, left of every page on wide web. Four
+// views: Discover (one list at a time, picked from a grouped menu, plus a
+// sort), Leaders, Thesis and Live (every trade as it lands). Alerts live
+// behind the header's bell. Dense rows: art with a chain badge, name and one
+// fact on the left; floor and 24h change on the right.
 
-type Tab = 'alerts' | 'collections' | 'thesis' | 'leaders' | 'feed';
+type Tab = 'collections' | 'leaders' | 'thesis' | 'feed';
 type List = 'watch' | 'blue' | 'trending' | 'smart' | 'new' | 'minting' | 'breakouts' | 'following';
 
 const TABS: { key: Tab; label: string }[] = [
-  { key: 'alerts', label: 'Alerts' }, { key: 'collections', label: 'Discover' }, { key: 'thesis', label: 'Thesis' },
-  { key: 'leaders', label: 'Leaders' }, { key: 'feed', label: 'Feed' },
+  { key: 'collections', label: 'Discover' }, { key: 'leaders', label: 'Leaders' }, { key: 'thesis', label: 'Thesis' }, { key: 'feed', label: 'Live' },
 ];
-const LISTS: { key: List; label: string }[] = [
-  { key: 'watch', label: 'Watchlist' }, { key: 'blue', label: 'Blue chips' }, { key: 'trending', label: 'Trending' },
-  { key: 'smart', label: 'Smart money' }, { key: 'new', label: 'New' }, { key: 'minting', label: 'Minting' },
-  { key: 'breakouts', label: 'Breakouts' }, { key: 'following', label: 'Following' },
+// The Discover lists, grouped in the picker. `hint` is the one line under the
+// controls; `caution` tints it (young or fast-moving collections).
+const LISTS: { key: List; label: string; group: string; hint: string; caution?: boolean }[] = [
+  { key: 'trending', label: 'Trending', group: 'Market', hint: 'Busiest today against their usual week' },
+  { key: 'breakouts', label: 'Breakouts', group: 'Market', hint: 'Biggest 24h floor gains with real volume. Thin books fall fast too.', caution: true },
+  { key: 'blue', label: 'Blue chips', group: 'Market', hint: 'The most traded collections over 7 days' },
+  { key: 'new', label: 'New', group: 'Market', hint: 'Created in the last 30 days and already trading. The riskiest kind.', caution: true },
+  { key: 'minting', label: 'Minting', group: 'Market', hint: 'Live and upcoming drops. Most new NFTs lose value.', caution: true },
+  { key: 'smart', label: 'Smart money', group: 'Wallets', hint: 'Bought and still held by proven flippers (30 days)' },
+  { key: 'following', label: 'Following', group: 'Wallets', hint: 'What the wallets you follow hold right now' },
+  { key: 'watch', label: 'Watchlist', group: 'Yours', hint: 'Collections you starred' },
 ];
 
 // How a list is ordered. 'default' is the list's own ranking (trending score,
@@ -77,12 +83,11 @@ const toWallet = (address: string) => go({ pathname: '/wallet/[address]', params
 export function DiscoveryPanel() {
   const { open, toggle } = usePanel();
   const [tab, setTab] = useState<Tab>('collections');
-  const { unread } = useAlerts();
 
   if (!open) {
     return (
       <View style={s.rail}>
-        <Pressable onPress={toggle} accessibilityLabel="Show discovery panel" style={s.railBtn} hitSlop={6}>
+        <Pressable onPress={toggle} accessibilityLabel="Show Radar" style={s.railBtn} hitSlop={6}>
           <Text style={s.railTxt}>»</Text>
         </Pressable>
       </View>
@@ -90,21 +95,24 @@ export function DiscoveryPanel() {
   }
   return (
     <View style={s.panel}>
-      <View style={s.tabs}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 11, alignItems: 'center' }} style={{ flex: 1 }}>
-          {TABS.map((t) => (
-            <Pressable key={t.key} onPress={() => setTab(t.key)} accessibilityRole="tab" accessibilityState={{ selected: tab === t.key }}>
-              <Text style={[s.tab, tab === t.key && s.tabOn]}>
-                {t.label}{t.key === 'alerts' && unread > 0 ? <Text style={s.dot}> ●</Text> : null}
-              </Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-        <Pressable onPress={toggle} accessibilityLabel="Collapse discovery panel" hitSlop={8}>
+      <View style={s.head}>
+        <View style={s.radar}><View style={s.radarDot} /></View>
+        <Text {...display} style={s.title}>Radar</Text>
+        <Pressable onPress={toggle} accessibilityLabel="Collapse Radar" hitSlop={8} style={s.collapseBtn}>
           <Text style={s.collapse}>«</Text>
         </Pressable>
       </View>
-      {tab === 'alerts' && <AlertsTab />}
+      <View style={s.tabs} accessibilityRole="tablist">
+        {TABS.map((t) => {
+          const on = tab === t.key;
+          return (
+            <Pressable key={t.key} onPress={() => setTab(t.key)} accessibilityRole="tab" accessibilityState={{ selected: on }}
+              style={({ hovered }: { hovered?: boolean }) => [s.tab, on && s.tabOn, !on && hovered && { backgroundColor: C.card }]}>
+              <Text style={[s.tabTxt, on && { color: C.text }]}>{t.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
       {tab === 'collections' && <CollectionsTab />}
       {tab === 'thesis' && <ThesisFeedTab />}
       {tab === 'leaders' && <LeadersTab />}
@@ -125,16 +133,6 @@ function Chips<K extends string>({ items, value, onChange }: { items: { key: K; 
           <Text style={[s.chipTxt, value === c.key && { color: C.text }]}>{c.label}</Text>
         </Pressable>
       ))}
-    </View>
-  );
-}
-
-function Notice({ tone = 'info', title, text }: { tone?: 'info' | 'caution'; title: string; text: string }) {
-  const caution = tone === 'caution';
-  return (
-    <View style={[s.notice, caution && s.noticeCaution]}>
-      <Text style={[s.noticeTitle, caution && { color: '#F5B547' }]}>{caution ? '⚠ ' : 'ⓘ '}{title}</Text>
-      <Text style={s.noticeTxt}>{text}</Text>
     </View>
   );
 }
@@ -234,8 +232,38 @@ function useCollections() {
 // --- Collections -------------------------------------------------------------------
 
 // Also the phone's Discover view (Markets tab).
+// The grouped list picker, over the list it replaces (closes on a pick or a tap outside).
+function ListMenu({ value, onPick, onClose }: { value: List; onPick: (k: List) => void; onClose: () => void }) {
+  const groups = [...new Set(LISTS.map((l) => l.group))];
+  return (
+    <Pressable style={s.menuBackdrop} onPress={onClose} accessibilityLabel="Close list picker">
+      <Pressable style={s.menu} onPress={() => {}}>
+        {groups.map((g) => (
+          <View key={g} style={{ gap: 2 }}>
+            <Text style={s.menuGroup}>{g}</Text>
+            {LISTS.filter((l) => l.group === g).map((l) => {
+              const on = l.key === value;
+              return (
+                <Pressable key={l.key} onPress={() => onPick(l.key)} accessibilityRole="menuitem" accessibilityState={{ selected: on }}
+                  style={({ hovered }: { hovered?: boolean }) => [s.menuItem, (on || hovered) && { backgroundColor: C.cardHi }]}>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={[s.menuLbl, on && { color: C.accent }]}>{l.label}</Text>
+                    <Text style={s.menuHint} numberOfLines={1}>{l.hint}</Text>
+                  </View>
+                  {on && <Text style={s.menuCheck}>✓</Text>}
+                </Pressable>
+              );
+            })}
+          </View>
+        ))}
+      </Pressable>
+    </Pressable>
+  );
+}
+
 export function CollectionsTab() {
   const [list, setList] = useState<List>('trending');
+  const [picking, setPicking] = useState(false);
   const [sorts, setSorts] = useState<Partial<Record<List, Sort>>>({});
   const sort = sorts[list] ?? 'default';
   const sortMenu = useQuickMenu();
@@ -296,9 +324,6 @@ export function CollectionsTab() {
       <Scroll loading={!holders || !rows} empty={list === 'following'
         ? <Empty text="Follow wallets and the collections they hold right now show up here." cta="Find traders to follow" onPress={() => go('/leaderboard')} />
         : <Empty text="No proven wallets are holding tracked collections right now." />}>
-        {list === 'smart'
-          ? <Notice title="Held by proven flippers" text="Collections that Top Flipper and Proven wallets bought in the last 30 days and still hold." />
-          : null}
         {hs.length ? holderRows(hs, list === 'smart' ? 'proven holders' : 'you follow') : null}
       </Scroll>
     );
@@ -307,12 +332,6 @@ export function CollectionsTab() {
       <Scroll loading={!rows} empty={list === 'watch'
         ? <Empty text="Tap ☆ on any collection to keep it here." cta="Browse collections" onPress={() => go('/markets')} />
         : <Empty text="Nothing here right now." />}>
-        {list === 'breakouts' && ranked.length
-          ? <Notice tone="caution" title="Floors move fast" text="Biggest 24h floor gains among collections with real volume. Thin books can drop as quickly as they rise." />
-          : null}
-        {list === 'new' && ranked.length
-          ? <Notice tone="caution" title="Young collections" text="Created in the last 30 days and already trading: the busiest on their chain, plus projects that just minted out. New projects are the riskiest kind." />
-          : null}
         {ranked.length ? ranked.map((c) => collRow(c, list === 'new'
           ? `🌱 ${Math.max(1, Math.round(ageDays(c.createdAt!)))}d old · ${usd(c.volume7dUsd)} vol 7d`
           : list === 'trending' || list === 'breakouts'
@@ -322,26 +341,35 @@ export function CollectionsTab() {
     );
   }
 
+  const meta = LISTS.find((l) => l.key === list)!;
   return (
-    <>
-      <Chips items={LISTS} value={list} onChange={setList} />
-      {list !== 'minting' && (
-        <View style={s.sortRow}>
-          <Text style={s.sortLbl}>Sort</Text>
-          <Pressable accessibilityRole="button" accessibilityLabel="Sort this list" style={s.sortBtn}
+    <View style={{ flex: 1 }}>
+      <View style={s.controls}>
+        <Pressable accessibilityRole="button" accessibilityLabel={`List: ${meta.label}. Change list`} onPress={() => setPicking((v) => !v)}
+          style={({ hovered }: { hovered?: boolean }) => [s.picker, (picking || hovered) && { borderColor: C.dim }]}>
+          <Text style={s.pickerTxt} numberOfLines={1}>{meta.label}</Text>
+          <Text style={s.caret}>{picking ? '▴' : '▾'}</Text>
+        </Pressable>
+        {list !== 'minting' && (
+          <Pressable accessibilityRole="button" accessibilityLabel="Sort this list"
+            style={({ hovered }: { hovered?: boolean }) => [s.sortBtn, hovered && { backgroundColor: C.card }]}
             onPress={(e) => sortMenu.open(e as never, [
               { label: `${sort === 'default' ? '✓ ' : ''}${DEFAULT_SORT[list] ?? 'Default'}`, onPress: () => setSorts((x) => ({ ...x, [list]: 'default' })) },
               'sep',
               ...SORTS.filter((o) => o.label !== DEFAULT_SORT[list]).map((o) => ({ label: `${sort === o.key ? '✓ ' : ''}${o.label}`, onPress: () => setSorts((x) => ({ ...x, [list]: o.key })) })),
             ], 'Sort by')}>
+            <Text style={s.sortIcon}>⇅</Text>
             <Text style={s.sortVal} numberOfLines={1}>{sort === 'default' ? DEFAULT_SORT[list] ?? 'Default' : SORTS.find((o) => o.key === sort)!.label}</Text>
-            <Text style={s.sortCaret}>▾</Text>
           </Pressable>
-        </View>
-      )}
+        )}
+      </View>
+      <Text style={[s.hint, meta.caution && { color: '#F5B547' }]} numberOfLines={2}>{meta.caution ? '⚠ ' : ''}{meta.hint}</Text>
       {sortMenu.node}
-      {body}
-    </>
+      <View style={{ flex: 1 }}>
+        {body}
+        {picking && <ListMenu value={list} onPick={(k) => { setList(k); setPicking(false); }} onClose={() => setPicking(false)} />}
+      </View>
+    </View>
   );
 }
 
@@ -368,16 +396,12 @@ function MintingList() {
     <Scroll loading={!drops} empty={<Empty text="No live or upcoming mints right now." />}>
       {drops?.length ? (
         <>
-          {mode === 'paper' ? (
-            // Paper trading can't mint: a mint makes a new NFT on chain and is paid in real coins.
-            <View style={s.paperNote}>
-              <Notice title="Minting uses real money" text="You're in Practice mode, which can't mint: a mint creates a new NFT on chain and is paid in real coins. Browse drops here; switch to Real to mint one." />
-              {canReal
-                ? <Pressable onPress={() => setMode('real')} style={s.emptyBtn}><Text style={s.emptyBtnTxt}>Switch to Real</Text></Pressable>
-                : <Text style={s.emptyTxt}>Connect a wallet or sign in to switch to Real.</Text>}
+          {mode === 'paper' && (
+            // Practice can't mint: a mint makes a new NFT on chain and is paid in real coins.
+            <View style={s.inlineNote}>
+              <Text style={[s.sub, { flex: 1 }]}>Minting uses real money. {canReal ? '' : 'Sign in or connect a wallet to mint.'}</Text>
+              {canReal && <Pressable onPress={() => setMode('real')} hitSlop={6}><Text style={s.moreTxt}>Switch to Real</Text></Pressable>}
             </View>
-          ) : (
-            <Notice tone="caution" title="Mint here, carefully" text="Live and upcoming drops across chains. Open one to see its stages and mint in FloorFeed. Most new NFTs lose value, so check the collection first." />
           )}
           {drops.map((d) => {
             const soon = !d.minting && d.startsAt != null && d.startsAt > now;
@@ -401,44 +425,6 @@ function MintingList() {
   );
 }
 const trimNum = (n: number) => (n >= 1 ? n.toFixed(2) : n.toPrecision(2)).replace(/\.?0+$/, '');
-
-// --- Alerts --------------------------------------------------------------------------
-
-function AlertsTab() {
-  const toUsd = useUsd();
-  const signedUsdOf = useSignedUsd();
-  const { userId, following } = useSession();
-  const { unread } = useAlerts();
-  const [alerts, setAlerts] = useState<Alert[] | null>(null);
-  useEffect(() => {
-    if (!userId) return;
-    let alive = true;
-    api.alerts(userId).then((r) => alive && setAlerts(r.alerts)).catch(() => alive && setAlerts([]));
-    return () => { alive = false; };
-  }, [userId, unread]);
-
-  return (
-    <Scroll loading={!alerts && !!userId} empty={following.size
-      ? <Empty text="No trades from the wallets you follow yet. They show up here as they happen." />
-      : <Empty text="Follow a wallet to get its buys and sales here, with a notification if you want one." cta="Find traders to follow" onPress={() => go('/leaderboard')} />}>
-      {following.size ? <View style={{ marginBottom: 6 }}><PushCard compact /></View> : null}
-      {alerts?.length ? (
-        <>
-          {alerts.slice(0, 30).map((a) => (
-            <Row key={a.id} left={<Art uri={a.image} name={a.collection.name} round={false} />}
-              title={`${a.name ?? shortAddr(a.wallet)} ${a.side === 'buy' ? 'bought' : a.pnl == null ? 'sold' : a.pnl >= 0 ? 'flipped' : 'sold'}`}
-              sub={`${a.collection.name} · ${timeAgo(a.t)}`}
-              value={amount(a.price, a.currency)} usd={toUsd(a.price, a.currency)}
-              change={a.pnl != null ? (signedUsdOf(a.pnl, a.currency) ?? signedAmount(a.pnl, a.currency)) : a.read ? undefined : 'new'}
-              changeColor={a.pnl == null ? C.accent : a.pnl >= 0 ? C.up : C.down}
-              onPress={() => go({ pathname: '/item/[symbol]/[id]', params: { symbol: a.collection.symbol, id: a.mint } })} />
-          ))}
-          <Pressable onPress={() => go('/alerts')} style={s.more}><Text style={s.moreTxt}>All alerts →</Text></Pressable>
-        </>
-      ) : null}
-    </Scroll>
-  );
-}
 
 // --- Thesis: the live feed of theses across collections ---------------------------
 
@@ -574,21 +560,37 @@ const s = StyleSheet.create({
   rail: { width: 44, alignItems: 'center', paddingTop: 16 },
   railBtn: { width: 28, height: 28, borderRadius: 8, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center' },
   railTxt: { color: C.dim, fontSize: 16, lineHeight: 18 },
-  tabs: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingTop: 12, paddingBottom: 8 },
-  tab: { color: C.dim, fontSize: 13, fontWeight: '500' },
-  tabOn: { color: C.text },
-  dot: { color: C.accent, fontSize: 10 },
-  collapse: { color: C.dim, fontSize: 18, lineHeight: 20 },
+  head: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingTop: 14, paddingBottom: 10 },
+  radar: { width: 18, height: 18, borderRadius: 9, borderWidth: 1.5, borderColor: C.accent, alignItems: 'center', justifyContent: 'center' },
+  radarDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: C.accent },
+  title: { color: C.text, fontSize: 17, fontWeight: '700', letterSpacing: -0.3, flex: 1 },
+  collapseBtn: { width: 26, height: 26, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
+  collapse: { color: C.dim, fontSize: 16, lineHeight: 18 },
+  tabs: { flexDirection: 'row', gap: 2, marginHorizontal: 12, marginBottom: 10, padding: 3, borderRadius: 10, backgroundColor: C.card },
+  tab: { flex: 1, alignItems: 'center', paddingVertical: 6, borderRadius: 8 },
+  tabOn: { backgroundColor: C.cardHi },
+  tabTxt: { color: C.dim, fontSize: 12, fontWeight: '700' },
+  controls: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12 },
+  picker: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 30, paddingHorizontal: 10, borderRadius: 8, borderWidth: 1, borderColor: C.border, flexShrink: 0 },
+  pickerTxt: { color: C.text, fontSize: 13, fontWeight: '700' },
+  caret: { color: C.dim, fontSize: 10 },
+  hint: { color: C.muted, fontSize: 11, lineHeight: 15, paddingHorizontal: 14, paddingTop: 6, paddingBottom: 6 },
+  menuBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 10, backgroundColor: '#0B0B10B3', paddingHorizontal: 8 },
+  menu: { backgroundColor: C.card, borderRadius: 12, borderWidth: 1, borderColor: C.border, padding: 6, gap: 6 },
+  menuGroup: { color: C.muted, fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.6, paddingHorizontal: 8, paddingTop: 4 },
+  menuItem: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 8, paddingVertical: 6, borderRadius: 8 },
+  menuLbl: { color: C.text, fontSize: 13, fontWeight: '600' },
+  menuHint: { color: C.dim, fontSize: 11 },
+  menuCheck: { color: C.accent, fontSize: 13, fontWeight: '700' },
+  inlineNote: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 6, marginBottom: 6, padding: 10, borderRadius: 10, backgroundColor: C.card },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 12, paddingBottom: 8 },
-  chipPair: { gap: 0 },
+  chipPair: { flexDirection: 'row', justifyContent: 'space-between' },
   chip: { height: 24, paddingHorizontal: 8, borderRadius: 6, borderWidth: 1, borderColor: C.card, justifyContent: 'center' },
   chipOn: { backgroundColor: C.card },
   chipTxt: { color: C.dim, fontSize: 12, fontWeight: '700' },
-  sortRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingBottom: 8 },
-  sortLbl: { color: C.muted, fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4 },
-  sortBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, height: 24, paddingHorizontal: 8, borderRadius: 6, backgroundColor: C.card, flexShrink: 1 },
-  sortVal: { color: C.text, fontSize: 12, fontWeight: '600', flexShrink: 1 },
-  sortCaret: { color: C.dim, fontSize: 10 },
+  sortBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 5, height: 30, paddingHorizontal: 8, borderRadius: 8, flex: 1, minWidth: 0 },
+  sortIcon: { color: C.dim, fontSize: 13 },
+  sortVal: { color: C.dim, fontSize: 12, fontWeight: '600', flexShrink: 1 },
   list: { paddingHorizontal: 6, paddingBottom: 12 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 8, borderRadius: 8 },
   rowMid: { flex: 1, minWidth: 0, gap: 2 },
