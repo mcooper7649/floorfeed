@@ -85,6 +85,7 @@ export function WalletButton() {
 // Picker when disconnected; account details + disconnect when connected.
 export function WalletSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const w = useWallet();
+  const ew = useEvmWallet();
   const auth = useAuth();
   const balance = useBalance(w.address);
   const [deposit, setDeposit] = useState(false);
@@ -208,24 +209,15 @@ export function WalletSheet({ open, onClose }: { open: boolean; onClose: () => v
               )}
               {!auth.supported && <Text style={s.title}>Connect a wallet</Text>}
               <Text style={s.note}>FloorFeed never sees your keys or seed phrase. Your wallet asks before signing anything.</Text>
-              {w.available.length === 0 ? (
-                <View style={{ gap: 10 }}>
-                  <Text style={s.meta}>No Solana wallet was found in this browser.</Text>
-                  <Pressable accessibilityRole="button" onPress={() => Linking.openURL('https://phantom.com/download')} style={s.secondary}>
-                    <Text style={s.secondaryTxt}>Get Phantom ↗</Text>
-                  </Pressable>
-                </View>
+              {ew.address ? (
+                <>
+                  <Text style={s.label}>Solana wallet</Text>
+                  <SolanaOptions onPick={pick} />
+                  <EvmSection onDeposit={openEthDeposit} />
+                </>
               ) : (
-                w.available.map((o) => (
-                  <Pressable accessibilityRole="button" key={o.name} onPress={() => pick(o.name)} disabled={w.connecting} style={s.option}>
-                    <Image source={o.icon} style={s.iconBig} />
-                    <Text style={s.optionTxt}>{o.name}</Text>
-                    <Text style={s.meta}>{w.connecting ? 'Check your wallet…' : 'Detected'}</Text>
-                  </Pressable>
-                ))
+                <WalletPicker onSolana={pick} />
               )}
-              {w.error ? <Text style={s.err}>{w.error}</Text> : null}
-              <EvmSection onDeposit={openEthDeposit} />
             </>
           )}
           </ScrollView>
@@ -236,6 +228,81 @@ export function WalletSheet({ open, onClose }: { open: boolean; onClose: () => v
     <DepositSheet chain="ethereum" open={ethDeposit} onClose={() => setEthDeposit(false)} />
     <SendSheet open={sendOpen} onClose={() => setSendOpen(false)} />
     </>
+  );
+}
+
+// Detected Solana wallets, or a link to get Phantom.
+function SolanaOptions({ onPick }: { onPick: (name: string) => void }) {
+  const w = useWallet();
+  return (
+    <>
+      {w.available.length === 0 ? (
+        <View style={{ gap: 10 }}>
+          <Text style={s.meta}>No Solana wallet was found in this browser.</Text>
+          <Pressable accessibilityRole="button" onPress={() => Linking.openURL('https://phantom.com/download')} style={s.secondary}>
+            <Text style={s.secondaryTxt}>Get Phantom ↗</Text>
+          </Pressable>
+        </View>
+      ) : (
+        w.available.map((o) => (
+          <Pressable accessibilityRole="button" key={o.name} onPress={() => onPick(o.name)} disabled={w.connecting} style={s.option}>
+            <Image source={o.icon} style={s.iconBig} />
+            <Text style={s.optionTxt}>{o.name}</Text>
+            <Text style={s.meta}>{w.connecting ? 'Check your wallet…' : 'Detected'}</Text>
+          </Pressable>
+        ))
+      )}
+      {w.error ? <Text style={s.err}>{w.error}</Text> : null}
+    </>
+  );
+}
+
+// Nothing connected yet: each browser wallet once, with a button per network it
+// offers. Phantom and MetaMask both announce themselves as a Solana and an
+// Ethereum wallet, which used to list each of them twice.
+function WalletPicker({ onSolana }: { onSolana: (name: string) => void }) {
+  const w = useWallet();
+  const ew = useEvmWallet();
+  const rows = new Map<string, { name: string; icon: string; solana: boolean; evm: boolean }>();
+  for (const o of w.available) rows.set(o.name.toLowerCase(), { ...o, solana: true, evm: false });
+  for (const o of ew.supported ? ew.available : []) {
+    const r = rows.get(o.name.toLowerCase());
+    if (r) r.evm = true;
+    else rows.set(o.name.toLowerCase(), { ...o, solana: false, evm: true });
+  }
+  const chain = (label: string, busy: boolean, onPress: () => void) => (
+    <Pressable accessibilityRole="button" accessibilityLabel={`Connect on ${label}`} onPress={onPress} disabled={busy}
+      style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [s.chainBtn, (pressed || hovered) && { borderColor: C.dim }]}>
+      <Text style={s.chainTxt}>{busy ? 'Check wallet…' : label}</Text>
+    </Pressable>
+  );
+  if (!rows.size) {
+    return (
+      <View style={{ gap: 10 }}>
+        <Text style={s.meta}>No wallet was found in this browser.</Text>
+        <Pressable accessibilityRole="button" onPress={() => Linking.openURL('https://phantom.com/download')} style={s.secondary}>
+          <Text style={s.secondaryTxt}>Get Phantom ↗</Text>
+        </Pressable>
+      </View>
+    );
+  }
+  return (
+    <View style={{ gap: 8 }}>
+      {[...rows.values()].map((r) => (
+        <View key={r.name} style={s.option}>
+          <Image source={r.icon} style={s.iconBig} />
+          <View style={{ flex: 1, gap: 8 }}>
+            <Text style={s.optionTxt} numberOfLines={1}>{r.name}</Text>
+            <View style={s.chains}>
+              {r.solana && chain('Solana', w.connecting, () => onSolana(r.name))}
+              {r.evm && chain('Ethereum', ew.connecting, () => { void ew.connect(r.name); track('wallet_connect', { wallet: r.name, chain: 'evm' }); })}
+            </View>
+          </View>
+        </View>
+      ))}
+      {w.error ? <Text style={s.err}>{w.error}</Text> : null}
+      {ew.error ? <Text style={s.err}>{ew.error}</Text> : null}
+    </View>
   );
 }
 
@@ -305,6 +372,9 @@ const s = StyleSheet.create({
     backgroundColor: C.cardHi, borderWidth: 1, borderColor: C.border,
   },
   optionTxt: { ...T.bodyStrong, flex: 1 },
+  chains: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  chainBtn: { borderRadius: 9, borderWidth: 1, borderColor: C.border, backgroundColor: C.bg, paddingHorizontal: 10, paddingVertical: 7 },
+  chainTxt: { fontSize: 13, lineHeight: 17, fontWeight: '600', color: C.text },
   acct: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   addrBig: { ...T.num, fontSize: 13 },
   secondary: { borderRadius: 12, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: C.border, backgroundColor: C.cardHi },
