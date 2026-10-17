@@ -9,6 +9,7 @@ import { UNITS, collectionName, config } from "../config.ts";
 import { db } from "../db.ts";
 import { markPosition, practiceLeaderboard, type PositionRow } from "../practice.ts";
 import { unitOf } from "../units.ts";
+import { syncPrivyWallets } from "../user-wallets.ts";
 
 export const followedWallets = (userId: string) =>
   (db.prepare("SELECT wallet FROM follows WHERE user_id = ?").all(userId) as { wallet: string }[]).map((r) => r.wallet);
@@ -25,6 +26,7 @@ export function accountRoutes(app: FastifyInstance) {
     if (!userId) return reply.code(401).send({ error: "invalid or expired token" });
     const b = z.object({ deviceId: z.string().optional() }).parse(req.body ?? {});
     if (b.deviceId) adoptDevice(userId, b.deviceId);
+    void syncPrivyWallets(userId); // their wallets show their account name (user-wallets.ts)
     return { userId };
   });
 

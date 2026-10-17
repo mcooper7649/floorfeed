@@ -3,6 +3,7 @@ import { mainnet } from "viem/chains";
 import { createHash } from "node:crypto";
 import { config } from "./config.ts";
 import { db } from "./db.ts";
+import { floorfeedNames } from "./user-wallets.ts";
 
 // .sol names for wallets (Solana Name Service "favorite domain"), resolved
 // over plain JSON-RPC so the server needs no Solana SDK. Results, including
@@ -133,11 +134,15 @@ export async function resolveEns(wallets: string[]): Promise<Map<string, string 
   return new Map(wallets.map((w, i) => [w, names[i] && names[i]!.length <= 40 ? names[i]! : null]));
 }
 
+// The name to show for each wallet: the owner's FloorFeed account name first,
+// then its .sol / ENS name. Wallets with neither are left out.
 const getNames = (wallets: string[]) => {
   if (!wallets.length) return new Map<string, string>();
   const rows = db.prepare(`SELECT wallet, name FROM wallet_names WHERE name IS NOT NULL AND wallet IN (${wallets.map(() => "?").join(",")})`)
     .all(...wallets) as { wallet: string; name: string }[];
-  return new Map(rows.map((r) => [r.wallet, r.name]));
+  const names = new Map(rows.map((r) => [r.wallet, r.name]));
+  for (const [w, n] of floorfeedNames(wallets)) names.set(w, n);
+  return names;
 };
 export { getNames };
 

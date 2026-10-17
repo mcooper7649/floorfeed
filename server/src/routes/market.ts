@@ -15,7 +15,7 @@ import { itemDetail } from "../items.ts";
 import { marks } from "../marks.ts";
 import { walletStats } from "../pnl.ts";
 import { tickerPrices } from "../prices.ts";
-import { nameFor } from "../sns.ts";
+import { getNames, nameFor, wantNames } from "../sns.ts";
 import { authorOf, takeMarkers } from "../takes.ts";
 import { traderLeaderboard, traderProfile, walletUnits } from "../traders.ts";
 import { unitOf } from "../units.ts";
@@ -204,6 +204,19 @@ export function marketRoutes(app: FastifyInstance) {
 
   // One wallet's record in one currency (?unit=, default: the one it trades
   // most in), plus every currency it trades in.
+  // Display names for a few wallets (the header's wallet button, etc.): the
+  // owner's FloorFeed account name, else .sol / ENS, else null. Unresolved
+  // wallets get queued, so a later call may have a name.
+  app.get("/names", async (req, reply) => {
+    const { w } = z.object({ w: z.string().max(2000) }).parse(req.query);
+    const wallets = [...new Set(w.split(",").map((x) => x.trim()).filter((x) => /^(0x[0-9a-fA-F]{40}|[1-9A-HJ-NP-Za-km-z]{32,44})$/.test(x)))].slice(0, 20);
+    // Trades (and so cached names) keep EVM addresses lowercase; wallets report them checksummed.
+    const key = (x: string) => (x.startsWith("0x") ? x.toLowerCase() : x);
+    const names = getNames(wallets.map(key));
+    wantNames(wallets.map(key));
+    return reply.header("cache-control", "public, max-age=60").send(Object.fromEntries(wallets.map((x) => [x, names.get(key(x)) ?? null])));
+  });
+
   app.get("/wallets/:address", async (req) => {
     const { address } = req.params as { address: string };
     const { unit } = z.object({ unit: z.enum(UNITS).optional() }).parse(req.query);

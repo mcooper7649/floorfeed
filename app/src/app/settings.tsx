@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useRef, useState } from 'react';
-import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { RecoveryCard, SignInCard, TwoStepCard, WalletBackupCard, securityLevel } from '@/components/account-security';
 import { ModeToggle } from '@/components/mode-toggle';
@@ -13,6 +13,7 @@ import { C } from '@/constants/brand';
 import { T, display } from '@/constants/type';
 import { useAuth } from '@/lib/auth';
 import { useLayout } from '@/lib/layout';
+import { useProfile } from '@/lib/profile';
 import { useSession } from '@/lib/session';
 import { useTitle } from '@/lib/use-title';
 
@@ -54,6 +55,7 @@ export default function Settings() {
           {signedIn ? (
             <Card>
               <ProfileName />
+              <NameOnWallets />
               {auth.label && <Text style={T.meta}>Signed in as {auth.label}</Text>}
               <View style={s.row}>
                 <Button label="View profile" tone="secondary" onPress={() => router.push('/profile')} />
@@ -109,7 +111,39 @@ export default function Settings() {
   );
 }
 
+// Show the account name in place of your wallet addresses everywhere on
+// FloorFeed (feed, leaders, wallet pages). On by default.
+function NameOnWallets() {
+  const { profile, setShowOnWallets } = useProfile();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (!profile?.name) return null;
+  const on = profile.showOnWallets;
+  const toggle = () => {
+    setBusy(true); setError(null);
+    setShowOnWallets(!on).catch((e: Error) => setError(e.message)).finally(() => setBusy(false));
+  };
+  return (
+    <View style={{ gap: 4 }}>
+      <Pressable accessibilityRole="switch" accessibilityState={{ checked: on, disabled: busy }} onPress={toggle} disabled={busy} style={s.check}>
+        <View style={[s.box, on && s.boxOn]}>{on && <Text style={s.tick}>✓</Text>}</View>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={T.bodyStrong}>Show {profile.name} on my wallets</Text>
+          <Text style={T.meta}>
+            Your trades, wallet pages and leaderboard spots show your account name instead of your wallet address. Turn off to show the address (or its .sol / ENS name).
+          </Text>
+        </View>
+      </Pressable>
+      {error && <Text style={[T.caption, { color: C.down }]}>{error}</Text>}
+    </View>
+  );
+}
+
 const s = StyleSheet.create({
+  check: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
+  box: { width: 20, height: 20, borderRadius: 5, borderWidth: 1.5, borderColor: C.border, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+  boxOn: { backgroundColor: C.accent, borderColor: C.accent },
+  tick: { color: C.accentInk, fontSize: 13, fontWeight: '700', lineHeight: 15 },
   fill: { flex: 1, backgroundColor: C.bg },
   page: { width: '100%', maxWidth: 640, alignSelf: 'center', paddingTop: 28, paddingBottom: 80, gap: 24 },
   section: { gap: 10 },

@@ -15,6 +15,7 @@ import { useEvmWallet } from '@/lib/evm-wallet';
 import { amt, shortAddr, usd } from '@/lib/format';
 import { GROUPS, TYPE, clock, dayLabel, inFlight, lifecycle, signedPrice, stamp, statusOf, viaLabel } from '@/lib/history';
 import { useLayout } from '@/lib/layout';
+import { useWalletName } from '@/lib/names';
 import { usePrices } from '@/lib/prices';
 import { useTitle } from '@/lib/use-title';
 import { useWallet } from '@/lib/wallet';
@@ -307,6 +308,7 @@ function HistoryRow({ e, first, wide, open, onToggle, toUsd }: {
 
 function Details({ e, dollars }: { e: HistoryEntry; dollars: number | null }) {
   const l = e.listing;
+  const who = useWalletName(e.counterparty);
   const tx = e.tx ?? l?.soldTx ?? null;
   const explorer = e.outUrl ?? e.explorerUrl ?? null;
   const fields: [string, string | null, (() => void)?][] = [
@@ -315,7 +317,7 @@ function Details({ e, dollars }: { e: HistoryEntry; dollars: number | null }) {
     ['Price', e.price != null && e.unit ? `${amt(e.price, e.unit)}${dollars != null ? ` (≈ ${usd(dollars)} today)` : ''}` : null],
     ['Sale type', e.saleKind === 'offer' ? 'Offer / bid' : e.saleKind === 'listing' ? 'Listing' : null],
     [e.type === 'buy' || e.type === 'offer' ? 'Seller' : e.type === 'transfer_in' ? 'From' : e.type === 'listing' ? 'Buyer' : 'To',
-      e.counterparty ? shortAddr(e.counterparty) : null,
+      e.counterparty ? (who ? `${who} · ${shortAddr(e.counterparty)}` : shortAddr(e.counterparty)) : null,
       e.counterparty ? () => router.push({ pathname: '/wallet/[address]', params: { address: e.counterparty! } }) : undefined],
     [e.type === 'offer' ? 'Offered' : 'Listed', l ? stamp(l.listedAt) : null],
     ['Expires', l?.expiresAt ? stamp(l.expiresAt) : null],

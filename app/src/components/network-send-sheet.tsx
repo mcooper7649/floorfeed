@@ -9,6 +9,7 @@ import { api, type EvmNetwork, type SendTx } from '@/lib/api';
 import { track } from '@/lib/analytics';
 import { useEvmWallet } from '@/lib/evm-wallet';
 import { amt, shortAddr, usd } from '@/lib/format';
+import { useWalletName } from '@/lib/names';
 import { usePrices } from '@/lib/prices';
 import { useWallet } from '@/lib/wallet';
 
@@ -63,6 +64,7 @@ function Sheet({ chain, sol, network, onClose }: { chain: string; sol: number | 
   const [assetKey, setAssetKey] = useState(assets[0]?.key ?? '');
   const asset = assets.find((a) => a.key === assetKey) ?? assets[0];
   const [to, setTo] = useState('');
+  const toName = useWalletName(/^(0x[0-9a-fA-F]{40}|[1-9A-HJ-NP-Za-km-z]{32,44})$/.test(to.trim()) ? to.trim() : null);
   const [amount, setAmount] = useState('');
   const [max, setMax] = useState(false);
   const [quote, setQuote] = useState<SendTx | null>(null);
@@ -147,7 +149,7 @@ function Sheet({ chain, sol, network, onClose }: { chain: string; sol: number | 
                   <Row label="Network" value={name} />
                   <Row label="From" value={shortAddr(from)} />
                   <View style={{ gap: 2 }}>
-                    <Text style={T.meta}>To</Text>
+                    <Text style={T.meta}>To{toName ? <Text style={{ color: C.text, fontWeight: '600' }}> · {toName}</Text> : null}</Text>
                     <Text style={[T.metaNum, { color: C.text }]} selectable>{to.trim()}</Text>
                   </View>
                   <Row label="Network fee" value={`~${trim(quote!.fee, 8)} ${quote!.native}`} />

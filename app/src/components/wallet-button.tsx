@@ -13,6 +13,8 @@ import { api, type Capabilities } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { shortAddr } from '@/lib/format';
 import { useEvmWallet } from '@/lib/evm-wallet';
+import { useWalletName } from '@/lib/names';
+import { useProfile } from '@/lib/profile';
 import { useTradeMode } from '@/lib/mode';
 import { useWallet } from '@/lib/wallet';
 import { track } from '@/lib/analytics';
@@ -69,7 +71,7 @@ export function WalletButton() {
           <>
             <ModeChip mode={mode} />
             {icon ? <Image source={icon} style={s.icon} /> : null}
-            <Text style={s.addr}>{shortAddr(address)}</Text>
+            <WalletLabel address={address} />
             {w.address
               ? balance != null && <Text style={s.bal}>{balance.toFixed(2)} SOL</Text>
               : ethBalance != null && <Text style={s.bal}>{ethBalance.toFixed(3)} ETH</Text>}
@@ -93,6 +95,19 @@ function AccountLinks({ onGo }: { onGo: () => void }) {
       <Pressable accessibilityRole="link" onPress={() => go('/settings')}><Text style={[s.link, { color: C.accent }]}>Settings and security</Text></Pressable>
     </View>
   );
+}
+
+// Who's signed in, in the header: your FloorFeed account name when the wallet
+// is one of yours, else the wallet's .sol / ENS name (or its FloorFeed owner's),
+// else the short address.
+function WalletLabel({ address }: { address: string }) {
+  const auth = useAuth();
+  const { profile } = useProfile();
+  const looked = useWalletName(address);
+  const own = profile?.name && (address === auth.embeddedAddress || address.toLowerCase() === auth.evmAddress?.toLowerCase()
+    || profile.wallets.some((x) => x.toLowerCase() === address.toLowerCase()));
+  const name = own ? profile!.name : looked;
+  return <Text style={name ? s.name : s.addr} numberOfLines={1}>{name ?? shortAddr(address)}</Text>;
 }
 
 // Picker when disconnected; account details + disconnect when connected.
@@ -375,6 +390,7 @@ const s = StyleSheet.create({
   icon: { width: 20, height: 20, borderRadius: 5 },
   iconBig: { width: 36, height: 36, borderRadius: 9 },
   addr: { ...T.bodyStrong, fontVariant: ['tabular-nums'] },
+  name: { ...T.bodyStrong, maxWidth: 160 },
   bal: T.metaNum,
   backdrop: { flex: 1, backgroundColor: '#000000AA', alignItems: 'center', justifyContent: 'center', padding: 16 },
   sheet: { width: '100%', maxWidth: 420, maxHeight: '92%', backgroundColor: C.card, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: C.border },

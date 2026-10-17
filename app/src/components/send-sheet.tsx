@@ -9,6 +9,7 @@ import { recordTx } from '@/lib/activity';
 import { api, type Chain, type Holding } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { shortAddr } from '@/lib/format';
+import { useWalletName } from '@/lib/names';
 
 // Withdrawals from the FloorFeed (Privy) wallets: send SOL, send ETH (or a
 // chain's native coin), send an NFT on Ethereum chains, or export the wallet's
@@ -154,7 +155,7 @@ function SendSol({ setBusy }: Busy) {
         <>
           <View style={s.review}>
             <Row label="Send" value={`${amount} SOL`} strong />
-            <Row label="To" value={shortAddr(to.trim())} />
+            <ToRow to={to.trim()} />
             <Row label="Network fee" value="~0.000005 SOL" />
           </View>
           <Text style={T.caption}>Solana transfers can’t be reversed. Double-check the address.</Text>
@@ -264,7 +265,7 @@ function SendEvm({ setBusy }: Busy) {
           <View style={s.review}>
             <Row label="Send" value={`${amount} ${native}`} strong />
             <Row label="Network" value={CHAINS[chain]?.name ?? chain} />
-            <Row label="To" value={shortAddr(to.trim())} />
+            <ToRow to={to.trim()} />
             <Row label="Network fee" value={feeNow != null ? `~${trim(feeNow, 8)} ${native}` : '…'} />
           </View>
           <Text style={T.caption}>Make sure the receiving wallet supports {CHAINS[chain]?.name}. Transfers can’t be reversed.</Text>
@@ -422,3 +423,9 @@ const s = StyleSheet.create({
   nft: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 8, borderRadius: 12, borderWidth: 1, borderColor: C.border },
   notice: { backgroundColor: C.bg, borderRadius: 12, padding: 12, gap: 6, borderWidth: 1, borderColor: C.border },
 });
+
+// The recipient: its FloorFeed / .sol / ENS name when it has one, always with the address.
+function ToRow({ to }: { to: string }) {
+  const name = useWalletName(to);
+  return <Row label="To" value={name ? `${name} · ${shortAddr(to)}` : shortAddr(to)} />;
+}

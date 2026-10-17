@@ -4,7 +4,8 @@ import { z } from "zod";
 import { authorize, privyUser } from "../auth.ts";
 import { config } from "../config.ts";
 import { bearer, secretMatches } from "../http.ts";
-import { TakeError, collectionTakes, deleteTake, getProfile, nameProblem, postTake, recentTheses, reportTake, setProfileName, signedMessage, toggleLike } from "../takes.ts";
+import { TakeError, collectionTakes, deleteTake, getProfile, nameProblem, postTake, recentTheses, reportTake, setProfileName, setShowOnWallets, signedMessage, toggleLike } from "../takes.ts";
+import { syncPrivyWallets } from "../user-wallets.ts";
 
 const takeReply = (reply: FastifyReply, err: unknown) => {
   if (err instanceof TakeError) return reply.code(err.status).send({ error: err.message });
@@ -28,7 +29,15 @@ export function takeRoutes(app: FastifyInstance) {
   app.get("/profile", async (req, reply) => {
     const userId = await privyUser(req);
     if (!userId) return reply.code(401).send({ error: "Sign in again." });
+    void syncPrivyWallets(userId);
     return getProfile(userId);
+  });
+  // Show my account name on my wallets across FloorFeed (default on).
+  app.put("/profile/show-on-wallets", async (req, reply) => {
+    const userId = await privyUser(req);
+    if (!userId) return reply.code(401).send({ error: "Sign in again." });
+    const { on } = z.object({ on: z.boolean() }).parse(req.body);
+    try { return setShowOnWallets(userId, on); } catch (err) { return takeReply(reply, err); }
   });
   app.put("/profile", async (req, reply) => {
     const userId = await privyUser(req);

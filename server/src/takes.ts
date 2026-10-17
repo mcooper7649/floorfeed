@@ -7,6 +7,7 @@ import { feeRates } from "./fees.ts";
 import { traders } from "./feed.ts";
 import { champions } from "./practice.ts";
 import { tg } from "./social.ts";
+import { linkWallet } from "./user-wallets.ts";
 import { EVM_ADDRESS_RE, evmHoldings } from "./trade-evm.ts";
 
 // Takes: short posts about a collection by signed-in users (FOMO's "Thesis").
@@ -42,11 +43,19 @@ CREATE TABLE IF NOT EXISTS profiles (
 );
 `);
 
+// Members can keep their account name off their wallets (user-wallets.ts).
+if (!(db.prepare(`PRAGMA table_info(profiles)`).all() as { name: string }[]).some((c) => c.name === "show_on_wallets")) {
+  db.exec(`ALTER TABLE profiles ADD COLUMN show_on_wallets INTEGER NOT NULL DEFAULT 1`);
+}
+// Wallets from verified theses posted before user_wallets existed.
+db.exec(`INSERT OR IGNORE INTO user_wallets (wallet, user_id, source, linked_at)
+  SELECT wallet, user_id, 'signature', MAX(created_at) FROM user_takes WHERE wallet IS NOT NULL GROUP BY wallet`);
+
 // --- profiles ---------------------------------------------------------------------
 
 const NAME_RE = /^[A-Za-z0-9_.-]{3,20}$/;
 const RESERVED = /^(floorfeed|admin|moderator|mod|support|official|ai|system|null|undefined)$/i;
-const profileOf = db.prepare(`SELECT name, updated_at FROM profiles WHERE user_id = ?`);
+const profileOf = db.prepare(`SELECT name, updated_at, show_on_wallets FROM profiles WHERE user_id = ?`);
 
 const profileStats = db.prepare(`
   SELECT (SELECT COUNT(*) FROM user_takes WHERE user_id = @u AND hidden = 0) AS theses,
@@ -56,9 +65,18 @@ const profileStats = db.prepare(`
 
 // The signed-in user's own profile page and settings (GET /profile).
 export function getProfile(userId: string) {
-  const p = profileOf.get(userId) as { name: string; updated_at: number } | undefined;
+  const p = profileOf.get(userId) as { name: string; updated_at: number; show_on_wallets: number } | undefined;
   const stats = profileStats.get({ u: userId }) as { theses: number; likes: number; following: number; practiceTrades: number };
-  return { name: p?.name ?? null, fallback: memberName(userId), nameChangedAt: p?.updated_at ?? null, stats };
+  const wallets = (walletsOf.all(userId) as { wallet: string }[]).map((r) => r.wallet);
+  return { name: p?.name ?? null, fallback: memberName(userId), nameChangedAt: p?.updated_at ?? null, stats, showOnWallets: (p?.show_on_wallets ?? 1) === 1, wallets };
+}
+const walletsOf = db.prepare(`SELECT wallet FROM user_wallets WHERE user_id = ? ORDER BY linked_at`);
+
+// Show the account name on the member's wallets everywhere (default), or not.
+export function setShowOnWallets(userId: string, on: boolean) {
+  const r = db.prepare(`UPDATE profiles SET show_on_wallets = ? WHERE user_id = ?`).run(on ? 1 : 0, userId);
+  if (!r.changes) throw new TakeError("Pick an account name first.");
+  return { showOnWallets: on };
 }
 
 // Why a name can't be used by this user, or null if it can (also the live
@@ -176,6 +194,7 @@ export async function postTake(userId: string, b: {
     }
     wallet = EVM_ADDRESS_RE.test(b.wallet) ? b.wallet.toLowerCase() : b.wallet;
     pos = await position(b.collection, wallet).catch(() => ({ items: null, pnlPct: null }));
+    linkWallet(userId, wallet, "signature");
   }
   const r = insert.run({ userId, collection: b.collection, text, wallet, items: pos.items, pnlPct: pos.pnlPct, floor: floor.floor, now });
   return { id: Number(r.lastInsertRowid) };

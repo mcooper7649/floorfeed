@@ -19,6 +19,8 @@ export type ThesisFeedItem = (UserTake & { collection: FeedColl }) | (AiTake & {
 export type MyProfile = {
   name: string | null; fallback: string; nameChangedAt: number | null;
   stats: { theses: number; likes: number; following: number; practiceTrades: number };
+  showOnWallets: boolean; // the account name shows on these wallets across FloorFeed
+  wallets: string[];
 };
 
 export const takesApi = {
@@ -26,6 +28,7 @@ export const takesApi = {
   theses: (userId?: string | null) => req<ThesisFeedItem[]>('/theses' + qs({ limit: 40, userId })),
   profile: () => req<MyProfile>('/profile'),
   setProfileName: (name: string) => send<{ name: string }>('PUT', '/profile', { name }),
+  setShowOnWallets: (on: boolean) => send<{ showOnWallets: boolean }>('PUT', '/profile/show-on-wallets', { on }),
   checkProfileName: (name: string) => req<{ ok: boolean; error?: string }>('/profile/name-check' + qs({ name })),
   // The text a wallet signs to mark a take as posted by a holder.
   takeMessage: (collection: string, text: string, ts: number) => req<{ message: string }>('/takes/message' + qs({ collection, text, ts })),

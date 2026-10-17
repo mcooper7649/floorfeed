@@ -271,6 +271,8 @@ export type GuideSection = { id: string; part: GuidePart; title: string; blocks:
 export type Guide = { parts: { id: GuidePart; title: string; blurb: string }[]; sections: GuideSection[] };
 
 export const marketApi = {
+  // Display names for wallets (FloorFeed account name, else .sol / ENS); lib/names.ts batches these.
+  names: (wallets: string[]) => req<Record<string, string | null>>('/names' + qs({ w: wallets.join(',') })),
   collections: () => req<CollectionSummary[]>('/collections'),
   collection: (symbol: string, range: number) => req<CollectionDetail>(path`/collections/${symbol}` + qs({ range })),
   collectionHolders: (symbol: string) => req<CollectionHolder[]>(path`/collections/${symbol}/holders`),

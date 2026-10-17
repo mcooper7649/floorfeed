@@ -10,10 +10,11 @@ type ProfileState = {
   profile: MyProfile | null;
   loaded: boolean; // fetched for the current account (profile may still be null on error)
   setName: (name: string) => Promise<string>; // throws the server's message
+  setShowOnWallets: (on: boolean) => Promise<void>;
   refresh: () => void;
 };
 
-const Ctx = createContext<ProfileState>({ profile: null, loaded: false, setName: async (n) => n, refresh: () => {} });
+const Ctx = createContext<ProfileState>({ profile: null, loaded: false, setName: async (n) => n, setShowOnWallets: async () => {}, refresh: () => {} });
 
 export function ProfileProvider({ children }: { children: ReactNode }) {
   const { signedIn, userId } = useSession();
@@ -34,10 +35,14 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     setState((s) => (s?.profile ? { ...s, profile: { ...s.profile, name: r.name, nameChangedAt: Date.now() } } : s));
     return r.name;
   }, []);
+  const setShowOnWallets = useCallback(async (on: boolean) => {
+    const r = await api.setShowOnWallets(on);
+    setState((s) => (s?.profile ? { ...s, profile: { ...s.profile, showOnWallets: r.showOnWallets } } : s));
+  }, []);
   const refresh = useCallback(() => setVersion((v) => v + 1), []);
 
   const mine = signedIn && state?.userId === userId ? state : null;
-  return <Ctx value={{ profile: mine?.profile ?? null, loaded: !!mine, setName, refresh }}>{children}</Ctx>;
+  return <Ctx value={{ profile: mine?.profile ?? null, loaded: !!mine, setName, setShowOnWallets, refresh }}>{children}</Ctx>;
 }
 
 export const useProfile = () => use(Ctx);
