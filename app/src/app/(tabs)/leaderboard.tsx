@@ -8,7 +8,7 @@ import { Chip, ChipRow } from '@/components/ui';
 import { TraderCard } from '@/components/trader-card';
 import { C } from '@/constants/brand';
 import { T } from '@/constants/type';
-import { api, type Leaderboard, type LeaderSort, type LeaderWindow, type Unit } from '@/lib/api';
+import { api, type Leaderboard, type LeaderSort, type LeaderWindow, type PracticeWindow, type Unit } from '@/lib/api';
 import { signedSol } from '@/lib/format';
 import { useLayout } from '@/lib/layout';
 import { useSession } from '@/lib/session';
@@ -22,6 +22,10 @@ const BOARDS: { key: Unit; label: string }[] = [
 ];
 const WINDOWS: { key: LeaderWindow; label: string }[] = [
   { key: '7', label: '7D' }, { key: '30', label: '30D' }, { key: 'all', label: 'All' },
+];
+// The practice board runs in weekly seasons (Monday to Monday, UTC).
+const PRACTICE_WINDOWS: { key: PracticeWindow; label: string }[] = [
+  { key: 'season', label: 'This season' }, { key: 'last', label: 'Last season' }, { key: 'all', label: 'All time' },
 ];
 const SORTS: { key: LeaderSort; label: string }[] = [
   { key: 'pnl', label: 'P&L' }, { key: 'winrate', label: 'Win rate' }, { key: 'roi', label: 'ROI' }, { key: 'flips', label: 'Flips' },
@@ -43,6 +47,7 @@ export default function LeaderboardScreen() {
   }
   const { following, toggleFollow } = useSession();
   const [win, setWin] = useState<LeaderWindow>('30');
+  const [pwin, setPwin] = useState<PracticeWindow>('season');
   const [sort, setSort] = useState<LeaderSort>('pnl');
   const [hideMM, setHideMM] = useState(true);
   const [data, setData] = useState<Leaderboard | null>(null);
@@ -73,12 +78,14 @@ export default function LeaderboardScreen() {
       <ChipRow pad={pad} groups={[
         <Chip key="practice" label="Practice traders" on={practice} onPress={() => setUnit('practice')} />,
         BOARDS.map((b) => <Chip key={b.key} label={b.label} on={unit === b.key} onPress={() => change(() => setUnit(b.key))} />),
-        WINDOWS.map((w) => <Chip key={w.key} label={w.label} on={win === w.key} onPress={() => (practice ? setWin(w.key) : change(() => setWin(w.key)))} />),
+        practice
+          ? PRACTICE_WINDOWS.map((w) => <Chip key={w.key} label={w.label} on={pwin === w.key} onPress={() => setPwin(w.key)} />)
+          : WINDOWS.map((w) => <Chip key={w.key} label={w.label} on={win === w.key} onPress={() => change(() => setWin(w.key))} />),
         !practice && SORTS.map((o) => <Chip key={o.key} label={o.label} on={sort === o.key} onPress={() => change(() => setSort(o.key))} />),
         !practice && <Chip key="mm" label={unit === 'SOL' ? 'Hide market makers' : 'Hide bid bots'} on={hideMM} onPress={() => change(() => setHideMM((v) => !v))} />,
       ]} />
 
-      {practice ? <PracticeBoard window={win} pad={pad} cols={cols} /> : <>
+      {practice ? <PracticeBoard window={pwin} pad={pad} cols={cols} /> : <>
       {sm && (
         <Text style={[T.metaNum, s.summary, { paddingHorizontal: pad }]}>
           Ranked in {unit}. {sm.wallets} wallets with 3+ flips made {sm.flips.toLocaleString()} flips; {sm.profitableWallets} are in profit,{' '}

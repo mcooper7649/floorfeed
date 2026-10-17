@@ -9,6 +9,7 @@ import { loadDiscovered } from "./discovery.ts";
 import { startIngest } from "./ingest.ts";
 import { warmRarity } from "./items.ts";
 import { startMints } from "./mints.ts";
+import { startPracticeSeasons } from "./practice.ts";
 import { refreshPrices } from "./prices.ts";
 import { accountRoutes } from "./routes/account.ts";
 import { adminRoutes } from "./routes/admin.ts";
@@ -61,6 +62,7 @@ if (process.env.INGEST !== "0") {
   setInterval(warm, 6 * 3_600_000).unref();
 }
 startSocial();
+startPracticeSeasons();
 startNames();
 startAlerts();
 startAnalytics();

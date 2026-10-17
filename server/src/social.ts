@@ -5,6 +5,7 @@ import { collectionName, config } from "./config.ts";
 import { db } from "./db.ts";
 import { TEASERS } from "./teasers.ts";
 import { walletStats } from "./pnl.ts";
+import { lastSeason } from "./practice.ts";
 import { traderLeaderboard, traderProfile } from "./traders.ts";
 
 // Drafts X posts from FloorFeed's own data. Each draft is sent to Telegram
@@ -13,8 +14,8 @@ import { traderLeaderboard, traderProfile } from "./traders.ts";
 // (tools/x-poster), which pulls them from GET /social/next.
 
 // Kinds FloorFeed drafts from its own data on a schedule.
-export type GenKind = "movers" | "bigsale" | "smartbuy" | "flipper" | "teaser";
-export const KINDS: GenKind[] = ["movers", "bigsale", "smartbuy", "flipper", "teaser"];
+export type GenKind = "movers" | "bigsale" | "smartbuy" | "flipper" | "teaser" | "season";
+export const KINDS: GenKind[] = ["movers", "bigsale", "smartbuy", "flipper", "teaser", "season"];
 // Kinds other apps submit through POST /social/draft ("merch": CryptoThreads drops).
 export type Kind = GenKind | "merch";
 
@@ -162,6 +163,25 @@ function flipper(key: string): Draft | null {
   return text ? { kind: "flipper", key, text, image: img, ttlMs: 12 * HOUR } : null;
 }
 
+// The week's practice season winners, the Monday after it ends. Skipped when
+// nobody finished in profit: a podium in the red isn't worth a post.
+function season(key: string): Draft | null {
+  const s = lastSeason();
+  const top = (s?.rows ?? []).slice(0, 3);
+  if (!s || !top.length || top[0].roiPct <= 0) return null;
+  const pct = (n: number) => `${n >= 0 ? "+" : ""}${n.toFixed(1)}%`;
+  const week = new Date(s.start).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+  const head = pick(key, [
+    `Practice season results, week of ${week}:`,
+    `Top practice traders on FloorFeed, week of ${week}:`,
+    `This week's practice podium (week of ${week}):`,
+  ]);
+  const podium = top.map((r, i) => `${["🥇", "🥈", "🥉"][i]} ${r.name} ${pct(r.roiPct)} on ${r.trades} trades`);
+  const text = compose([head, "", ...podium], ["\nSimulated money, live NFT floors, real fees. A new season starts today."],
+    `\n${link("/leaderboard?board=practice")}`);
+  return text ? { kind: "season", key, text, image: null, ttlMs: 12 * HOUR } : null;
+}
+
 // The next product teaser: never-posted ones first (in file order), then the
 // least recently used one, as long as it hasn't run in the last 21 days.
 // Draft keys end in the teaser id, which is how usage is tracked.
@@ -202,6 +222,7 @@ function slotKey(kind: GenKind, now = new Date()): string | null {
       return today ? null : `smartbuy:${day()}`;
     }
     case "flipper": return now.getUTCDay() === 5 && h >= 17 ? `flipper:${day()}` : null; // Fridays
+    case "season": return now.getUTCDay() === 1 && h >= 16 ? `season:${day()}` : null;  // Mondays, ~noon ET
     case "teaser": {                                              // only the latest slot that has passed
       const i = TEASER_SLOTS.findLastIndex((s) => h + now.getUTCMinutes() / 60 >= s);
       return i < 0 ? null : `teaser:${day()}:${i}`;
@@ -216,6 +237,7 @@ export async function generate(kind: GenKind, key: string): Promise<Draft | null
     case "smartbuy": return smartBuy(key);
     case "flipper": return flipper(key);
     case "teaser": return teaser(key);
+    case "season": return season(key);
   }
 }
 
@@ -319,7 +341,7 @@ export async function tg<T = unknown>(method: string, body: object, timeoutMs = 
   return json.result;
 }
 
-const LABEL: Record<Kind, string> = { movers: "Floor movers", bigsale: "Biggest sale", smartbuy: "Smart-money buy", flipper: "Top flipper", teaser: "Teaser", merch: "CryptoThreads drop" };
+const LABEL: Record<Kind, string> = { movers: "Floor movers", bigsale: "Biggest sale", smartbuy: "Smart-money buy", flipper: "Top flipper", teaser: "Teaser", season: "Practice season", merch: "CryptoThreads drop" };
 const buttons = (id: number) => ({
   inline_keyboard: [[
     { text: "✅ Post", callback_data: `ok:${id}` },

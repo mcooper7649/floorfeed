@@ -5,6 +5,7 @@ import { collectionName, config, isEvm } from "./config.ts";
 import { db } from "./db.ts";
 import { feeRates } from "./fees.ts";
 import { traders } from "./feed.ts";
+import { champions } from "./practice.ts";
 import { tg } from "./social.ts";
 import { EVM_ADDRESS_RE, evmHoldings } from "./trade-evm.ts";
 
@@ -190,6 +191,7 @@ export function authorOf(r: { user_id: string; wallet: string | null }, w: Who) 
     name: chosen ?? w?.name ?? short ?? memberName(r.user_id),
     walletName: w?.name ?? short, // shown next to a chosen name
     avatar: w?.avatar ?? null, wallet: r.wallet, tier: (w?.tier ?? null) as "elite" | "pro" | "mm" | "new" | null,
+    champ: champions().get(r.user_id) ?? null, // 1–3: top of last week's practice season
   };
 }
 

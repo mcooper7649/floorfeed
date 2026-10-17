@@ -5,7 +5,7 @@ import type { Chain, Tier } from './market';
 
 export type UserTake = {
   kind: 'user'; id: number; text: string; t: number;
-  author: { name: string; walletName: string | null; avatar: string | null; wallet: string | null; tier: Tier };
+  author: { name: string; walletName: string | null; avatar: string | null; wallet: string | null; tier: Tier; champ?: number | null };
   holder: { items: number; pnlPct: number | null } | null; verified: boolean;
   floor: number | null; likes: number; liked: boolean; mine: boolean;
 };

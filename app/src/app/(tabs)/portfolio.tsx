@@ -235,7 +235,29 @@ function PositionRow({ p, onSell }: { p: PaperPosition; onSell: () => void }) {
       note={pnlUsd != null ? `≈ ${signedUsd(pnlUsd)}` : undefined}
       sub={p.open ? 'Open' : 'Closed'}
       action={p.open ? <RowAction label="Sell" onPress={onSell} /> : <View style={{ width: 52 }} />}
+      footer={p.open && p.breakEven && p.collection.floor ? <BreakEven entry={p.entryPrice} floor={p.collection.floor} target={p.breakEven} unit={u} /> : undefined}
     />
+  );
+}
+
+// An open practice position's goal: how far the floor has to rise for a sale
+// to get the cost back (fees, royalty and the sale discount included), and how
+// far it has come since the buy.
+function BreakEven({ entry, floor, target, unit }: { entry: number; floor: number; target: number; unit: string }) {
+  const need = (target / floor - 1) * 100;
+  const done = need <= 0;
+  const progress = done ? 1 : Math.min(1, Math.max(0, (floor - entry) / (target - entry)));
+  return (
+    <View style={s.goal}>
+      <View style={s.goalTrack}>
+        <View style={[s.goalFill, { width: `${Math.max(progress * 100, 3)}%`, backgroundColor: done ? C.up : MODE_COLOR.paper }]} />
+      </View>
+      <Text style={T.metaNum} numberOfLines={2}>
+        {done
+          ? <>In profit: the floor is <Text style={{ color: C.up }}>{(-need).toFixed(1)}%</Text> above break-even ({sol(target, 3, unit)})</>
+          : <>Floor needs <Text style={{ color: C.text }}>+{need.toFixed(1)}%</Text> to break even ({sol(target, 3, unit)})</>}
+      </Text>
+    </View>
   );
 }
 
@@ -436,6 +458,9 @@ function RealPortfolio({ solAddress, evmAddress }: { solAddress: string | null; 
 }
 
 const s = StyleSheet.create({
+  goal: { marginLeft: 56, gap: 6 }, // lines up with the row's title, past the 44px art
+  goalTrack: { height: 4, borderRadius: 2, backgroundColor: C.cardHi, overflow: 'hidden' },
+  goalFill: { height: 4, borderRadius: 2 },
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   totals: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },

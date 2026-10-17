@@ -13,6 +13,7 @@ export type PaperPosition = {
   pnlSol: number;
   openedAt: number;
   copiedFrom: string | null;
+  breakEven?: number | null; // open positions: the floor at which selling gets the cost back
 };
 export type PaperBook = {
   positions: PaperPosition[];
@@ -23,15 +24,19 @@ export type PaperBook = {
 
 // Top practice traders (GET /practice/leaderboard): ranked by return on what
 // they put in, in dollars across coins; open positions at today's floor.
-export type PracticeWindow = '7' | '30' | 'all';
+// Weekly seasons run Monday to Monday (UTC): "season" is this one, "last" the
+// one that just ended, frozen.
+export type PracticeWindow = 'season' | 'last' | '7' | '30' | 'all';
 export type PracticeRow = {
   rank: number; name: string; you: boolean;
   trades: number; open: number; wins: number;
   roiPct: number; pnlUsd: number; costUsd: number;
   best: { symbol: string; collection: string; pct: number } | null;
+  champ: number | null; // 1–3: placed in the last finished season
 };
 export type PracticeBoard = {
   window: PracticeWindow; minTrades: number; traders: number; rows: PracticeRow[];
+  season: { id: string; start: number; end: number } | null; // for the season windows
   you: PracticeRow | { trades: number; needed: number }; // ranked, or how many more trades to rank
 };
 

@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 
 
 import { CollIcon } from '@/components/coll-icon';
 import { Avatar, TierBadge } from '@/components/event-card';
+import { ChampBadge } from '@/components/practice-board';
 import { ProfileName } from '@/components/profile-name';
 import { C } from '@/constants/brand';
 import { T } from '@/constants/type';
@@ -175,6 +176,7 @@ export function UserTakeRow({ t, onChange }: { t: UserTake; currency: string; on
           <Text style={s.name} numberOfLines={1}>{t.author.name}</Text>
           {t.author.walletName && t.author.walletName !== t.author.name ? <Text style={s.time} numberOfLines={1}>{t.author.walletName}</Text> : null}
           {t.author.tier === 'elite' || t.author.tier === 'pro' ? <TierBadge tier={t.author.tier} /> : null}
+          <ChampBadge place={t.author.champ} />
           <HolderBadge t={t} />
           <Text style={s.time}>{timeAgo(t.t)}</Text>
         </View>

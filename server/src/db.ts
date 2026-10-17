@@ -65,6 +65,14 @@ CREATE TABLE IF NOT EXISTS paper_positions (
   closed_at   INTEGER
 );
 
+-- Finished weekly practice seasons (practice.ts): the final board, kept
+-- server-side (it holds user ids), one row per season.
+CREATE TABLE IF NOT EXISTS practice_seasons (
+  season       TEXT PRIMARY KEY,         -- the Monday it started, "2026-10-12" (UTC)
+  finalized_at INTEGER NOT NULL,
+  results      TEXT NOT NULL             -- JSON: ranked rows with user_id
+);
+
 -- X (Twitter) posts drafted from FloorFeed data. Flow: draft → approved
 -- (Telegram button or auto-approve) → posted by the browser poster.
 CREATE TABLE IF NOT EXISTS social_posts (

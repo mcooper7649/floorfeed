@@ -26,7 +26,7 @@ export function SectionHeader({ title, count, action }: { title: string; count?:
 }
 
 // [art] title / meta ............ value / sub [action]
-export function ListRow({ art, title, meta, value, valueColor, note, sub, subColor, action, onPress, onMenu }: {
+export function ListRow({ art, title, meta, value, valueColor, note, sub, subColor, action, footer, onPress, onMenu }: {
   art?: ReactNode;
   title: string;
   meta?: string;
@@ -38,6 +38,7 @@ export function ListRow({ art, title, meta, value, valueColor, note, sub, subCol
   action?: ReactNode;
   onPress?: () => void;
   onMenu?: (e: unknown) => void; // right-click (web) / long-press: a quick menu (quick-menu.tsx)
+  footer?: ReactNode; // a full-width line under the row
 }) {
   const body = (
     <>
@@ -55,14 +56,15 @@ export function ListRow({ art, title, meta, value, valueColor, note, sub, subCol
       ) : null}
     </>
   );
-  return (
-    <View style={s.row} {...(onMenu ? { onContextMenu: onMenu } as object : {})}>
+  const row = (
+    <View style={[s.row, footer ? s.rowOpen : null]} {...(onMenu ? { onContextMenu: onMenu } as object : {})}>
       {onPress
         ? <Pressable accessibilityRole="link" onPress={onPress} onLongPress={onMenu} style={s.rowMain}>{body}</Pressable>
         : <View style={s.rowMain}>{body}</View>}
       {action}
     </View>
   );
+  return footer ? <View style={s.rowFooter}>{row}{footer}</View> : row;
 }
 
 export function Button({ label, onPress, tone = 'primary', color, disabled }: {
@@ -152,6 +154,8 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border,
   },
+  rowOpen: { borderBottomWidth: 0, paddingBottom: 8 },
+  rowFooter: { paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
   rowMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, minWidth: 0 },
   rowText: { flex: 1, minWidth: 0, gap: 2 },
   rowValue: { alignItems: 'flex-end', gap: 2 },

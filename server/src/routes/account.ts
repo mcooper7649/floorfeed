@@ -114,7 +114,7 @@ export function accountRoutes(app: FastifyInstance) {
        WHERE p.user_id = ? ORDER BY p.opened_at DESC`,
     ).all(userId) as PositionRow[];
     const positions = rows.map((p) => {
-      const { pnl, fees } = markPosition(p);
+      const { pnl, fees, breakEven } = markPosition(p);
       return {
         id: p.id,
         collection: { symbol: p.collection, name: collectionName(p.collection), floor: p.floor, image: p.image ?? null },
@@ -124,6 +124,7 @@ export function accountRoutes(app: FastifyInstance) {
         open: p.closed_at == null,
         pnlSol: pnl,
         feesSol: fees,
+        breakEven: p.closed_at == null ? breakEven : null, // the floor this open position needs to be in profit
         openedAt: p.opened_at,
         copiedFrom: p.copied_from,
       };
@@ -147,7 +148,7 @@ export function accountRoutes(app: FastifyInstance) {
   // Top practice traders (practice.ts): ranked by return, in dollars across coins.
   // `userId` only marks the viewer's own row and standing.
   app.get("/practice/leaderboard", async (req, reply) => {
-    const q = z.object({ window: z.enum(["7", "30", "all"]).default("7"), userId: z.string().max(200).optional() }).parse(req.query);
+    const q = z.object({ window: z.enum(["season", "last", "7", "30", "all"]).default("season"), userId: z.string().max(200).optional() }).parse(req.query);
     return reply.header("cache-control", "no-store").send(practiceLeaderboard(q.window, q.userId ?? null));
   });
 
