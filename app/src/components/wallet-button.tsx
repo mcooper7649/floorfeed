@@ -118,7 +118,7 @@ export function WalletSheet({ open, onClose }: { open: boolean; onClose: () => v
   // A centered card on wide screens; a bottom sheet on phones.
   const { wide } = useLayout();
   const { bottom } = useSafeAreaInsets();
-  const swipe = useSwipeDown(onClose, !wide);
+  const swipe = useSwipeDown(open, onClose, !wide);
 
   // Privy draws its own modal; close ours first so they don't stack.
   const signIn = () => { onClose(); auth.login(); };
@@ -132,16 +132,18 @@ export function WalletSheet({ open, onClose }: { open: boolean; onClose: () => v
 
   return (
     <>
-    <Modal visible={open} transparent animationType={wide ? 'fade' : 'slide'} onRequestClose={onClose}>
+    <Modal visible={open} transparent animationType={wide ? 'fade' : 'none'} onRequestClose={swipe.dismiss}>
       <View style={[s.backdrop, !wide && s.backdropPhone]}>
         {/* Behind the sheet, not around it, so taps and drags on the sheet never reach it. */}
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
+        <Animated.View style={[StyleSheet.absoluteFill, !wide && s.dim, swipe.backdropStyle]}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={swipe.dismiss} accessibilityLabel="Close" />
+        </Animated.View>
         <Animated.View style={[s.sheet, !wide && [s.sheetPhone, { paddingBottom: 16 + bottom }], swipe.style]}
           {...swipe.panHandlers} onLayout={swipe.onLayout}>
           {!wide && <View style={s.grab} />}
           <ScrollView onScroll={swipe.onScroll} scrollEventThrottle={16} contentContainerStyle={{ gap: w.address || ew.address ? 16 : 14 }} showsVerticalScrollIndicator={false}>
           {w.address || ew.address ? (
-            <AccountView onClose={onClose} onDeposit={(c) => { onClose(); if (c === 'solana') setDeposit(true); else setEthDeposit(true); }}
+            <AccountView onClose={onClose} onDismiss={swipe.dismiss} onDeposit={(c) => { onClose(); if (c === 'solana') setDeposit(true); else setEthDeposit(true); }}
               onSend={openSend} onSignIn={signIn} onSignOut={signOut} onPick={pick} />
           ) : (
             <>
@@ -252,8 +254,9 @@ function WalletPicker({ onSolana }: { onSolana: (name: string) => void }) {
 // Real, your wallets with their balances, where to go next (Profile, Settings
 // and security, History, Help), and Sign out. Without a FloorFeed account (a
 // browser wallet only) the identity card offers sign-in instead.
-function AccountView({ onClose, onDeposit, onSend, onSignIn, onSignOut, onPick }: {
+function AccountView({ onClose, onDismiss, onDeposit, onSend, onSignIn, onSignOut, onPick }: {
   onClose: () => void;
+  onDismiss: () => void; // the ✕: slides the phone sheet away first
   onDeposit: (chain: 'solana' | 'ethereum') => void;
   onSend: () => void;
   onSignIn: () => void;
@@ -291,7 +294,7 @@ function AccountView({ onClose, onDeposit, onSend, onSignIn, onSignOut, onPick }
           </View>
           {signedIn && <Text style={s.chev}>›</Text>}
         </Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={onClose} hitSlop={10} style={s.close}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={onDismiss} hitSlop={10} style={s.close}>
           <Text style={s.closeTxt}>✕</Text>
         </Pressable>
       </View>
@@ -507,7 +510,8 @@ const s = StyleSheet.create({
   bal: T.metaNum,
   backdrop: { flex: 1, backgroundColor: '#000000AA', alignItems: 'center', justifyContent: 'center', padding: 16 },
   sheet: { width: '100%', maxWidth: 420, maxHeight: '92%', backgroundColor: C.card, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: C.border },
-  backdropPhone: { justifyContent: 'flex-end', padding: 0 },
+  backdropPhone: { justifyContent: 'flex-end', padding: 0, backgroundColor: 'transparent' },
+  dim: { backgroundColor: '#000000AA' },
   sheetPhone: { maxWidth: 560, maxHeight: '90%', borderBottomLeftRadius: 0, borderBottomRightRadius: 0, borderBottomWidth: 0, paddingTop: 8 },
   grab: { alignSelf: 'center', width: 36, height: 4, borderRadius: 2, backgroundColor: C.border, marginBottom: 12 },
   title: T.title,
