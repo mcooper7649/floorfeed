@@ -293,15 +293,20 @@ export async function getOsBestOffer(slug: string, id: string) {
     const params = r.protocol_data?.parameters;
     if (!p || !r.order_hash || !r.protocol_address || !params?.offer?.length) return null;
     const token = params.offer[0].token.toLowerCase();
-    const gross = BigInt(params.offer[0].startAmount);
+    // An offer can ask for several NFTs (the NFT item's amount, itemType 2-5);
+    // the price is for all of them, and selling one fills 1/units of it.
+    const nftItem = (params.consideration ?? []).find((c) => c.itemType >= 2 && c.itemType <= 5);
+    const units = nftItem ? BigInt(nftItem.startAmount) || 1n : 1n;
+    const gross = BigInt(params.offer[0].startAmount) / units;
     // ERC-20 items (itemType 1) in the offer's token go to fees and royalties.
     const fees = (params.consideration ?? [])
       .filter((c) => c.itemType === 1 && c.token.toLowerCase() === token)
-      .reduce((a, c) => a + BigInt(c.startAmount), 0n);
+      .reduce((a, c) => a + BigInt(c.startAmount), 0n) / units;
     const scale = 10 ** p.decimals;
     return {
-      price: Number(p.value) / scale,
+      price: Number(gross) / scale,
       net: Number(gross - fees) / scale,
+      units: Number(units),
       currency: p.currency,
       orderHash: r.order_hash,
       protocolAddress: r.protocol_address,

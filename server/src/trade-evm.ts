@@ -355,7 +355,8 @@ export async function evmSellQuote(symbol: string, id: string, seller: string) {
   if (!meta || !EVM_ADDRESS_RE.test(contract ?? "") || !/^\d{1,78}$/.test(tokenId ?? "")) return null;
   const chain = meta.chain as string;
   const floor = (floorOf.get(symbol) as { floor: number | null } | undefined)?.floor ?? null;
-  const boughtAt = (lastBuy.get(seller.toLowerCase(), id.toLowerCase()) as { price: number } | undefined)?.price ?? null;
+  const boughtAt = (lastBuy.get(seller.toLowerCase(), id.toLowerCase()) as { price: number } | undefined)?.price
+    ?? (appBuy.get(seller.toLowerCase(), id.toLowerCase()) as { amount: number | null } | undefined)?.amount ?? null;
   const base = {
     collection: { symbol, name: meta.name, floor },
     chain, mint: id, name: `${meta.name} #${tokenId}`,
