@@ -325,7 +325,7 @@ export function CollectionsTab() {
             onPress={(e) => sortMenu.open(e as never, [
               { label: `${sort === 'default' ? '✓ ' : ''}${DEFAULT_SORT[list] ?? 'Default'}`, onPress: () => setSorts((x) => ({ ...x, [list]: 'default' })) },
               'sep',
-              ...SORTS.map((o) => ({ label: `${sort === o.key ? '✓ ' : ''}${o.label}`, onPress: () => setSorts((x) => ({ ...x, [list]: o.key })) })),
+              ...SORTS.filter((o) => o.label !== DEFAULT_SORT[list]).map((o) => ({ label: `${sort === o.key ? '✓ ' : ''}${o.label}`, onPress: () => setSorts((x) => ({ ...x, [list]: o.key })) })),
             ], 'Sort by')}>
             <Text style={s.sortVal} numberOfLines={1}>{sort === 'default' ? DEFAULT_SORT[list] ?? 'Default' : SORTS.find((o) => o.key === sort)!.label}</Text>
             <Text style={s.sortCaret}>▾</Text>
