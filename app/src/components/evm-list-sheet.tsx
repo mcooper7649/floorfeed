@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { ModeChip } from '@/components/mode-toggle';
+import { Stepper, stepLabel } from '@/components/stepper';
 import { Chip } from '@/components/ui';
 import { ReportLink } from '@/components/report-link';
 import { C } from '@/constants/brand';
@@ -282,11 +283,18 @@ export function EvmListSheet({ symbol, id, open, onClose, onDone }: {
               {step.kind === 'error' && <Text style={s.err}>{step.message}</Text>}
               {step.kind === 'error' && <ReportLink topic="trade" detail={step.message} from="evm-list" onLeave={onClose} />}
 
+              {/* Two steps the first time from a collection; after that, signing is all there is. */}
+              <Stepper current={q.approved ? 1 : 0} busy={busy}
+                note={q.approved ? undefined : 'Step 1 only sets up your wallet. Nothing is listed or sold until you sign step 2.'}
+                steps={[
+                  { title: 'Approve', sub: q.approved ? 'Done for this collection' : 'Once per collection' },
+                  { title: 'Sign listing', sub: 'Free, no gas' },
+                ]} />
               {!q.approved ? (
                 <View style={{ gap: 8 }}>
-                  <Text style={s.meta}>Step 1 of 2: allow OpenSea to move NFTs from this collection when they sell. Once per collection; a small network fee.</Text>
+                  <Text style={s.meta}>Lets OpenSea move NFTs from this collection when one sells. A small network fee, once.</Text>
                   <Pressable accessibilityRole="button" onPress={approve} disabled={busy} style={[s.primary, busy && { opacity: 0.7 }]}>
-                    <Text style={s.primaryTxt}>{step.kind === 'approving' ? (step.hash ? 'Waiting for the approval to confirm…' : 'Confirm the approval in your wallet…') : 'Step 1: Approve listing'}</Text>
+                    <Text style={s.primaryTxt}>{step.kind === 'approving' ? (step.hash ? 'Waiting for the approval to confirm…' : 'Confirm the approval in your wallet…') : `${stepLabel(0, 2)}Approve ${q.collection.name}`}</Text>
                   </Pressable>
                 </View>
               ) : (
@@ -295,7 +303,7 @@ export function EvmListSheet({ symbol, id, open, onClose, onDone }: {
                   <Text style={s.primaryTxt}>
                     {step.kind === 'signing' ? 'Sign the listing in your wallet…'
                       : step.kind === 'cancelOld' ? 'Now sign to cancel the old listing…'
-                      : value > 0 ? `${old ? 'Change price to' : 'List for'} ${sol(value, 4, unit)}` : 'Enter a price'}
+                      : value > 0 ? `${stepLabel(1, 2)}${old ? 'Change price to' : 'List for'} ${sol(value, 4, unit)}` : 'Enter a price'}
                   </Text>
                 </Pressable>
               )}

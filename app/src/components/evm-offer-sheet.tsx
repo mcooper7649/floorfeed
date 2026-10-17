@@ -4,6 +4,7 @@ import { ActivityIndicator, Image, Linking, Modal, Pressable, ScrollView, StyleS
 import { ModeChip } from '@/components/mode-toggle';
 import { NftImage } from '@/components/nft-image';
 import { ReportLink } from '@/components/report-link';
+import { Stepper } from '@/components/stepper';
 import { Chip } from '@/components/ui';
 import { C } from '@/constants/brand';
 import { chainName } from '@/constants/chains';
@@ -382,29 +383,6 @@ export function EvmOfferSheet({ symbol, id, listedAt, open, onClose, onBuy, repl
   );
 }
 
-// The three steps of an offer, done ✓ / current / next, so it reads as one flow.
-function Stepper({ steps, current, busy }: { steps: { title: string; sub: string }[]; current: number; busy: boolean }) {
-  return (
-    <View style={s.stepper}>
-      {steps.map((st, i) => {
-        const done = i < current, now = i === current;
-        return (
-          <View key={st.title} style={s.stepCol}>
-            <View style={[s.stepBar, (done || now) && { backgroundColor: C.accent }, now && busy && { opacity: 0.6 }]} />
-            <View style={s.stepHead}>
-              <View style={[s.dot, done && s.dotDone, now && s.dotNow]}>
-                <Text style={[s.dotTxt, done && { color: C.accentInk }, now && { color: C.accent }]}>{done ? '✓' : i + 1}</Text>
-              </View>
-              <Text style={[s.stepTitle, !done && !now && { color: C.muted }]} numberOfLines={1}>{st.title}</Text>
-            </View>
-            <Text style={s.stepSub} numberOfLines={2}>{now && busy ? 'In progress…' : st.sub}</Text>
-          </View>
-        );
-      })}
-    </View>
-  );
-}
-
 function Row({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
   return (
     <View style={s.row}>
@@ -443,16 +421,6 @@ const s = StyleSheet.create({
   primaryTxt: { ...T.button, color: C.accentInk },
   secondary: { borderRadius: 12, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: C.border, backgroundColor: C.cardHi },
   secondaryTxt: { ...T.button, color: C.text },
-  stepper: { flexDirection: 'row', gap: 8 },
-  stepCol: { flex: 1, gap: 6 },
-  stepBar: { height: 4, borderRadius: 2, backgroundColor: C.border },
-  stepHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  dot: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.border },
-  dotDone: { backgroundColor: C.accent, borderColor: C.accent },
-  dotNow: { borderColor: C.accent, borderWidth: 2 },
-  dotTxt: { ...T.caption, color: C.muted, fontWeight: '700' },
-  stepTitle: { ...T.label, color: C.text, flexShrink: 1 },
-  stepSub: { ...T.caption, color: C.muted },
   option: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: C.border, backgroundColor: C.cardHi },
   icon: { width: 28, height: 28, borderRadius: 6 },
   optionTxt: { ...T.bodyStrong, flex: 1 },

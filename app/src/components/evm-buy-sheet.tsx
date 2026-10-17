@@ -7,6 +7,7 @@ import { EvmOfferSheet } from '@/components/evm-offer-sheet';
 import { ModeChip } from '@/components/mode-toggle';
 import { NftImage } from '@/components/nft-image';
 import { ReportLink } from '@/components/report-link';
+import { Stepper, stepLabel } from '@/components/stepper';
 import { C } from '@/constants/brand';
 import { chainById, chainName } from '@/constants/chains';
 import { T } from '@/constants/type';
@@ -164,6 +165,14 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
               {step.kind === 'error' && <Text style={s.err}>{step.message}</Text>}
               {step.kind === 'error' && <ReportLink topic="trade" detail={step.message} from="evm-buy" onLeave={onClose} />}
 
+              {/* Short on funds turns a buy into two steps: move money here, then buy. */}
+              {q.executable && ((short != null && short > 0) || arrived) && (
+                <Stepper current={short != null && short > 0 ? 0 : 1} busy={step.kind === 'preparing' || step.kind === 'confirm'}
+                  steps={[
+                    { title: `Add ${unit}`, sub: short != null && short > 0 ? `${sol(short, 4, unit)} more on ${chainName(q.chain)}` : 'Arrived' },
+                    { title: 'Buy', sub: total != null ? sol(total, 4, unit) : '' },
+                  ]} />
+              )}
               {short != null && short > 0 ? (
                 <>
                   <Text style={s.err}>
@@ -202,7 +211,7 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
                   <Text style={s.primaryTxt}>
                     {step.kind === 'preparing' ? 'Checking the listing…'
                       : step.kind === 'confirm' ? 'Confirm in your wallet…'
-                      : `Buy for ${total != null ? sol(total, fee ? 4 : 3, unit) : ''}`}
+                      : `${arrived ? stepLabel(1, 2) : ''}Buy for ${total != null ? sol(total, fee ? 4 : 3, unit) : ''}`}
                   </Text>
                 </Pressable>
               ) : null}

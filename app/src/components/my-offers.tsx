@@ -2,7 +2,9 @@ import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { EvmOfferSheet } from '@/components/evm-offer-sheet';
 import { NftImage } from '@/components/nft-image';
+import { useQuickMenu, type MenuItem } from '@/components/quick-menu';
 import { Card, ListRow, RowAction, SectionHeader } from '@/components/ui';
 import { C } from '@/constants/brand';
 import { chainName } from '@/constants/chains';
@@ -26,6 +28,8 @@ export function MyOffers({ address }: { address: string }) {
   const [data, setData] = useState<{ address: string; offers: MyOffer[] } | null>(null);
   const [rows, setRows] = useState<Record<string, RowState>>({});
   const [gone, setGone] = useState<Set<string>>(() => new Set());
+  const [editing, setEditing] = useState<MyOffer | null>(null);
+  const quick = useQuickMenu();
 
   const load = useCallback(() => {
     api.evmOffers(address).then((r) => setData({ address, offers: r.offers })).catch(() => {});
@@ -63,6 +67,11 @@ export function MyOffers({ address }: { address: string }) {
   if (!offers.length) return null;
   return (
     <View style={{ gap: 8 }}>
+      {quick.node}
+      {editing?.symbol && (
+        <EvmOfferSheet symbol={editing.symbol} id={editing.mint} open onClose={() => { setEditing(null); setTimeout(load, 4_000); }}
+          replacing={{ orderHash: editing.orderHash, chain: editing.chain, price: editing.price }} />
+      )}
       <SectionHeader title="Your offers" count={offers.length} />
       <Card><Text style={T.meta}>Nothing leaves your wallet until someone accepts. Cancelling is free.</Text></Card>
       {offers.map((o) => {
@@ -74,13 +83,21 @@ export function MyOffers({ address }: { address: string }) {
           chainName(o.chain), daysLeft(o.expiresAt),
           vsFloor != null ? `${Math.abs(vsFloor * 100).toFixed(0)}% ${vsFloor >= 0 ? 'above' : 'below'} floor` : null,
         ].filter(Boolean).join(' · ');
+        const view = () => (o.symbol && o.mint
+          ? router.push({ pathname: '/item/[symbol]/[id]', params: { symbol: o.symbol, id: o.mint } })
+          : o.symbol ? router.push({ pathname: '/collection/[symbol]', params: { symbol: o.symbol } })
+          : Linking.openURL(o.url));
+        // Edit needs a collection FloorFeed tracks (the offer sheet prices against it); not for trait offers.
+        const items: MenuItem[] = [
+          ...(o.symbol && o.kind !== 'trait' ? [{ label: 'Edit offer', onPress: () => setEditing(o) }] : []),
+          { label: 'Cancel offer', danger: true, onPress: () => { void cancel(o); } },
+          'sep', { label: o.mint ? 'View NFT' : 'View collection', onPress: () => { void view(); } },
+        ];
         return (
           <View key={o.orderHash}>
             <ListRow
-              onPress={() => (o.symbol && o.mint
-                ? router.push({ pathname: '/item/[symbol]/[id]', params: { symbol: o.symbol, id: o.mint } })
-                : o.symbol ? router.push({ pathname: '/collection/[symbol]', params: { symbol: o.symbol } })
-                : Linking.openURL(o.url))}
+              onPress={() => { void view(); }}
+              onMenu={(e) => quick.open(e as never, items, o.name)}
               art={<NftImage uri={o.image} name={o.name} radius={10} px={120} style={{ width: 44 }} />}
               title={o.name}
               meta={meta}
@@ -96,7 +113,10 @@ export function MyOffers({ address }: { address: string }) {
                   <RowAction label="Keep" onPress={() => setRow(o.orderHash, null)} />
                 </View>
               ) : (
-                <RowAction label="Cancel" onPress={() => setRow(o.orderHash, { kind: 'confirm' })} />
+                <View style={s.actions}>
+                  {o.symbol && o.kind !== 'trait' && <RowAction label="Edit" onPress={() => setEditing(o)} />}
+                  <RowAction label="Cancel" onPress={() => setRow(o.orderHash, { kind: 'confirm' })} />
+                </View>
               )}
             />
             {st?.kind === 'confirm' && (

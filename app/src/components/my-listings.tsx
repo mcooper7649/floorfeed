@@ -4,6 +4,7 @@ import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { EvmListSheet } from '@/components/evm-list-sheet';
 import { NftImage } from '@/components/nft-image';
+import { useQuickMenu, type MenuItem } from '@/components/quick-menu';
 import { Card, ListRow, RowAction, SectionHeader } from '@/components/ui';
 import { C } from '@/constants/brand';
 import { chainName } from '@/constants/chains';
@@ -28,6 +29,7 @@ export function MyListings({ address, onChanged }: { address: string; onChanged?
   const [rows, setRows] = useState<Record<string, RowState>>({});
   const [gone, setGone] = useState<Set<string>>(() => new Set());
   const [editing, setEditing] = useState<MyListing | null>(null);
+  const quick = useQuickMenu();
 
   const load = useCallback(() => {
     api.evmListings(address).then((r) => setData({ address, listings: r.listings }))
@@ -67,6 +69,7 @@ export function MyListings({ address, onChanged }: { address: string; onChanged?
 
   return (
     <View style={{ gap: 8 }}>
+      {quick.node}
       {editing?.symbol && (
         <EvmListSheet symbol={editing.symbol} id={editing.mint} open onClose={() => setEditing(null)}
           onDone={() => { setTimeout(load, 3_000); onChanged?.(); }} />
@@ -85,12 +88,19 @@ export function MyListings({ address, onChanged }: { address: string; onChanged?
         const meta = [l.collection, chainName(l.chain), daysLeft(l.expiresAt),
           vsFloor != null ? (Math.abs(vsFloor) < 0.005 ? 'at floor' : `${Math.abs(vsFloor * 100).toFixed(0)}% ${vsFloor > 0 ? 'above' : 'below'} floor`) : null,
         ].filter(Boolean).join(' · ');
+        const view = () => (l.symbol
+          ? router.push({ pathname: '/item/[symbol]/[id]', params: { symbol: l.symbol, id: l.mint } })
+          : Linking.openURL(l.url));
+        const items: MenuItem[] = [
+          ...(l.symbol ? [{ label: 'Edit listing', onPress: () => setEditing(l) }] : []),
+          { label: 'Cancel listing', danger: true, onPress: () => { void cancel(l); } },
+          'sep', { label: 'View NFT', onPress: () => { void view(); } },
+        ];
         return (
           <View key={l.orderHash}>
             <ListRow
-              onPress={() => (l.symbol
-                ? router.push({ pathname: '/item/[symbol]/[id]', params: { symbol: l.symbol, id: l.mint } })
-                : Linking.openURL(l.url))}
+              onPress={() => { void view(); }}
+              onMenu={(e) => quick.open(e as never, items, l.name)}
               art={<NftImage uri={l.image} name={l.name} radius={10} px={120} style={{ width: 44 }} />}
               title={l.name}
               meta={meta}

@@ -26,7 +26,7 @@ export function SectionHeader({ title, count, action }: { title: string; count?:
 }
 
 // [art] title / meta ............ value / sub [action]
-export function ListRow({ art, title, meta, value, valueColor, note, sub, subColor, action, onPress }: {
+export function ListRow({ art, title, meta, value, valueColor, note, sub, subColor, action, onPress, onMenu }: {
   art?: ReactNode;
   title: string;
   meta?: string;
@@ -37,6 +37,7 @@ export function ListRow({ art, title, meta, value, valueColor, note, sub, subCol
   subColor?: string;
   action?: ReactNode;
   onPress?: () => void;
+  onMenu?: (e: unknown) => void; // right-click (web) / long-press: a quick menu (quick-menu.tsx)
 }) {
   const body = (
     <>
@@ -55,9 +56,9 @@ export function ListRow({ art, title, meta, value, valueColor, note, sub, subCol
     </>
   );
   return (
-    <View style={s.row}>
+    <View style={s.row} {...(onMenu ? { onContextMenu: onMenu } as object : {})}>
       {onPress
-        ? <Pressable accessibilityRole="link" onPress={onPress} style={s.rowMain}>{body}</Pressable>
+        ? <Pressable accessibilityRole="link" onPress={onPress} onLongPress={onMenu} style={s.rowMain}>{body}</Pressable>
         : <View style={s.rowMain}>{body}</View>}
       {action}
     </View>

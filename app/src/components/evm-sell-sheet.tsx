@@ -5,6 +5,7 @@ import { EvmListSheet } from '@/components/evm-list-sheet';
 import { ModeChip } from '@/components/mode-toggle';
 import { NftImage } from '@/components/nft-image';
 import { ReportLink } from '@/components/report-link';
+import { Stepper, stepLabel } from '@/components/stepper';
 import { C } from '@/constants/brand';
 import { chainById, chainName } from '@/constants/chains';
 import { T } from '@/constants/type';
@@ -235,30 +236,30 @@ export function EvmSellSheet({ symbol, id, open, onClose, onSold }: {
               {step.kind === 'error' && <Text style={s.err}>{step.message}</Text>}
               {step.kind === 'error' && <ReportLink topic="trade" detail={step.message} from="evm-sell" onLeave={onClose} />}
 
+              {q.executable && w.send && (
+                <Stepper current={q.approved ? 1 : 0} busy={busy}
+                  note={q.approved ? undefined : "Step 1 only sets up your wallet. Your NFT isn't sold until you confirm step 2."}
+                  steps={[
+                    { title: 'Approve', sub: q.approved ? (justApproved ? 'Approved just now' : 'Done for this collection') : 'Once per collection' },
+                    { title: 'Sell', sub: offer ? `Get ${sol(offer.net, 4, offer.currency)}` : 'Confirm in wallet' },
+                  ]} />
+              )}
               {q.executable && w.send && (q.approved ? (
                 <View style={{ gap: 8 }}>
-                  {justApproved && (
-                    <View style={s.stepBox}>
-                      <Text style={s.okLine}>✓ Step 1 done: selling is approved.</Text>
-                      <Text style={s.meta}>Step 2 of 2: confirm the sale below. Your NFT hasn&apos;t been sold yet.</Text>
-                    </View>
-                  )}
                   <Pressable accessibilityRole="button" onPress={sell} disabled={busy} style={[s.primary, busy && { opacity: 0.7 }]}>
                     <Text style={s.primaryTxt}>
                       {step.kind === 'preparing' ? 'Checking the offer…'
                         : step.kind === 'confirm' ? 'Confirm the sale in your wallet…'
-                        : `${justApproved ? 'Step 2: ' : ''}Sell for ${offer ? sol(offer.net, 4, offer.currency) : ''}`}
+                        : `${stepLabel(1, 2)}Sell for ${offer ? sol(offer.net, 4, offer.currency) : ''}`}
                     </Text>
                   </Pressable>
                 </View>
               ) : (
                 <View style={{ gap: 8 }}>
-                  <Text style={s.meta}>
-                    Step 1 of 2: allow OpenSea to move NFTs from this collection. You only do this once per collection; it costs a small network fee.
-                  </Text>
+                  <Text style={s.meta}>Lets OpenSea move NFTs from this collection when you accept an offer. A small network fee, once.</Text>
                   <Pressable accessibilityRole="button" onPress={approve} disabled={busy} style={[s.primary, busy && { opacity: 0.7 }]}>
                     <Text style={s.primaryTxt}>
-                      {step.kind === 'approving' ? (step.hash ? 'Waiting for the approval to confirm…' : 'Confirm the approval in your wallet…') : 'Step 1: Approve selling'}
+                      {step.kind === 'approving' ? (step.hash ? 'Waiting for the approval to confirm…' : 'Confirm the approval in your wallet…') : `${stepLabel(0, 2)}Approve ${q.collection.name}`}
                     </Text>
                   </Pressable>
                 </View>

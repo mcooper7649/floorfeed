@@ -11,6 +11,7 @@ import { MODE_COLOR, ModeToggle } from '@/components/mode-toggle';
 import { MyListings } from '@/components/my-listings';
 import { MyOffers } from '@/components/my-offers';
 import { NftImage } from '@/components/nft-image';
+import { useQuickMenu, type MenuItem } from '@/components/quick-menu';
 import { Screen } from '@/components/screen';
 import { Button, Card, ListRow, RowAction, SectionHeader } from '@/components/ui';
 import { WalletSheet } from '@/components/wallet-button';
@@ -21,6 +22,7 @@ import { openseaAsset } from '@/constants/chains';
 import { T, display } from '@/constants/type';
 import { api, type EvmHoldings, type EvmNetwork, type Holding, type Holdings, type PaperPosition } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { cancelEvmListing } from '@/lib/evm-listing';
 import { useEvmWallet } from '@/lib/evm-wallet';
 import { signedSol, signedUsd, sol, usd } from '@/lib/format';
 import { useLayout } from '@/lib/layout';
@@ -247,6 +249,9 @@ function RealPortfolio({ solAddress, evmAddress }: { solAddress: string | null; 
   const [refreshing, setRefreshing] = useState(false);
   const [selling, setSelling] = useState<Row | null>(null);
   const [listing, setListing] = useState<Row | null>(null);
+  const ew = useEvmWallet();
+  const quick = useQuickMenu();
+  const [notice, setNotice] = useState<{ mint: string; text: string; bad?: boolean } | null>(null);
   const [nets, setNets] = useState<{ address: string; n: EvmNetwork[] } | null>(null);
 
   const fetchData = useCallback(() => {
@@ -300,6 +305,7 @@ function RealPortfolio({ solAddress, evmAddress }: { solAddress: string | null; 
 
   return (
     <>
+    {quick.node}
     {listing && (
       <EvmListSheet symbol={listing.collection.symbol} id={listing.mint} open onClose={() => setListing(null)}
         onDone={() => setTimeout(fetchData, 3_000)} />
@@ -361,9 +367,40 @@ function RealPortfolio({ solAddress, evmAddress }: { solAddress: string | null; 
         const sellUrl = n.chain === 'solana'
           ? `https://magiceden.io/item-details/${n.mint}`
           : openseaAsset(n.evmChain ?? 'ethereum', n.mint);
+        const view = () => router.push({ pathname: '/item/[symbol]/[id]', params: { symbol: n.collection.symbol, id: n.mint } });
+        const cancelListing = async () => {
+          if (!n.listing) return;
+          setNotice({ mint: n.mint, text: 'Sign in your wallet to cancel the listing…' });
+          try {
+            await cancelEvmListing(ew, { chain: n.evmChain ?? 'ethereum', orderHash: n.listing.orderHash, name: n.name ?? n.collection.name, mint: n.mint });
+            setNotice(null);
+          } catch (e) {
+            const m = (e as Error).message;
+            setNotice(/isn't live anymore/i.test(m) ? null : { mint: n.mint, bad: true,
+              text: /reject|denied|cancel/i.test(m) && !/didn't cancel|can't cancel/i.test(m) ? 'You cancelled in your wallet. Still listed.' : m });
+          }
+        };
+        // Right-click / long-press: the same quick actions as the Your NFTs panel.
+        const items: MenuItem[] = n.drop ? [
+          { label: 'Open on OpenSea ↗', onPress: () => { void Linking.openURL(sellUrl); } },
+          'sep', { label: 'View NFT', onPress: view },
+        ] : n.chain === 'evm' ? [
+          ...(n.listing
+            ? [{ label: 'Edit listing', onPress: () => setListing(n) },
+               { label: 'Cancel listing', danger: true, onPress: () => { void cancelListing(); } }]
+            : [{ label: 'List for sale', onPress: () => setListing(n) }]),
+          { label: 'Sell to best offer', onPress: () => setSelling(n) },
+          'sep', { label: 'View NFT', onPress: view },
+        ] : [
+          { label: 'Sell on Magic Eden ↗', onPress: () => { void Linking.openURL(sellUrl); } },
+          'sep', { label: 'View NFT', onPress: view },
+        ];
+        const note = notice?.mint === n.mint ? notice : null;
         return (
+          <View>
           <ListRow
-            onPress={() => router.push({ pathname: '/item/[symbol]/[id]', params: { symbol: n.collection.symbol, id: n.mint } })}
+            onPress={view}
+            onMenu={(e) => quick.open(e as never, items, n.name || n.collection.name)}
             art={<NftImage uri={n.image} name={n.collection.name} radius={10} px={120} style={{ width: 44 }} />}
             title={n.name || n.collection.name}
             meta={[n.collection.name, n.boughtAt != null ? `bought at ${sol(n.boughtAt, 2, n.unit)}` : null,
@@ -382,6 +419,8 @@ function RealPortfolio({ solAddress, evmAddress }: { solAddress: string | null; 
               </View>
             ) : <RowAction label="Sell" onPress={() => Linking.openURL(sellUrl)} />}
           />
+          {note && <Text style={[T.caption, { paddingLeft: 56, color: note.bad ? C.down : C.muted }]}>{note.text}</Text>}
+          </View>
         );
       }}
     />
