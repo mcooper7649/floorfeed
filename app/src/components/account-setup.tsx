@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useEffect, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { RecoveryCard, TwoStepCard } from '@/components/account-security';
@@ -15,7 +16,10 @@ import { useProfile } from '@/lib/profile';
 // protect the account with 2-step verification and a backup sign-in. The name
 // step can't be skipped; it comes back on the next visit until a name is saved
 // (signing out is the only other way out). Security can be skipped, and lives
-// in Settings afterwards.
+// in Settings afterwards. Accounts that already had a name get the security
+// step on its own, once per device, while 2-step is off or there's only one
+// way to sign in.
+const ASKED_KEY = 'floorfeed.secureAsked.';
 export function AccountSetup() {
   const auth = useAuth();
   const { profile, loaded, setName } = useProfile();
@@ -25,10 +29,29 @@ export function AccountSetup() {
   const [error, setError] = useState<string | null>(null);
   // Privy draws its own modals; ours steps aside while one is open.
   const [away, setAway] = useState(false);
+  // Has this device already offered the security step to this account? (null: still reading)
+  const [asked, setAsked] = useState<{ userId: string; v: boolean } | null>(null);
+  const userId = auth.userId;
+  useEffect(() => {
+    if (!userId) return;
+    AsyncStorage.getItem(ASKED_KEY + userId)
+      .then((v) => setAsked({ userId, v: v === '1' }))
+      .catch(() => setAsked({ userId, v: true }));
+  }, [userId]);
 
+  const sec = auth.security;
   const needsName = loaded && !!profile && !profile.name;
-  const visible = !away && (step === 'secure' || (needsName && step === 'name'));
-  if (!auth.userId || (!needsName && step !== 'secure')) return null;
+  const unprotected = !!sec && (sec.mfa.length === 0 || sec.logins.length < 2);
+  // An existing name: straight to the security step, if it hasn't been offered here before.
+  const securityOnly = step === 'name' && loaded && !!profile?.name && unprotected && asked?.userId === userId && asked.v === false;
+  const showSecure = step === 'secure' || securityOnly;
+  const visible = !away && (showSecure || (needsName && step === 'name'));
+  if (!userId || (!needsName && !showSecure)) return null;
+
+  const remember = () => {
+    setAsked({ userId, v: true });
+    AsyncStorage.setItem(ASKED_KEY + userId, '1').catch(() => {});
+  };
 
   const save = async () => {
     if (!nameLooksValid(value) || busy) return;
@@ -43,17 +66,17 @@ export function AccountSetup() {
       setBusy(false);
     }
   };
-  const finish = (how: 'skip' | 'done') => { track('onboard_secure', { how }); setStep('done'); };
+  const finish = (how: 'skip' | 'done') => { track('onboard_secure', { how, existing: securityOnly }); remember(); setStep('done'); };
   // Opening a Privy flow from the security step ends onboarding: their screen takes over.
-  const handOff = () => { setAway(true); setStep('done'); };
+  const handOff = () => { remember(); setAway(true); setStep('done'); };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={() => step === 'secure' && finish('skip')}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={() => showSecure && finish('skip')}>
       <View style={s.backdrop}>
         <View style={s.sheet}>
           <ScrollView contentContainerStyle={{ gap: 14 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-            <Text style={s.steps}>Step {step === 'name' ? 1 : 2} of 2</Text>
-            {step === 'name' ? (
+            {!securityOnly && <Text style={s.steps}>Step {showSecure ? 2 : 1} of 2</Text>}
+            {!showSecure ? (
               <>
                 <Text {...display} style={T.title}>Choose your account name</Text>
                 <Text style={T.meta}>
