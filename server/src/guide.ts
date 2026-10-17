@@ -58,10 +58,10 @@ export const GUIDE: GuideSection[] = [
         { term: "Sweep", text: "One wallet bought 3 or more from the same collection within 15 minutes." },
         { term: "Cluster", text: "3 or more different wallets bought the same collection within 6 hours." },
       ] },
-      { p: "Buy, Sweep and Cluster cards end in a Copy button: buy that collection's floor yourself, on paper or for real depending on your mode. Flip cards end in \"See <collection>\" instead. A flip is a sale, so there's nothing to copy; the link opens the collection, where Buy floor is one tap away." },
+      { p: "The feed has two tabs. Buys holds Buy, Sweep and Cluster cards, and each ends in Buy floor (on paper or for real, depending on your mode) with Offer beside it on Ethereum and its networks. Flips holds Flip cards, which end in \"See <collection>\": a flip is a sale, so the link opens the collection, where Buy floor is one tap away." },
       img("feed-flip-card", "A Win card: a Proven wallet flipped Argonauts for +0.568 ETH after fees, with a See Argonauts button", 780, 640,
         "A flip card. The profit is after fees, and the button opens the collection rather than copying a sale."),
-      { p: "Top ranks the last 72 hours by who traded, how much and how recently. Latest is every trade as it lands. Wins is profitable flips only. Filter by chain, or switch to Following to see only the wallets you follow." },
+      { p: "On Buys, Top ranks the last 72 hours by who bought, how much and how recently (at most one card in three is a cluster), and Latest is every buy as it lands. On Flips, All is every flip and Profitable is +2% or more after fees. Filter by chain, switch to Following to see only the wallets you follow, and Hide bots (on by default) leaves out market-making wallets that trade around the clock." },
     ],
   },
   {
@@ -119,7 +119,7 @@ export const GUIDE: GuideSection[] = [
     blocks: [
       { p: "Paper mode is practice with simulated money at live prices. It's the default, and it needs no wallet and no sign-up. Every paper button is purple, so you always know which mode you're in. Your positions are kept on this device; sign in and they move to your account." },
       { steps: [
-        "Find a trade you like in the feed and tap \"Copy · paper buy floor\".",
+        "Find a buy you like on the feed's Buys tab and tap Buy floor (it says PAPER in Paper mode).",
         "FloorFeed records one NFT bought at that collection's current floor. The button confirms the price you got.",
         "Open Portfolio to watch the position. Open positions are marked at what you'd get selling now.",
         "Tap Sell when you're done. The profit or loss is locked in, after fees.",
@@ -191,7 +191,7 @@ export const GUIDE: GuideSection[] = [
     part: "real",
     title: "Buying for real",
     blocks: [
-      { p: "Tap Copy on a feed card, or Buy floor on a collection page. What happens next depends on the chain." },
+      { p: "Tap Buy floor on a feed card or a collection page. What happens next depends on the chain." },
       { p: "On Ethereum and its networks, the whole purchase happens in FloorFeed:" },
       { steps: [
         "FloorFeed finds the cheapest OpenSea listing priced in the network's coin and shows the NFT, its price in coin and dollars, and your balance on that network.",

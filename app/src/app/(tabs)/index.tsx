@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import { AlertsBell } from '@/components/alerts-bell';
@@ -66,11 +66,14 @@ export default function FeedScreen() {
     return api.events({ view, kinds: tab === 'flips' ? 'flips' : 'buys', hideBots, before, chain, following: scope === 'following' ? userId! : undefined });
   }, [scope, tab, buySort, flipSort, chain, userId, hideBots]);
 
+  // Switching tabs or filters while a page loads: only the latest request may land.
+  const req = useRef(0);
   const fetchFirst = useCallback(() => {
+    const id = ++req.current;
     load()
-      .then((r) => { setItems(r.events); setNext(r.next); setError(null); })
-      .catch((e: Error) => setError(e.message))
-      .finally(() => { setRefreshing(false); setLoading(false); });
+      .then((r) => { if (id === req.current) { setItems(r.events); setNext(r.next); setError(null); } })
+      .catch((e: Error) => { if (id === req.current) setError(e.message); })
+      .finally(() => { if (id === req.current) { setRefreshing(false); setLoading(false); } });
   }, [load]);
 
   useEffect(() => { fetchFirst(); }, [fetchFirst, following.size]);
@@ -80,8 +83,9 @@ export default function FeedScreen() {
 
   const more = async () => {
     if (next == null || refreshing) return;
+    const id = req.current;
     const r = await load(next).catch(() => null);
-    if (!r) return;
+    if (!r || id !== req.current) return; // the view changed while this page loaded
     setNext(r.next);
     setItems((prev) => [...prev, ...r.events.filter((e) => !prev.some((p) => p.id === e.id))]);
   };

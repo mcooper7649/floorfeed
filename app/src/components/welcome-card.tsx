@@ -14,7 +14,7 @@ const KEY = 'floorfeed.welcomed';
 const STEPS = [
   { n: '1', title: 'Watch', text: 'Every buy, flip and sweep from wallets we can score on real results.' },
   { n: '2', title: 'Follow', text: 'Follow the traders who keep winning and get an alert when they move.' },
-  { n: '3', title: 'Copy', text: 'Tap Copy to try the trade on paper first. Go real when you trust it.' },
+  { n: '3', title: 'Buy', text: 'Tap Buy floor to try it on paper first, or make an offer. Go real when you trust it.' },
 ];
 
 // First-visit intro at the top of the feed: what FloorFeed is, the three-step
