@@ -7,6 +7,7 @@ import {
   buildOsCollectionOffer, fromOsChain, getOsBestCollectionOffer, getOsBestOffer, getOsMyOffers, getOsNft, getOsOrder,
   postOsCollectionOffer, postOsItemOffer, type OsOrderParams,
 } from "./opensea.ts";
+import { noteListed } from "./history.ts";
 import { evmPublicClient, isTradableChain, osConduit } from "./trade-evm.ts";
 
 // Making an offer on OpenSea from FloorFeed: on one NFT (item offer) or on any
@@ -261,6 +262,7 @@ export async function evmOfferSubmit(p: { chain: string; kind: "item" | "collect
     hash = r.order_hash ?? null;
   }
   forgetOffers(p.parameters.offerer);
+  if (hash) noteListed(hash, p.chain); // History badges it "via FloorFeed"
   return { orderHash: hash };
 }
 

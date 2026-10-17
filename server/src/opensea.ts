@@ -534,6 +534,7 @@ export type OsAccountEvent = {
   from_address?: string; to_address?: string; transfer_type?: string;
   start_date?: number; expiration_date?: number; quantity?: number;
   nft?: OsEventNft; asset?: OsEventNft;
+  criteria?: { collection?: { slug: string } | null; traits?: unknown[] | null } | null; // offers
 };
 type OsEventNft = { identifier: string; collection: string; contract: string; name: string | null; image_url: string | null; display_image_url?: string | null };
 export async function getOsAccountEvents(address: string, pages = 4) {
@@ -541,7 +542,7 @@ export async function getOsAccountEvents(address: string, pages = 4) {
   let next: string | null | undefined;
   for (let i = 0; i < pages; i++) {
     const q = new URLSearchParams({ limit: "50" });
-    for (const t of ["sale", "listing", "transfer", "mint"]) q.append("event_type", t);
+    for (const t of ["sale", "listing", "offer", "collection_offer", "trait_offer", "transfer", "mint"]) q.append("event_type", t);
     if (next) q.set("next", next);
     const r = await get<{ asset_events?: OsAccountEvent[]; next?: string | null }>(`/events/accounts/${address}?${q}`);
     events.push(...(r.asset_events ?? []));

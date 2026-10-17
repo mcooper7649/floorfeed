@@ -6,9 +6,10 @@ import { fromOsChain, getOsAccountEvents, getOsOrder, osChain, type OsAccountEve
 // A wallet's full trading history, for the History page and its CSV export:
 // FloorFeed's own transactions (activity.ts) merged with the marketplace
 // record: OpenSea account events on EVM chains (buys, sales, listings,
-// transfers, mints) and ingested Magic Eden trades on Solana. Each listing
-// carries its outcome (active, sold, cancelled, expired), which OpenSea's
-// events don't say, so it's looked up per order and kept in listing_status.
+// transfers, mints, offers) and ingested Magic Eden trades on Solana. Each
+// listing and offer carries its outcome (active, sold / accepted, cancelled,
+// expired), which OpenSea's events don't say, so it's looked up per order and
+// kept in listing_status (offers too: an order is an order).
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS listing_status (
@@ -22,7 +23,7 @@ CREATE TABLE IF NOT EXISTS listing_status (
 `);
 
 export type HistoryType =
-  | "buy" | "sale" | "listing" | "mint" | "launch" | "transfer_in" | "transfer_out"
+  | "buy" | "sale" | "listing" | "offer" | "mint" | "launch" | "transfer_in" | "transfer_out"
   | "bridge" | "send" | "approve" | "unwrap";
 export type HistoryEntry = {
   id: string; at: number; type: HistoryType; status: string; wallet: string; chain: string;
@@ -78,7 +79,8 @@ function osEvents(wallet: string) {
 }
 
 // Orders still open are re-read at most every 10 min, a few per request
-// (each is one OpenSea call through the shared queue).
+// (each is one OpenSea call through the shared queue). `soldAt`: when the
+// order was filled (a listing sold, an offer accepted), if a sale shows it.
 async function listingStatus(e: OsAccountEvent, soldAt: number | null, budget: { n: number }): Promise<StatusRow> {
   const hash = e.order_hash!.toLowerCase();
   const chain = fromOsChain(e.chain);
@@ -104,11 +106,17 @@ async function evmHistory(wallet: string) {
   const sales = events.filter((e) => e.event_type === "sale");
   const soldByOrder = new Map(sales.filter((e) => e.seller?.toLowerCase() === me && e.order_hash).map((e) => [e.order_hash!.toLowerCase(), e]));
   const myListingHashes = new Set(events.filter((e) => e.order_type === "listing" && e.order_hash).map((e) => e.order_hash!.toLowerCase()));
+  // My offers that were accepted show up as sales where I'm the buyer, under the offer's order hash.
+  const boughtByOrder = new Map(sales.filter((e) => e.buyer?.toLowerCase() === me && e.order_hash).map((e) => [e.order_hash!.toLowerCase(), e]));
   const saleTx = new Set(sales.map((e) => `${e.transaction}:${e.nft?.contract}:${e.nft?.identifier}`));
-  const budget = { n: 12 };
+  const budget = { n: 20 };
 
   const out: HistoryEntry[] = [];
   for (const e of events) {
+    if (/offer$/.test(e.order_type ?? "") && e.order_hash && e.maker?.toLowerCase() === me) {
+      out.push(await offerEntry(e, me, boughtByOrder.get(e.order_hash.toLowerCase()) ?? null, budget));
+      continue;
+    }
     const nft = e.nft ?? e.asset;
     if (!nft) continue;
     const chain = fromOsChain(e.chain);
@@ -162,6 +170,42 @@ async function evmHistory(wallet: string) {
     }
   }
   return { entries: out, more };
+}
+
+// One offer this wallet made: on an NFT, a whole collection, or a trait.
+// Its outcome is the order's (accepted when a sale filled it).
+const collImage = db.prepare("SELECT image FROM collections WHERE symbol = ?");
+async function offerEntry(e: OsAccountEvent, me: string, bought: OsAccountEvent | null, budget: { n: number }): Promise<HistoryEntry> {
+  const chain = fromOsChain(e.chain);
+  const nft = e.nft ?? e.asset ?? null;
+  const slug = e.criteria?.collection?.slug ?? nft?.collection ?? null;
+  const meta = slug ? tracked(slug) : undefined;
+  const coll = meta?.name ?? (slug ? prettySlug(slug) : null);
+  const st = await listingStatus(e, bought?.event_timestamp ?? null, budget);
+  const status = st.status === "sold" ? "accepted" : st.status;
+  const got = bought?.nft ?? bought?.asset ?? null; // the NFT a collection offer bought
+  const item = nft ?? got;
+  const kind = nft ? "item" : e.criteria?.traits?.length ? "trait" : "collection";
+  const name = nft ? nft.name ?? `${coll ?? "NFT"} #${nft.identifier}` : kind === "trait" ? `${coll ?? "Collection"} trait offer` : `Any ${coll ?? "NFT"}`;
+  const qty = Math.max(1, e.quantity ?? 1);
+  const total = amount(e.payment);
+  const hash = e.order_hash!.toLowerCase();
+  return {
+    id: `offer:${hash}`, at: e.start_date ?? e.event_timestamp, type: "offer", status, wallet: me, chain,
+    title: `Offered on ${name}`, name, collection: coll, symbol: meta?.slug ?? null,
+    mint: item ? `${item.contract.toLowerCase()}:${item.identifier}` : null, tokenId: item?.identifier ?? null,
+    image: item?.display_image_url ?? item?.image_url ?? (meta ? (collImage.get(meta.slug) as { image: string | null } | undefined)?.image ?? null : null),
+    price: total != null ? total / qty : null, unit: e.payment?.symbol ?? null,
+    counterparty: bought?.seller?.toLowerCase() ?? null, via: st.via_ff ? "floorfeed" : "opensea", saleKind: null,
+    tx: null, explorerUrl: bought?.transaction ? explorer(chain, bought.transaction) : null,
+    marketUrl: item ? osAsset(chain, item.contract.toLowerCase(), item.identifier) : `https://opensea.io/collection/${slug ?? ""}`,
+    toChain: null, outUrl: null,
+    listing: {
+      orderHash: hash, listedAt: e.start_date ?? e.event_timestamp, expiresAt: e.expiration_date ?? null,
+      closedAt: bought?.event_timestamp ?? st.closed_at ?? (st.status === "expired" ? e.expiration_date ?? null : null),
+      soldTx: bought?.transaction ?? null, buyer: bought?.seller?.toLowerCase() ?? null,
+    },
+  };
 }
 
 // --- Solana: ingested marketplace trades (tracked collections) ---
@@ -242,7 +286,7 @@ export async function walletHistory(wallets: string[]) {
 // --- CSV export ---
 
 const TYPE_LABEL: Record<HistoryType, string> = {
-  buy: "Buy", sale: "Sale", listing: "Listing", mint: "Mint", launch: "Collection launch", transfer_in: "Transfer in",
+  buy: "Buy", sale: "Sale", listing: "Listing", offer: "Offer", mint: "Mint", launch: "Collection launch", transfer_in: "Transfer in",
   transfer_out: "Transfer out", bridge: "Bridge", send: "Send", approve: "Approval", unwrap: "Unwrap",
 };
 const iso = (t: number | null | undefined) => (t ? new Date(t * 1000).toISOString().replace("T", " ").slice(0, 19) : "");

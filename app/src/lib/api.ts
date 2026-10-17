@@ -458,10 +458,11 @@ export type ActivityItem = {
   createdAt: number; explorerUrl: string; outUrl: string | null;
 };
 export type HistoryType =
-  | 'buy' | 'sale' | 'listing' | 'mint' | 'launch' | 'transfer_in' | 'transfer_out'
+  | 'buy' | 'sale' | 'listing' | 'offer' | 'mint' | 'launch' | 'transfer_in' | 'transfer_out'
   | 'bridge' | 'send' | 'approve' | 'unwrap';
 // One row of a wallet's history: FloorFeed txs merged with the marketplace record.
-// Tx statuses as ActivityItem; listings: active | sold | cancelled | expired | inactive.
+// Tx statuses as ActivityItem; listings: active | sold | cancelled | expired | inactive;
+// offers: active | accepted | cancelled | expired | inactive (`listing` holds the order either way).
 export type HistoryEntry = {
   id: string; at: number; type: HistoryType; status: string; wallet: string; chain: string;
   title: string; name: string; collection: string | null; symbol: string | null;

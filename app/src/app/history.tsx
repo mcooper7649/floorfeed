@@ -29,7 +29,11 @@ const RANGES = [
   { id: '90d', label: '90D', days: 90 },
   { id: 'all', label: 'All time', days: 0 },
 ];
-const LISTING_STATES = ['any', 'active', 'sold', 'cancelled', 'expired'] as const;
+// Outcome filters for orders: listings sell, offers get accepted.
+const ORDER_STATES = {
+  listings: ['any', 'active', 'sold', 'cancelled', 'expired'],
+  offers: ['any', 'active', 'accepted', 'cancelled', 'expired'],
+} as const;
 
 export default function HistoryPage() {
   useTitle('History | FloorFeed');
@@ -47,7 +51,7 @@ export default function HistoryPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [group, setGroup] = useState(GROUPS.some((g) => g.id === params.type) ? params.type! : 'all');
   const [range, setRange] = useState('all');
-  const [lstate, setLstate] = useState<(typeof LISTING_STATES)[number]>('any');
+  const [lstate, setLstate] = useState<string>('any');
   const [q, setQ] = useState('');
   const [open, setOpen] = useState<string | null>(null);
   const [now] = useState(() => Math.floor(Date.now() / 1000));
@@ -82,7 +86,7 @@ export default function HistoryPage() {
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return inRange.filter((e) => (!types || types.includes(e.type))
-      && (group !== 'listings' || lstate === 'any' || e.status === lstate)
+      && (!(group in ORDER_STATES) || lstate === 'any' || e.status === lstate)
       && (!needle || [e.name, e.collection, e.tx, e.counterparty, e.tokenId, e.listing?.orderHash, chainName(e.chain)]
         .some((v) => v?.toLowerCase().includes(needle))));
   }, [inRange, types, group, lstate, q]);
@@ -99,8 +103,10 @@ export default function HistoryPage() {
     const buys = inRange.filter((e) => e.type === 'buy' && e.status === 'confirmed');
     const sales = inRange.filter((e) => e.type === 'sale' && e.status === 'confirmed');
     const listings = inRange.filter((e) => e.type === 'listing');
+    const offers = inRange.filter((e) => e.type === 'offer');
     const count = (s: string) => listings.filter((e) => e.status === s).length;
-    return { buys, sales, bought: tot(buys), sold: tot(sales), volume: tot([...buys, ...sales]), listings, count };
+    const countOffers = (s: string) => offers.filter((e) => e.status === s).length;
+    return { buys, sales, bought: tot(buys), sold: tot(sales), volume: tot([...buys, ...sales]), listings, count, offers, countOffers };
   }, [inRange, toUsd]);
 
   const byDay = useMemo(() => {
@@ -137,7 +143,7 @@ export default function HistoryPage() {
           <View style={{ gap: 6, flex: 1 }}>
             <Text {...display} style={wide ? T.displayL : T.display}>History</Text>
             <Text style={T.meta}>
-              Every buy, sale, listing and transfer{wallets.length ? ` for ${wallets.map(shortAddr).join(' and ')}` : ''}, on FloorFeed and the marketplaces.
+              Every buy, sale, listing, offer and transfer{wallets.length ? ` for ${wallets.map(shortAddr).join(' and ')}` : ''}, on FloorFeed and the marketplaces.
             </Text>
           </View>
           {wallets.length > 0 && <Button label="Export CSV" tone="secondary" onPress={exportCsv} />}
@@ -146,7 +152,7 @@ export default function HistoryPage() {
         {!wallets.length ? (
           <Card>
             <Text style={T.bodyStrong}>Connect a wallet to see its history</Text>
-            <Text style={T.meta}>Your buys, sales and listings show up here with their outcome, ready to export.</Text>
+            <Text style={T.meta}>Your buys, sales, listings and offers show up here with their outcome, ready to export.</Text>
             <Button label="Go to Portfolio" onPress={() => router.push('/portfolio')} />
           </Card>
         ) : !current ? (
@@ -163,16 +169,18 @@ export default function HistoryPage() {
               <Stat label="Sold" value={String(summary.sales.length)} sub={sub(summary.sold)} />
               <Stat label="Listings" value={String(summary.listings.length)}
                 sub={(['active', 'sold', 'cancelled', 'expired'] as const).filter((x) => summary.count(x)).map((x) => `${summary.count(x)} ${x}`).join(' · ') || 'none in this period'} />
+              <Stat label="Offers" value={String(summary.offers.length)}
+                sub={(['active', 'accepted', 'cancelled', 'expired'] as const).filter((x) => summary.countOffers(x)).map((x) => `${summary.countOffers(x)} ${x}`).join(' · ') || 'none in this period'} />
               <Stat label="Volume" value={summary.volume.dollars != null ? usd(summary.volume.dollars) : '—'} sub={summary.volume.coins} />
             </View>
 
             <View style={{ gap: 4 }}>
               <ChipRow groups={[
-                GROUPS.map((g) => <Chip key={g.id} label={g.label} on={group === g.id} onPress={() => { setGroup(g.id); setOpen(null); }} />),
+                GROUPS.map((g) => <Chip key={g.id} label={g.label} on={group === g.id} onPress={() => { setGroup(g.id); setOpen(null); setLstate('any'); }} />),
                 RANGES.map((r) => <Chip key={r.id} label={r.label} on={range === r.id} onPress={() => setRange(r.id)} />),
               ]} />
-              {group === 'listings' && (
-                <ChipRow groups={[LISTING_STATES.map((st) => (
+              {(group === 'listings' || group === 'offers') && (
+                <ChipRow groups={[ORDER_STATES[group].map((st) => (
                   <Chip key={st} label={st === 'any' ? 'Any status' : statusOf(st).label} on={lstate === st} onPress={() => setLstate(st)} />
                 ))]} />
               )}
@@ -302,12 +310,12 @@ function Details({ e, dollars }: { e: HistoryEntry; dollars: number | null }) {
     ['Network', e.toChain ? `${chainName(e.chain)} → ${chainName(e.toChain)}` : chainName(e.chain)],
     ['Price', e.price != null && e.unit ? `${amt(e.price, e.unit)}${dollars != null ? ` (≈ ${usd(dollars)} today)` : ''}` : null],
     ['Sale type', e.saleKind === 'offer' ? 'Offer / bid' : e.saleKind === 'listing' ? 'Listing' : null],
-    [e.type === 'buy' ? 'Seller' : e.type === 'transfer_in' ? 'From' : e.type === 'listing' ? 'Buyer' : 'To',
+    [e.type === 'buy' || e.type === 'offer' ? 'Seller' : e.type === 'transfer_in' ? 'From' : e.type === 'listing' ? 'Buyer' : 'To',
       e.counterparty ? shortAddr(e.counterparty) : null,
       e.counterparty ? () => router.push({ pathname: '/wallet/[address]', params: { address: e.counterparty! } }) : undefined],
-    ['Listed', l ? stamp(l.listedAt) : null],
+    [e.type === 'offer' ? 'Offered' : 'Listed', l ? stamp(l.listedAt) : null],
     ['Expires', l?.expiresAt ? stamp(l.expiresAt) : null],
-    [e.status === 'sold' ? 'Sold' : e.status === 'cancelled' ? 'Cancelled' : 'Closed', l?.closedAt ? stamp(l.closedAt) : null],
+    [e.status === 'sold' ? 'Sold' : e.status === 'accepted' ? 'Accepted' : e.status === 'cancelled' ? 'Cancelled' : 'Closed', l?.closedAt ? stamp(l.closedAt) : null],
     ['Token ID', e.tokenId && e.tokenId.length < 20 ? e.tokenId : e.tokenId ? shortAddr(e.tokenId) : null],
     ['Order', l ? shortAddr(l.orderHash) : null],
     ['Transaction', tx ? shortAddr(tx) : null, explorer ? () => Linking.openURL(explorer) : undefined],
