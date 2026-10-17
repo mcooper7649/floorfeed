@@ -211,8 +211,8 @@ export default function DropScreen() {
       ) : canMintHere && mode === 'paper' && canReal ? (
         // Paper trading has no mints: a mint is a real, on-chain purchase.
         <View style={s.paperBox}>
-          <Text style={T.bodyStrong}>You&apos;re in Paper mode</Text>
-          <Text style={T.meta}>Minting uses real money, so it isn&apos;t part of paper trading. Switch to Real to mint this one with your wallet, or keep paper trading the collections that already trade.</Text>
+          <Text style={T.bodyStrong}>You&apos;re in Practice mode</Text>
+          <Text style={T.meta}>Minting uses real money, so it isn&apos;t part of practice trading. Switch to Real to mint this one with your wallet, or keep practicing on the collections that already trade.</Text>
           <Pressable accessibilityRole="button" onPress={() => setMode('real')} style={s.primary}><Text style={s.primaryTxt}>Switch to Real to mint</Text></Pressable>
         </View>
       ) : canMintHere ? (

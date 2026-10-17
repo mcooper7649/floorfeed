@@ -14,6 +14,7 @@ import { NftImage } from '@/components/nft-image';
 import { useQuickMenu, type MenuItem } from '@/components/quick-menu';
 import { Screen } from '@/components/screen';
 import { Button, Card, ListRow, RowAction, SectionHeader } from '@/components/ui';
+import { PracticeRank } from '@/components/practice-board';
 import { WalletSheet } from '@/components/wallet-button';
 import { WalletsCard } from '@/components/wallet-card';
 import { ReportLink } from '@/components/report-link';
@@ -191,13 +192,14 @@ function PaperPortfolio() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={C.accent} />}
       ListHeaderComponent={
         <View style={{ gap: 16, marginBottom: 4 }}>
-          <Totals label="Paper profit and loss, after fees" color={MODE_COLOR.paper} units={units} />
+          <Totals label="Practice profit and loss, after fees" color={MODE_COLOR.paper} units={units} />
+          <PracticeRank />
           <SectionHeader
             title="Positions"
             count={positions.length || undefined}
             action={positions.length ? (
               <Pressable accessibilityRole="button" onPress={reset} hitSlop={8}>
-                <Text style={[T.label, armed && { color: C.down }]}>{armed ? 'Tap again to delete all paper trades' : 'Reset'}</Text>
+                <Text style={[T.label, armed && { color: C.down }]}>{armed ? 'Tap again to delete all practice trades' : 'Reset'}</Text>
               </Pressable>
             ) : null}
           />
@@ -206,7 +208,7 @@ function PaperPortfolio() {
       }
       ListEmptyComponent={
         <Card style={{ alignItems: 'flex-start' }}>
-          <Text style={T.bodyStrong}>No paper trades yet</Text>
+          <Text style={T.bodyStrong}>No practice trades yet</Text>
           <Text style={T.meta}>Open a position from any trade in the feed with Copy. It buys the collection&apos;s floor with simulated money.</Text>
           <Button label="Go to the feed" tone="secondary" onPress={() => router.push('/')} />
         </Card>

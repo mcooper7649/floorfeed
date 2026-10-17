@@ -24,7 +24,7 @@ export type GuideSection = { id: string; part: GuidePart; title: string; blocks:
 
 export const GUIDE_PARTS: { id: GuidePart; title: string; blurb: string }[] = [
   { id: "basics", title: "The basics", blurb: "The feed, the badges, profit after fees, alerts and finding collections." },
-  { id: "paper", title: "Paper trading", blurb: "Practice with simulated money at live prices. No wallet, no sign-up." },
+  { id: "paper", title: "Practice trading", blurb: "Practice with simulated money at live prices. No wallet, no sign-up." },
   { id: "real", title: "Real trading", blurb: "Your own wallet, real NFTs, and money that moves between networks." },
 ];
 
@@ -44,7 +44,7 @@ export const GUIDE: GuideSection[] = [
     title: "What FloorFeed is",
     blocks: [
       { p: "A live feed of NFT trades from wallets with a track record, on Solana, Ethereum and 9 more chains. We read every sale in the collections we track, match each wallet's buys to its later sales, and score traders on what they actually made." },
-      { p: "Use it to see who is buying right now, judge whether they're any good, and follow the ones who keep winning. When you want to act on a trade, you can do it on paper (practice money) or for real (your own wallet). The switch between the two is on the Portfolio tab." },
+      { p: "Use it to see who is buying right now, judge whether they're any good, and follow the ones who keep winning. When you want to act on a trade, you can practice with simulated money or trade for real with your own wallet. Once you're signed in or have a wallet connected, Real is the default; the Practice | Real switch is on the Portfolio tab." },
     ],
   },
   {
@@ -58,7 +58,7 @@ export const GUIDE: GuideSection[] = [
         { term: "Sweep", text: "One wallet bought 3 or more from the same collection within 15 minutes." },
         { term: "Cluster", text: "3 or more different wallets bought the same collection within 6 hours." },
       ] },
-      { p: "The feed has two tabs. Buys holds Buy, Sweep and Cluster cards, and each ends in Buy floor (on paper or for real, depending on your mode) with Offer beside it on Ethereum and its networks. Flips holds Flip cards, which end in \"See <collection>\": a flip is a sale, so the link opens the collection, where Buy floor is one tap away." },
+      { p: "The feed has two tabs. Buys holds Buy, Sweep and Cluster cards, and each ends in Buy floor (practice or real, depending on your mode) with Offer beside it on Ethereum and its networks. Flips holds Flip cards, which end in \"See <collection>\": a flip is a sale, so the link opens the collection, where Buy floor is one tap away." },
       img("feed-flip-card", "A Win card on the Flips tab: a wallet flipped RobinPunks for +0.006 ETH (+$15) after fees, +43.5% in 14 hours, with a See RobinPunks button", 780, 656,
         "A flip card. The profit is after fees, and the button opens the collection."),
       { p: "On Buys, Top ranks the last 72 hours by who bought, how much and how recently (at most one card in three is a cluster), and Latest is every buy as it lands. On Flips, All is every flip and Profitable is +2% or more after fees. Filter by chain, switch to Following to see only the wallets you follow, and Hide bots (on by default) leaves out market-making wallets that trade around the clock." },
@@ -115,11 +115,11 @@ export const GUIDE: GuideSection[] = [
   {
     id: "paper",
     part: "paper",
-    title: "How paper trading works",
+    title: "How practice trading works",
     blocks: [
-      { p: "Paper mode is practice with simulated money at live prices. It's the default, and it needs no wallet and no sign-up. Every paper button is purple, so you always know which mode you're in. Your positions are kept on this device; sign in and they move to your account." },
+      { p: "Practice mode uses simulated money at live prices. It needs no wallet and no sign-up, and it's what you get until you sign in or connect one. Practice is purple: the buy bar's border, its Buy button and the \"Practice\" marker next to the price. Your positions are kept on this device; sign in and they move to your account." },
       { steps: [
-        "Find a buy you like on the feed's Buys tab and tap Buy floor (it says PAPER in Paper mode).",
+        "Find a buy you like on the feed's Buys tab and tap Buy floor (the bar says Practice in purple).",
         "FloorFeed records one NFT bought at that collection's current floor. A line under the button confirms the price you got.",
         "Open Portfolio to watch the position. Open positions are marked at what you'd get selling now.",
         "Tap Sell when you're done. The profit or loss is locked in, after fees.",
@@ -132,18 +132,18 @@ export const GUIDE: GuideSection[] = [
   {
     id: "paper-pricing",
     part: "paper",
-    title: "How paper prices and fees are counted",
+    title: "How practice prices and fees are counted",
     blocks: [
-      { p: "Paper trades are built to come out the way a real trade would, so a paper win means something." },
+      { p: "Practice trades are built to come out the way a real trade would, so a practice win means something." },
       { list: [
-        { term: "Buying", text: "One NFT fills at the collection's floor. On a collection page you can paper-buy ×3, ×5 or ×10 at once: that walks up the live listings, so the 2nd, 3rd and later items cost what they really would." },
+        { term: "Buying", text: "One NFT fills at the collection's floor. On a collection page you can practice-buy ×3, ×5 or ×10 at once: that walks up the live listings, so the 2nd, 3rd and later items cost what they really would." },
         { term: "Fees on the buy", text: "The marketplace taker fee and the creator royalty are added on top of the price, like a real purchase." },
-        { term: "Selling", text: `Sales go into the best bid, which sits below the floor, so a paper sale fills at the floor minus ${haircut}%, and the seller's fees come off that.` },
-        { term: "Currencies", text: "Positions stay in the collection's own coin (SOL, ETH, HYPE, RON, APE or MON) and are totalled per coin. Collections priced in anything else are browse-only on paper." },
+        { term: "Selling", text: `Sales go into the best bid, which sits below the floor, so a practice sale fills at the floor minus ${haircut}%, and the seller's fees come off that.` },
+        { term: "Currencies", text: "Positions stay in the collection's own coin (SOL, ETH, HYPE, RON, APE or MON) and are totalled per coin. Collections priced in anything else are browse-only in practice." },
       ] },
       img("paper-portfolio", "Paper portfolio: paper profit and loss after fees −0.0010 ETH (about −$2.54), with open positions in RobinPunks and Squink, each with its value in dollars and a Sell button", 780, 892),
-      { tip: "That small red number right after a buy is normal: fees, plus the gap between the floor and the bid. A paper position has to beat it to show a profit, just like a real one." },
-      { p: "Reset (on the Positions header) clears every paper position, open and closed, for a fresh start. Paper trading is free and stays free." },
+      { tip: "That small red number right after a buy is normal: fees, plus the gap between the floor and the bid. A practice position has to beat it to show a profit, just like a real one." },
+      { p: "Reset (on the Positions header) clears every practice position, open and closed, for a fresh start. Practice trading is free and stays free." },
     ],
   },
 
@@ -153,7 +153,7 @@ export const GUIDE: GuideSection[] = [
     part: "real",
     title: "Going real: your wallets",
     blocks: [
-      { p: "Real mode uses your own wallet. On the Portfolio tab, switch Paper to Real. The switch unlocks once there's a wallet to use, and every real button turns lime green." },
+      { p: "Real mode uses your own wallet. Once you sign in or connect a wallet, Real is the default, and every real buy bar is lime green. You can switch back to Practice on the Portfolio tab." },
       { list: [
         { term: "Connect one you have", text: "Phantom, Solflare or Backpack for Solana; MetaMask, Rabby, Coinbase Wallet and other browser wallets for Ethereum and its networks." },
         { term: "Or get one with FloorFeed", text: "Sign in with email or Google and you get a Solana wallet and an Ethereum wallet, secured by Privy. Nothing to install." },
@@ -203,7 +203,7 @@ export const GUIDE: GuideSection[] = [
       { p: "If you're short on that network, the sheet turns into two steps, Add and Buy, says how much more you need, and offers to move it for you. On networks with their own coin (HYPE, APE, RON, MON) it swaps your ETH or SOL into that coin on the way:" },
       img("real-buy-short", "Buy floor sheet for PiP & Friends #1008 at 0.438 HYPE ($34.92) on HyperEVM. Steps: 1 Add HYPE, 2 Buy. It says: Not enough HYPE on HyperEVM, and offers Get HYPE on HyperEVM, which swaps ETH from another network into HYPE", 780, 1696),
       { p: "On Solana, the sheet shows the cheapest Magic Eden listing, what it costs and whether your SOL covers it, then the purchase finishes on Magic Eden. If you're short, Deposit opens with the shortfall filled in." },
-      { tip: "Listings priced in wrapped coins (WETH and similar) need an extra approval, so FloorFeed only buys listings priced in the network's own coin. Real buys are one NFT at a time; sweeps are paper-only for now." },
+      { tip: "Listings priced in wrapped coins (WETH and similar) need an extra approval, so FloorFeed only buys listings priced in the network's own coin. Real buys are one NFT at a time; sweeps are practice-only for now." },
     ],
   },
   {
@@ -343,7 +343,7 @@ export const GUIDE: GuideSection[] = [
     title: "Questions",
     blocks: [
       { list: [
-        { term: "Is it free?", text: "Yes. Browsing, following, alerts and paper trading are free. Real trades pay the usual marketplace fees, royalties and network gas, transfers between networks pay Relay's fee, and minting a collection launched on FloorFeed includes a small FloorFeed fee, all shown before you confirm." },
+        { term: "Is it free?", text: "Yes. Browsing, following, alerts and practice trading are free. Real trades pay the usual marketplace fees, royalties and network gas, transfers between networks pay Relay's fee, and minting a collection launched on FloorFeed includes a small FloorFeed fee, all shown before you confirm." },
         { term: "Can I launch my own NFTs?", text: "Yes, from the Mint tab: + Launch a collection. You need your art and a wallet with a little of the network's coin for the launch fee." },
         { term: "Why does a card say \"See …\" instead of Copy?", text: "It's a flip card: someone sold. Copy is on buy, sweep and cluster cards. Open the collection to buy its floor." },
         { term: "I have ETH but the buy says I don't.", text: "Your ETH is on a different network than the NFT. The buy sheet tells you where it is; tap Move to bring it over." },

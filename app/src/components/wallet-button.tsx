@@ -189,7 +189,7 @@ export function WalletSheet({ open, onClose }: { open: boolean; onClose: () => v
                 </View>
               ) : (
                 <Pressable accessibilityRole="button" onPress={signIn}>
-                  <Text style={s.link}>Sign in to keep your follows and paper trades across devices</Text>
+                  <Text style={s.link}>Sign in to keep your follows and practice trades across devices</Text>
                 </Pressable>
               ))}
             </>
@@ -199,7 +199,7 @@ export function WalletSheet({ open, onClose }: { open: boolean; onClose: () => v
                 <>
                   <Text style={s.title}>Sign in</Text>
                   <Text style={s.note}>
-                    Use email or Google. You get a free Solana wallet with no seed phrase, and your follows and paper trades follow you across devices.
+                    Use email or Google. You get a free Solana wallet with no seed phrase, and your follows and practice trades follow you across devices.
                   </Text>
                   <Pressable accessibilityRole="button" onPress={signIn} disabled={!auth.ready} style={s.primary}>
                     <Text style={s.primaryTxt}>{auth.ready ? 'Continue with email or Google' : 'Loading…'}</Text>

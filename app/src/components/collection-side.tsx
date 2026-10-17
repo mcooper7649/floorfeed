@@ -7,6 +7,7 @@ import { BuyOfferRow } from '@/components/buy-floor-button';
 import { EvmBuySheet } from '@/components/evm-buy-sheet';
 import { EvmOfferSheet } from '@/components/evm-offer-sheet';
 import { ModeToggle } from '@/components/mode-toggle';
+import { SignInNudge } from '@/components/sign-in-nudge';
 import { NftImage } from '@/components/nft-image';
 import { C } from '@/constants/brand';
 import { CHAINS } from '@/constants/chains';
@@ -76,7 +77,7 @@ export function TradeBox({ data }: { data: CollectionDetail }) {
     try {
       const r = await api.buyFloor(userId, data.symbol, undefined, n);
       track('paper_buy', { from: 'collection', count: n });
-      setMsg(`Bought ${n} on paper for ${amt(r.total ?? r.entryPrice, cur)}. See Portfolio.`);
+      setMsg(`Bought ${n} in practice for ${amt(r.total ?? r.entryPrice, cur)}. See Portfolio.`);
       bumpPortfolio();
     } catch (e) {
       setMsg((e as Error).message);
@@ -96,7 +97,7 @@ export function TradeBox({ data }: { data: CollectionDetail }) {
 
   return (
     <Panel>
-      <ModeToggle describe={false} />
+      {canReal ? <ModeToggle describe={false} /> : <SignInNudge />}
       <View style={s.counts}>
         {COUNTS.map((c) => {
           const disabled = real && c > 1;
@@ -113,7 +114,7 @@ export function TradeBox({ data }: { data: CollectionDetail }) {
         {feeRate > 0 && <Line label={`Fees and royalty (${(feeRate * 100).toFixed(1)}%)`} value={withUsd(amt(fees, cur), fees, cur)} />}
         <Line label="Total" value={floor == null ? '—' : withUsd(amt(subtotal + fees, cur), subtotal + fees, cur)} strong />
         {short && <Text style={T.caption}>Only {ladder.length} listings loaded; the rest are priced at the highest of them.</Text>}
-        {real && <Text style={T.caption}>Real buys are one NFT at a time. Sweeps are paper-only for now.</Text>}
+        {real && <Text style={T.caption}>Real buys are one NFT at a time. Sweeps are practice-only for now.</Text>}
       </View>
       {/* The same buy row as the feed cards, showing the Total above (real buys are one NFT: n = 1). */}
       <BuyOfferRow label={n === 1 ? 'Buy floor' : `Buy ${n}`} price={floor == null ? null : subtotal + fees} unit={cur}
@@ -299,7 +300,7 @@ export function PositionsPanel({ data }: { data: CollectionDetail }) {
       )}
       {list.length > 0 ? (
         <View style={{ gap: 6 }}>
-          <Text style={T.label}>Paper</Text>
+          <Text style={T.label}>Practice</Text>
           {list.map((p) => (
             <View key={p.id} style={s.pos}>
               <Text style={[T.metaNum, { flex: 1 }]}>

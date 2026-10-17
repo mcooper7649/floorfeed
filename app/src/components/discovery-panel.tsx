@@ -371,7 +371,7 @@ function MintingList() {
           {mode === 'paper' ? (
             // Paper trading can't mint: a mint makes a new NFT on chain and is paid in real coins.
             <View style={s.paperNote}>
-              <Notice title="Minting uses real money" text="You're in Paper mode, which can't mint: a mint creates a new NFT on chain and is paid in real coins. Browse drops here; switch to Real to mint one." />
+              <Notice title="Minting uses real money" text="You're in Practice mode, which can't mint: a mint creates a new NFT on chain and is paid in real coins. Browse drops here; switch to Real to mint one." />
               {canReal
                 ? <Pressable onPress={() => setMode('real')} style={s.emptyBtn}><Text style={s.emptyBtnTxt}>Switch to Real</Text></Pressable>
                 : <Text style={s.emptyTxt}>Connect a wallet or sign in to switch to Real.</Text>}

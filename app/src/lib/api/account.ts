@@ -1,6 +1,6 @@
 // A user's own state (server routes/account.ts): sign-in, follows, paper
 // trading, alerts and web push; plus support reports.
-import { path, req, send } from './client';
+import { path, qs, req, send } from './client';
 import type { Unit } from './market';
 
 export type PaperPosition = {
@@ -19,6 +19,20 @@ export type PaperBook = {
   totals?: Record<string, { realized: number; unrealized: number }>; // per unit
   realizedSol: number;
   unrealizedSol: number;
+};
+
+// Top practice traders (GET /practice/leaderboard): ranked by return on what
+// they put in, in dollars across coins; open positions at today's floor.
+export type PracticeWindow = '7' | '30' | 'all';
+export type PracticeRow = {
+  rank: number; name: string; you: boolean;
+  trades: number; open: number; wins: number;
+  roiPct: number; pnlUsd: number; costUsd: number;
+  best: { symbol: string; collection: string; pct: number } | null;
+};
+export type PracticeBoard = {
+  window: PracticeWindow; minTrades: number; traders: number; rows: PracticeRow[];
+  you: PracticeRow | { trades: number; needed: number }; // ranked, or how many more trades to rank
 };
 
 export type Alert = {
@@ -49,6 +63,8 @@ export const accountApi = {
     send<{ entryPrice: number; entryPrices?: number[]; total?: number }>('POST', '/paper/buy', { userId, collection, copiedFrom, count }),
   sell: (userId: string, positionId: number) => send<{ exitPrice: number }>('POST', '/paper/sell', { userId, positionId }),
   resetPaper: (userId: string) => send<{ deleted: number }>('POST', '/paper/reset', { userId }),
+  practiceBoard: (window: PracticeWindow, userId?: string | null) =>
+    req<PracticeBoard>('/practice/leaderboard' + qs({ window, userId })),
 
   alerts: (userId: string) => req<{ unread: number; push: boolean; alerts: Alert[] }>(path`/alerts/${userId}`),
   unread: (userId: string) => req<{ unread: number; push: boolean }>(path`/alerts/${userId}/unread`),

@@ -122,7 +122,7 @@ export default function LaunchedMint() {
         </View>
       ) : mode === 'paper' && canReal ? (
         <View style={{ gap: 8 }}>
-          <Text style={T.meta}>Minting uses real money, so it isn’t part of paper trading.</Text>
+          <Text style={T.meta}>Minting uses real money, so it isn’t part of practice trading.</Text>
           <Pressable onPress={() => setMode('real')} style={s.primary}><Text style={s.primaryTxt}>Switch to Real to mint</Text></Pressable>
         </View>
       ) : !w.address ? (

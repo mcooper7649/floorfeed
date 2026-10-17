@@ -5,16 +5,16 @@ import { T } from '@/constants/type';
 import { useTradeMode, type TradeMode } from '@/lib/mode';
 import { track } from '@/lib/analytics';
 
-// Paper is tinted with the AI/practice purple, Real with the brand accent, so
+// Practice (paper) is tinted with the AI purple, Real with the brand accent, so
 // the current mode reads at a glance wherever it shows up.
 export const MODE_COLOR: Record<TradeMode, string> = { paper: C.ai, real: C.accent };
 
 const COPY: Record<TradeMode, string> = {
-  paper: 'Practice with simulated trades. No real SOL moves.',
+  paper: 'Practice with simulated money at live prices. Nothing real moves.',
   real: 'Buys use your connected wallet. Your wallet asks before anything is signed.',
 };
 
-// Segmented Paper | Real switch. Real is disabled until a wallet is connected.
+// Segmented Practice | Real switch. Real is disabled until a wallet is connected.
 export function ModeToggle({ describe = true }: { describe?: boolean }) {
   const { mode, canReal, setMode } = useTradeMode();
   const seg = (m: TradeMode, label: string) => {
@@ -35,7 +35,7 @@ export function ModeToggle({ describe = true }: { describe?: boolean }) {
   return (
     <View style={{ gap: 8 }}>
       <View style={s.track}>
-        {seg('paper', 'Paper')}
+        {seg('paper', 'Practice')}
         {seg('real', 'Real')}
       </View>
       {describe && (
@@ -49,7 +49,7 @@ export function ModeToggle({ describe = true }: { describe?: boolean }) {
 export function ModeChip({ mode }: { mode: TradeMode }) {
   return (
     <View style={[s.chip, { borderColor: MODE_COLOR[mode] }]}>
-      <Text style={[s.chipTxt, { color: MODE_COLOR[mode] }]}>{mode === 'real' ? 'REAL' : 'PAPER'}</Text>
+      <Text style={[s.chipTxt, { color: MODE_COLOR[mode] }]}>{mode === 'real' ? 'REAL' : 'PRACTICE'}</Text>
     </View>
   );
 }

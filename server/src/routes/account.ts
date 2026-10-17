@@ -7,7 +7,7 @@ import { adoptDevice, authorize, privyUser } from "../auth.ts";
 import { listingLadder } from "../collections.ts";
 import { UNITS, collectionName, config } from "../config.ts";
 import { db } from "../db.ts";
-import { feeRates } from "../fees.ts";
+import { markPosition, practiceLeaderboard, type PositionRow } from "../practice.ts";
 import { unitOf } from "../units.ts";
 
 export const followedWallets = (userId: string) =>
@@ -112,14 +112,9 @@ export function accountRoutes(app: FastifyInstance) {
        FROM paper_positions p
        LEFT JOIN collections c ON c.symbol = p.collection
        WHERE p.user_id = ? ORDER BY p.opened_at DESC`,
-    ).all(userId) as any[];
+    ).all(userId) as PositionRow[];
     const positions = rows.map((p) => {
-      const mark = p.exit_price ?? (p.floor ?? p.entry_price) * (1 - config.paperSellHaircut);
-      // Like a real flip: the buy pays the taker fee and royalty on top, the
-      // sale (into the top bid) pays the seller's share (fees.ts).
-      const fee = feeRates(p.collection);
-      const cost = p.entry_price * (1 + fee.buyTaker);
-      const proceeds = mark * (1 - fee.sellTaker);
+      const { pnl, fees } = markPosition(p);
       return {
         id: p.id,
         collection: { symbol: p.collection, name: collectionName(p.collection), floor: p.floor, image: p.image ?? null },
@@ -127,8 +122,8 @@ export function accountRoutes(app: FastifyInstance) {
         entryPrice: p.entry_price,
         exitPrice: p.exit_price,
         open: p.closed_at == null,
-        pnlSol: proceeds - cost,
-        feesSol: cost - p.entry_price + mark - proceeds,
+        pnlSol: pnl,
+        feesSol: fees,
         openedAt: p.opened_at,
         copiedFrom: p.copied_from,
       };
@@ -147,6 +142,13 @@ export function accountRoutes(app: FastifyInstance) {
       realizedSol: totals.SOL?.realized ?? 0,
       unrealizedSol: totals.SOL?.unrealized ?? 0,
     };
+  });
+
+  // Top practice traders (practice.ts): ranked by return, in dollars across coins.
+  // `userId` only marks the viewer's own row and standing.
+  app.get("/practice/leaderboard", async (req, reply) => {
+    const q = z.object({ window: z.enum(["7", "30", "all"]).default("7"), userId: z.string().max(200).optional() }).parse(req.query);
+    return reply.header("cache-control", "no-store").send(practiceLeaderboard(q.window, q.userId ?? null));
   });
 
   // --- Wallet alerts: inbox and web push (alerts.ts) ---

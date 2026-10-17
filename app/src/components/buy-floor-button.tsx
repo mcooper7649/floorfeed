@@ -45,7 +45,7 @@ export function BuyOfferRow({ label, price, unit, busy, disabled, onBuy, onOffer
         <View style={s.subRow}>
           {dollars && <Text style={s.usd} numberOfLines={1}>{dollars}</Text>}
           <View style={[s.dot, { backgroundColor: color }]} />
-          <Text style={[s.modeTxt, { color }]}>{mode === 'real' ? 'Real' : 'Paper'}</Text>
+          <Text style={[s.modeTxt, { color }]}>{mode === 'real' ? 'Real' : 'Practice'}</Text>
         </View>
       </View>
       {onOffer && (
@@ -65,8 +65,8 @@ export function BuyOfferRow({ label, price, unit, busy, disabled, onBuy, onOffer
 
 // The one buy control for a collection, the same on desktop tiles and phone
 // cards: "Buy floor" with the floor price (and its dollars) in the mode's
-// colour, and Offer beside it on Ethereum-family chains. Paper mode buys the
-// floor on paper right away; Real opens the buy sheet. Offers are real, so
+// colour, and Offer beside it on Ethereum-family chains. Practice mode buys the
+// floor with simulated money right away; Real opens the buy sheet. Offers are real, so
 // Offer switches to Real first when it can.
 export function BuyFloorButton({ coll, copiedFrom }: { coll: FeedEvent['collection']; copiedFrom?: string }) {
   const { symbol, floor, currency } = coll;
@@ -86,7 +86,7 @@ export function BuyFloorButton({ coll, copiedFrom }: { coll: FeedEvent['collecti
     try {
       const r = await api.buyFloor(userId, symbol, copiedFrom);
       track('paper_buy', { from: 'feed' });
-      setNote({ text: `Bought on paper at ${amt(r.entryPrice, currency)}. See Portfolio.`, ok: true });
+      setNote({ text: `Bought in practice at ${amt(r.entryPrice, currency)}. See Portfolio.`, ok: true });
       bumpPortfolio();
     } catch (err) {
       setNote({ text: (err as Error).message, ok: false });

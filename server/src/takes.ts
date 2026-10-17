@@ -177,7 +177,7 @@ const aiTakes = db.prepare(`
   WHERE t.collection = ? ORDER BY t.block_time DESC LIMIT 10`);
 
 // A stable, non-identifying name for authors without a chosen name or a verified wallet.
-function memberName(userId: string) { return `Member ${createHash("sha256").update(userId).digest("hex").slice(0, 4)}`; }
+export function memberName(userId: string) { return `Member ${createHash("sha256").update(userId).digest("hex").slice(0, 4)}`; }
 
 // Who wrote a thesis: their chosen name, else the verified wallet's .sol/ENS
 // name, else the short wallet address, else "Member ab12".

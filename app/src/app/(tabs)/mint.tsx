@@ -140,7 +140,7 @@ export default function MintScreen() {
         {mode === 'paper' && (
           <Card style={s.notice}>
             <Text style={T.bodyStrong}>Minting uses real money</Text>
-            <Text style={T.meta}>Paper mode can’t mint: a mint creates a new NFT on chain and is paid in real coins. Browse here, then switch to Real to mint.</Text>
+            <Text style={T.meta}>Practice mode can’t mint: a mint creates a new NFT on chain and is paid in real coins. Browse here, then switch to Real to mint.</Text>
             {canReal
               ? <Pressable onPress={() => setMode('real')}><Text style={s.link}>Switch to Real ›</Text></Pressable>
               : <Text style={T.caption}>Connect a wallet or sign in to switch to Real.</Text>}

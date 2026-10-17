@@ -159,7 +159,7 @@ function guidePage(): Page {
   const faq = GUIDE.find((g) => g.id === "faq")?.blocks.flatMap((b) => ("list" in b ? b.list : [])) ?? [];
   return {
     title: `How ${NAME} works: follow NFT traders who win`,
-    description: "How to read the FloorFeed NFT feed, what trader badges mean, how profit after fees is counted, alerts, paper trading, and real buys, sales, mints and moving money between networks.",
+    description: "How to read the FloorFeed NFT feed, what trader badges mean, how profit after fees is counted, alerts, practice trading, and real buys, sales, mints and moving money between networks.",
     path: "/how-it-works",
     jsonLd: [crumbs([[NAME, "/"], ["How it works", "/how-it-works"]]), {
       "@context": "https://schema.org", "@type": "FAQPage",
@@ -191,7 +191,7 @@ const leaderList = (rows: Leader[]) => {
 function home(): Page {
   const top = markets().slice(0, 12);
   const lb = leaders().rows.slice(0, 10);
-  const description = "Live Solana NFT buys from wallets with a track record. See who is buying, their flip P&L and win rate, follow the best traders and copy them on paper first.";
+  const description = "Live Solana NFT buys from wallets with a track record. See who is buying, their flip P&L and win rate, follow the best traders and practice copying them first.";
   return {
     title: "FloorFeed: live Solana NFT trades from proven wallets",
     description,
@@ -369,7 +369,7 @@ export function pageFor(path: string): Page {
   if (clean === "/leaderboard") return leaderboardPage();
   if (clean === "/how-it-works") return guidePage();
   if (clean === "/portfolio") {
-    return { title: "Portfolio | FloorFeed", description: "Your paper and real NFT positions on FloorFeed.", path: "/portfolio", noindex: true, body: doc(`<h1>Portfolio</h1>`) };
+    return { title: "Portfolio | FloorFeed", description: "Your practice and real NFT positions on FloorFeed.", path: "/portfolio", noindex: true, body: doc(`<h1>Portfolio</h1>`) };
   }
   let m = clean.match(/^\/collection\/([^/]+)$/);
   if (m) return collectionPage(decodeURIComponent(m[1])) ?? notFound(clean);

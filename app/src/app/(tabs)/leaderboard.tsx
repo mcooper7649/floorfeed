@@ -1,7 +1,8 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
+import { PracticeBoard } from '@/components/practice-board';
 import { Empty, Screen } from '@/components/screen';
 import { Chip, ChipRow } from '@/components/ui';
 import { TraderCard } from '@/components/trader-card';
@@ -28,9 +29,18 @@ const SORTS: { key: LeaderSort; label: string }[] = [
 
 export default function LeaderboardScreen() {
   const withUsd = useWithUsd();
-  const [unit, setUnit] = useState<Unit>('SOL');
-  const board = BOARDS.find((b) => b.key === unit)!;
-  useTitle(`Top ${board.label} NFT flippers: P&L leaderboard | FloorFeed`);
+  // A wallet board per currency, or the Top practice traders board (?board=practice).
+  const params = useLocalSearchParams<{ board?: string }>();
+  const [unit, setUnit] = useState<Unit | 'practice'>(params.board === 'practice' ? 'practice' : 'SOL');
+  const practice = unit === 'practice';
+  const board = BOARDS.find((b) => b.key === unit);
+  useTitle(practice ? 'Top practice traders | FloorFeed' : `Top ${board?.label} NFT flippers: P&L leaderboard | FloorFeed`);
+  // Opening ?board=practice while the tab is already mounted (Portfolio's rank card) switches to it.
+  const [prevParam, setPrevParam] = useState(params.board);
+  if (params.board !== prevParam) {
+    setPrevParam(params.board);
+    if (params.board === 'practice') setUnit('practice');
+  }
   const { following, toggleFollow } = useSession();
   const [win, setWin] = useState<LeaderWindow>('30');
   const [sort, setSort] = useState<LeaderSort>('pnl');
@@ -43,6 +53,7 @@ export default function LeaderboardScreen() {
   const cols = wide ? 2 : 1;
 
   const fetchRows = useCallback(() => {
+    if (unit === 'practice') return;
     api.leaderboard({ window: win, sort, hideMM, unit })
       .then((d) => { setData(d); setError(null); })
       .catch((e) => setError(e.message))
@@ -56,14 +67,18 @@ export default function LeaderboardScreen() {
   const sm = data?.summary;
 
   return (
-    <Screen title="Leaders" subtitle="Wallets ranked by completed flips: buying an NFT and selling it later. After marketplace fees and royalties.">
+    <Screen title="Leaders" subtitle={practice
+      ? 'Top practice traders: FloorFeed members ranked by their practice trades. Simulated money, live prices, real fees.'
+      : 'Wallets ranked by completed flips: buying an NFT and selling it later. After marketplace fees and royalties.'}>
       <ChipRow pad={pad} groups={[
+        <Chip key="practice" label="Practice traders" on={practice} onPress={() => setUnit('practice')} />,
         BOARDS.map((b) => <Chip key={b.key} label={b.label} on={unit === b.key} onPress={() => change(() => setUnit(b.key))} />),
-        WINDOWS.map((w) => <Chip key={w.key} label={w.label} on={win === w.key} onPress={() => change(() => setWin(w.key))} />),
-        SORTS.map((o) => <Chip key={o.key} label={o.label} on={sort === o.key} onPress={() => change(() => setSort(o.key))} />),
-        <Chip key="mm" label={unit === 'SOL' ? 'Hide market makers' : 'Hide bid bots'} on={hideMM} onPress={() => change(() => setHideMM((v) => !v))} />,
+        WINDOWS.map((w) => <Chip key={w.key} label={w.label} on={win === w.key} onPress={() => (practice ? setWin(w.key) : change(() => setWin(w.key)))} />),
+        !practice && SORTS.map((o) => <Chip key={o.key} label={o.label} on={sort === o.key} onPress={() => change(() => setSort(o.key))} />),
+        !practice && <Chip key="mm" label={unit === 'SOL' ? 'Hide market makers' : 'Hide bid bots'} on={hideMM} onPress={() => change(() => setHideMM((v) => !v))} />,
       ]} />
 
+      {practice ? <PracticeBoard window={win} pad={pad} cols={cols} /> : <>
       {sm && (
         <Text style={[T.metaNum, s.summary, { paddingHorizontal: pad }]}>
           Ranked in {unit}. {sm.wallets} wallets with 3+ flips made {sm.flips.toLocaleString()} flips; {sm.profitableWallets} are in profit,{' '}
@@ -95,6 +110,7 @@ export default function LeaderboardScreen() {
           )}
         />
       )}
+      </>}
     </Screen>
   );
 }

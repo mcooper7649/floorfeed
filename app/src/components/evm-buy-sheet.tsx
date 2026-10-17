@@ -242,7 +242,7 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
           <View style={s.footer}>
             {onPaper && step.kind !== 'sent' && (
               <Pressable accessibilityRole="button" onPress={() => { close(); onPaper(); }} style={[s.secondary, { flex: 1 }]}>
-                <Text style={s.secondaryTxt}>Paper trade instead</Text>
+                <Text style={s.secondaryTxt}>Practice trade instead</Text>
               </Pressable>
             )}
             <Pressable accessibilityRole="button" onPress={close} style={[s.secondary, { flex: 1 }]}>

@@ -4,8 +4,9 @@ import { createContext, use, useCallback, useEffect, useState, type ReactNode } 
 import { useEvmWallet } from './evm-wallet';
 import { useWallet } from './wallet';
 
-// Paper vs real trading. Real needs a wallet (Solana or Ethereum); without
-// one the app is always in paper mode, whatever was chosen before.
+// Practice (stored as 'paper') vs real trading. Real needs a wallet (Solana or
+// Ethereum) or a sign-in; without one the app is always in practice. With one,
+// Real is the default until the user picks Practice.
 export type TradeMode = 'paper' | 'real';
 
 type ModeState = {
@@ -20,10 +21,10 @@ const Ctx = createContext<ModeState>({ mode: 'paper', canReal: false, setMode: (
 export function TradeModeProvider({ children }: { children: ReactNode }) {
   const w = useWallet();
   const evm = useEvmWallet();
-  const [chosen, setChosen] = useState<TradeMode>('paper');
+  const [chosen, setChosen] = useState<TradeMode | null>(null); // null: nothing picked yet
 
   useEffect(() => {
-    AsyncStorage.getItem(KEY).then((v) => v === 'real' && setChosen('real')).catch(() => {});
+    AsyncStorage.getItem(KEY).then((v) => (v === 'real' || v === 'paper') && setChosen(v)).catch(() => {});
   }, []);
 
   const setMode = useCallback((m: TradeMode) => {
@@ -32,7 +33,7 @@ export function TradeModeProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const canReal = (w.supported && !!w.address) || (evm.supported && !!evm.address);
-  return <Ctx value={{ mode: canReal ? chosen : 'paper', canReal, setMode }}>{children}</Ctx>;
+  return <Ctx value={{ mode: canReal ? chosen ?? 'real' : 'paper', canReal, setMode }}>{children}</Ctx>;
 }
 
 export const useTradeMode = () => use(Ctx);

@@ -57,7 +57,7 @@ export default function HowItWorks() {
       <ScrollView ref={scroll} contentContainerStyle={[s.page, { paddingHorizontal: pad }]}>
         <View style={{ gap: 6, marginBottom: 4 }}>
           <Text {...display} style={wide ? T.displayL : T.display}>How FloorFeed works</Text>
-          <Text style={T.meta}>Start with the basics, practice on paper, then trade for real when you&apos;re ready.</Text>
+          <Text style={T.meta}>Start with the basics, practice with simulated money, then trade for real when you&apos;re ready.</Text>
         </View>
 
         <View style={s.tabs} accessibilityRole="tablist">

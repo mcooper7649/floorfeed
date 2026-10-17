@@ -19,7 +19,7 @@ export function BuySheet({ symbol, open, onClose, onPaper }: {
   symbol: string;
   open: boolean;
   onClose: () => void;
-  onPaper?: () => void; // "Paper trade instead"
+  onPaper?: () => void; // "Practice trade instead"
 }) {
   const withUsd = useWithUsd();
   const w = useWallet();
@@ -100,7 +100,7 @@ export function BuySheet({ symbol, open, onClose, onPaper }: {
           <View style={s.footer}>
             {onPaper && (
               <Pressable accessibilityRole="button" onPress={() => { onClose(); onPaper(); }} style={[s.secondary, { flex: 1 }]}>
-                <Text style={s.secondaryTxt}>Paper trade instead</Text>
+                <Text style={s.secondaryTxt}>Practice trade instead</Text>
               </Pressable>
             )}
             <Pressable accessibilityRole="button" onPress={onClose} style={[s.secondary, { flex: 1 }]}>
