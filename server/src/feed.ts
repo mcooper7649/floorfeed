@@ -302,7 +302,15 @@ function diversify(events: FeedEvent[], limit: number) {
 }
 
 export type View = "top" | "latest" | "wins";
-export function feedEvents(opts: { view: View; before?: number; limit: number; followed?: Set<string>; chain?: "all" | "solana" | "evm" }) {
+// Which cards: buy signals (buys, sweeps, clusters: things you can act on
+// with Buy / Offer) or results (flips). The app shows them on separate tabs.
+export type Kinds = "all" | "buys" | "flips";
+const KIND_SET: Record<Exclude<Kinds, "all">, Set<string>> = {
+  buys: new Set(["buy", "sweep", "cluster"]),
+  flips: new Set(["flip"]),
+};
+export function feedEvents(opts: { view: View; before?: number; limit: number; followed?: Set<string>; chain?: "all" | "solana" | "evm"; kinds?: Kinds }) {
+  const want = opts.kinds && opts.kinds !== "all" ? KIND_SET[opts.kinds] : null;
   const now = Math.floor(Date.now() / 1000);
   const f = opts.followed;
   const chain = opts.chain === "solana" ? "AND c.chain = 'solana'" : opts.chain === "evm" ? "AND c.chain != 'solana'" : "";
@@ -318,6 +326,7 @@ export function feedEvents(opts: { view: View; before?: number; limit: number; f
     const rows = db.prepare(`${rowSelect} WHERE t.block_time >= ? ${who} ORDER BY t.block_time DESC LIMIT 5000`)
       .all(now - TOP_WINDOW, ...fargs) as Row[];
     let events = build(rows, true);
+    if (want) events = events.filter((e) => want.has(e.kind));
     if (f) events = events.filter((e) => involves(e, f));
     for (const e of events) e.score = signal(e) * 0.5 ** ((now - e.t) / HALF_LIFE);
     return { view: opts.view, events: diversify(events, opts.limit), next: null };
@@ -334,6 +343,7 @@ export function feedEvents(opts: { view: View; before?: number; limit: number; f
   let events = build(rows, false);
   // Wins: profitable flips by people, not AMM pool bots.
   if (opts.view === "wins") events = events.filter((e) => e.kind === "flip" && e.wallet.tier !== "mm");
+  if (want) events = events.filter((e) => want.has(e.kind));
   if (f) events = events.filter((e) => involves(e, f));
   events.sort((a, b) => b.t - a.t);
   // Don't cut a page inside the oldest second we loaded (it may be partial).

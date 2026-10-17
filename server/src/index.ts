@@ -303,12 +303,13 @@ app.get("/events", async (req, reply) => {
     before: z.coerce.number().int().optional(),
     following: z.string().optional(),
     chain: z.enum(["all", "solana", "evm"]).default("all"),
+    kinds: z.enum(["all", "buys", "flips"]).default("all"),
   }).parse(req.query);
   if (q.following && !(await authorize(req, reply, q.following))) return;
   const followed = q.following
     ? new Set((db.prepare("SELECT wallet FROM follows WHERE user_id = ?").all(q.following) as { wallet: string }[]).map((r) => r.wallet))
     : undefined;
-  return feedEvents({ view: q.view, before: q.before, limit: q.limit, followed, chain: q.chain });
+  return feedEvents({ view: q.view, before: q.before, limit: q.limit, followed, chain: q.chain, kinds: q.kinds });
 });
 
 // AI take, generated lazily and cached per trade.

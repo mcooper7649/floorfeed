@@ -5,7 +5,8 @@ import { AlertsBell } from '@/components/alerts-bell';
 import { EventCard } from '@/components/event-card';
 import { Empty, Screen } from '@/components/screen';
 import { SuggestedFollows } from '@/components/suggested-follows';
-import { Card, Chip, ChipRow } from '@/components/ui';
+import { Segmented } from '@/components/segmented';
+import { Card } from '@/components/ui';
 import { ThesisFeedRow } from '@/components/thesis';
 import { WelcomeCard } from '@/components/welcome-card';
 import { useThesisFeed } from '@/components/discovery-panel';
@@ -19,22 +20,28 @@ import { useTitle } from '@/lib/use-title';
 type Scope = 'all' | 'following';
 
 const CHAINS: { key: FeedChain; label: string }[] = [
-  { key: 'all', label: 'All chains' }, { key: 'solana', label: 'Solana' }, { key: 'evm', label: 'Ethereum & L2s' },
+  { key: 'all', label: 'All chains' }, { key: 'solana', label: 'Solana' }, { key: 'evm', label: 'ETH & L2s' },
 ];
 
-type View_ = FeedView | 'thesis';
-const VIEWS: { key: View_; label: string; hint: string }[] = [
-  { key: 'top', label: 'Top', hint: 'The last 72 hours, ranked by who traded, how much and how recently.' },
-  { key: 'latest', label: 'Latest', hint: 'Every buy, flip and sweep as it happens.' },
-  { key: 'wins', label: 'Wins', hint: 'Profitable flips, newest first.' },
-  { key: 'thesis', label: 'Thesis', hint: 'What holders and traders think, from every collection, newest first.' },
-];
+// Buys: what proven wallets are buying right now; every card can Buy floor or Offer.
+// Flips: how their trades turned out; every card links to the collection.
+type Tab = 'buys' | 'flips' | 'thesis';
+const TABS: { key: Tab; label: string }[] = [{ key: 'buys', label: 'Buys' }, { key: 'flips', label: 'Flips' }, { key: 'thesis', label: 'Thesis' }];
+type BuySort = 'top' | 'latest';
+type FlipSort = 'all' | 'wins';
+const hintFor = (tab: Tab, buySort: BuySort, flipSort: FlipSort) => tab === 'thesis'
+  ? 'What holders and traders think, from every collection, newest first.'
+  : tab === 'buys'
+    ? buySort === 'top' ? 'Buys, sweeps and clusters from the last 72 hours, ranked by who bought, how much and how recently.' : 'Every buy, sweep and cluster as it happens.'
+    : flipSort === 'wins' ? 'Profitable flips (+2% or more, after fees), newest first.' : 'Every flip and sale, newest first, with the profit after fees.';
 
 export default function FeedScreen() {
   useTitle('FloorFeed: live Solana NFT trades from proven wallets');
   const { userId, following } = useSession();
   const [scope, setScope] = useState<Scope>('all');
-  const [view, setView] = useState<View_>('top');
+  const [tab, setTab] = useState<Tab>('buys');
+  const [buySort, setBuySort] = useState<BuySort>('top');
+  const [flipSort, setFlipSort] = useState<FlipSort>('all');
   const theses = useThesisFeed();
   const [chain, setChain] = useState<FeedChain>('all');
   const [items, setItems] = useState<FeedEvent[]>([]);
@@ -47,8 +54,9 @@ export default function FeedScreen() {
 
   const load = useCallback(async (before?: number) => {
     if (scope === 'following' && !userId) return { events: [], next: null };
-    return api.events({ view: view === 'thesis' ? 'latest' : view, before, chain, following: scope === 'following' ? userId! : undefined });
-  }, [scope, view, chain, userId]);
+    const view: FeedView = tab === 'flips' ? (flipSort === 'wins' ? 'wins' : 'latest') : buySort;
+    return api.events({ view, kinds: tab === 'flips' ? 'flips' : 'buys', before, chain, following: scope === 'following' ? userId! : undefined });
+  }, [scope, tab, buySort, flipSort, chain, userId]);
 
   const fetchFirst = useCallback(() => {
     load()
@@ -73,25 +81,28 @@ export default function FeedScreen() {
   return (
     <Screen title="FloorFeed" subtitle="Live NFT trades from wallets with a track record" corner={wide ? undefined : <AlertsBell />}>
       <View style={[s.tabs, { paddingHorizontal: pad }]}>
-        {VIEWS.map((v) => (
-          <Pressable key={v.key} accessibilityRole="tab" accessibilityState={{ selected: view === v.key }}
-            onPress={() => v.key !== view && pick(() => setView(v.key))} style={[s.tab, view === v.key && s.tabOn]}>
-            <Text style={[T.bodyStrong, { color: view === v.key ? C.text : C.dim }]}>{v.label}</Text>
+        {TABS.map((t) => (
+          <Pressable key={t.key} accessibilityRole="tab" accessibilityState={{ selected: tab === t.key }}
+            onPress={() => t.key !== tab && pick(() => setTab(t.key))} style={[s.tab, tab === t.key && s.tabOn]}>
+            <Text style={[T.bodyStrong, { color: tab === t.key ? C.text : C.dim }]}>{t.label}</Text>
           </Pressable>
         ))}
       </View>
-      {view !== 'thesis' && (
-      <ChipRow pad={pad} groups={[
-        (['all', 'following'] as const).map((m) => (
-          <Chip key={m} on={scope === m} onPress={() => m !== scope && pick(() => setScope(m))}
-            label={m === 'all' ? 'Everyone' : `Following${following.size ? ` ${following.size}` : ''}`} />
-        )),
-        CHAINS.map((c) => <Chip key={c.key} label={c.label} on={chain === c.key} onPress={() => c.key !== chain && pick(() => setChain(c.key))} />),
-      ]} />
+      {tab !== 'thesis' && (
+        <View style={[s.controls, { paddingHorizontal: pad }]}>
+          {tab === 'buys'
+            ? <Segmented label="Order" value={buySort} onChange={(k) => pick(() => setBuySort(k))}
+                items={[{ key: 'top', label: 'Top' }, { key: 'latest', label: 'Latest' }]} />
+            : <Segmented label="Which flips" value={flipSort} onChange={(k) => pick(() => setFlipSort(k))}
+                items={[{ key: 'all', label: 'All' }, { key: 'wins', label: 'Profitable' }]} />}
+          <Segmented label="Whose trades" value={scope} onChange={(k) => pick(() => setScope(k))}
+            items={[{ key: 'all', label: 'Everyone' }, { key: 'following', label: 'Following', count: following.size }]} />
+          <Segmented label="Chain" value={chain} onChange={(k) => pick(() => setChain(k))} items={CHAINS} />
+        </View>
       )}
-      <Text style={[T.meta, s.hint, { paddingHorizontal: pad }]}>{VIEWS.find((v) => v.key === view)!.hint}</Text>
+      <Text style={[T.meta, s.hint, { paddingHorizontal: pad }]}>{hintFor(tab, buySort, flipSort)}</Text>
 
-      {view === 'thesis' ? (
+      {tab === 'thesis' ? (
         <FlatList
           data={theses ?? []}
           keyExtractor={(t) => `${t.kind}:${t.id}`}
@@ -129,7 +140,8 @@ export default function FeedScreen() {
             ) : (
               <Empty text={error ? `Can't reach the server: ${error}`
                 : scope === 'following' ? 'No recent trades from the wallets you follow. They show up here as they happen.'
-                : view === 'wins' ? 'No profitable flips in this window yet.'
+                : tab === 'flips' && flipSort === 'wins' ? 'No profitable flips in this window yet.'
+                : tab === 'flips' ? 'No flips in this window yet.'
                 : 'No trades yet. The server is still ingesting.'} />
             )
           }
@@ -140,6 +152,7 @@ export default function FeedScreen() {
 }
 
 const s = StyleSheet.create({
+  controls: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingTop: 4, paddingBottom: 8 },
   tabs: { flexDirection: 'row', gap: 20, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border, marginBottom: 6 },
   tab: { paddingVertical: 10, borderBottomWidth: 2, borderBottomColor: 'transparent', marginBottom: -StyleSheet.hairlineWidth },
   tabOn: { borderBottomColor: C.accent },
