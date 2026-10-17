@@ -11,6 +11,7 @@ import {
 } from 'lightweight-charts';
 import type { CanvasRenderingTarget2D } from 'fancy-canvas';
 
+import { MODE_COLOR } from '@/components/mode-toggle';
 import { C } from '@/constants/brand';
 import type { ChartMarker, DailyPoint } from '@/lib/api';
 import { shortAddr } from '@/lib/format';
@@ -283,6 +284,7 @@ export function PriceChart({ sales, buckets, bucketSec, floor, rangeDays, asOf, 
         <Key color={C.muted} kind="dot" label="Sale" />
         {floor != null && <Key color={C.dim} kind="ref" label="Floor now" />}
         <Key color={C.barFill} kind="bar" label="Volume" />
+        {markers.some((m) => m.practice) && <Key color={MODE_COLOR.paper} kind="dot" label="Your practice trades" />}
       </View>
 
       <View style={{ height: H }} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
@@ -294,11 +296,11 @@ export function PriceChart({ sales, buckets, bucketSec, floor, rangeDays, asOf, 
           <Pressable key={`${p.m.wallet}:${p.m.t}:${p.m.side}:${i}`}
             onPress={() => p.m.wallet && router.push({ pathname: '/wallet/[address]', params: { address: p.m.wallet } })}
             onHoverIn={() => setHoverMark(p)} onHoverOut={() => setHoverMark((h) => (h === p ? null : h))}
-            accessibilityLabel={p.m.side === 'take' ? `Thesis: ${p.m.text ?? ''}` : `${p.m.name ?? shortAddr(p.m.wallet)} ${p.m.side === 'buy' ? 'bought' : 'sold'} at ${fmtSol(p.m.price)} ${unit}`}
-            style={[s.mark, { left: p.x - AV / 2, top: p.y - AV / 2, borderColor: p.m.side === 'buy' ? C.up : p.m.side === 'take' ? C.ai : C.down }]}>
+            accessibilityLabel={p.m.side === 'take' ? `Thesis: ${p.m.text ?? ''}` : `${p.m.name ?? shortAddr(p.m.wallet)} ${p.m.side === 'buy' ? 'bought' : 'sold'}${p.m.practice ? ' (practice)' : ''} at ${fmtSol(p.m.price)} ${unit}`}
+            style={[s.mark, p.m.practice && s.markPractice, { left: p.x - AV / 2, top: p.y - AV / 2, borderColor: p.m.side === 'buy' ? C.up : p.m.side === 'take' ? C.ai : C.down }]}>
             {p.m.avatar
               ? <Image source={thumb(p.m.avatar, AV * 2)} style={s.markImg} contentFit="cover" />
-              : <Text style={s.markTxt}>{p.m.side === 'take' && !p.m.wallet ? '✎' : (p.m.name ?? p.m.wallet).slice(0, 1).toUpperCase()}</Text>}
+              : <Text style={s.markTxt}>{p.m.practice ? 'P' : p.m.side === 'take' && !p.m.wallet ? '✎' : (p.m.name ?? p.m.wallet).slice(0, 1).toUpperCase()}</Text>}
           </Pressable>
         ))}
         {hoverMark && (
@@ -310,6 +312,7 @@ export function PriceChart({ sales, buckets, bucketSec, floor, rangeDays, asOf, 
               <Text style={{ color: hoverMark.m.side === 'buy' ? C.up : hoverMark.m.side === 'take' ? C.ai : C.down }}>
                 {hoverMark.m.side === 'buy' ? 'bought' : hoverMark.m.side === 'take' ? 'posted a thesis' : 'sold'}
               </Text>
+              {hoverMark.m.practice ? <Text style={{ color: MODE_COLOR.paper }}> · practice</Text> : null}
             </Text>
             {hoverMark.m.side === 'take' && hoverMark.m.text ? <Text style={s.tipLabel} numberOfLines={3}>“{hoverMark.m.text}”</Text> : null}
             <Text style={s.tipLabel}>{hoverMark.m.side === 'take' ? 'floor ' : ''}{fmtSol(hoverMark.m.price)} {unit} · {new Date(hoverMark.m.t * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</Text>
@@ -384,6 +387,8 @@ const s = StyleSheet.create({
     backgroundColor: C.cardHi, alignItems: 'center', justifyContent: 'center',
   },
   markImg: { width: '100%', height: '100%' },
+  // Practice trades: practice purple fill and a dashed ring, so they never read as real fills.
+  markPractice: { backgroundColor: MODE_COLOR.paper, borderStyle: 'dashed' },
   markTxt: { color: C.text, fontSize: 10, fontWeight: '700' },
   markTip: {
     position: 'absolute', width: 240, backgroundColor: C.cardHi, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7,

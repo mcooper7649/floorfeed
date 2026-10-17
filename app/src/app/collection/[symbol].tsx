@@ -29,7 +29,7 @@ import { useTitle } from '@/lib/use-title';
 
 const RANGES = [{ d: 1, label: '1D' }, { d: 7, label: '1W' }, { d: 30, label: '1M' }, { d: 90, label: '3M' }] as const;
 const SCALES = [{ key: 'pct', label: '%' }, { key: 'log', label: 'log' }, { key: 'auto', label: 'auto' }] as const;
-type Overlays = { proven: boolean; mine: boolean; following: boolean; minSize: boolean; takes: boolean };
+type Overlays = { proven: boolean; mine: boolean; practice: boolean; following: boolean; minSize: boolean; takes: boolean };
 type TabKey = 'holders' | 'sales' | 'thesis' | 'listings' | 'flippers';
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'holders', label: 'Holders' }, { key: 'sales', label: 'Sales' }, { key: 'thesis', label: 'Thesis' },
@@ -50,10 +50,11 @@ export default function CollectionScreen() {
   const [filter, setFilter] = useState<TabFilter>({ proven: false, following: false });
   const [holderCount, setHolderCount] = useState<number | null>(null);
   const [scale, setScale] = useState<'auto' | 'pct' | 'log'>('auto');
-  const [overlays, setOverlays] = useState<Overlays>({ proven: true, mine: true, following: false, minSize: false, takes: true });
+  const [overlays, setOverlays] = useState<Overlays>({ proven: true, mine: true, practice: true, following: false, minSize: false, takes: true });
   const [takeCount, setTakeCount] = useState<number | null>(null);
   const [markerState, setMarkerState] = useState<{ key: string; list: ChartMarker[] } | null>(null);
-  const { following } = useSession();
+  const { following, userId, portfolioVersion } = useSession();
+  const [paper, setPaper] = useState<{ key: string; list: ChartMarker[] } | null>(null);
   const solAddr = useWallet().address;
   const evmAddr = useEvmWallet().address;
 
@@ -73,7 +74,29 @@ export default function CollectionScreen() {
       .catch(() => alive && setMarkerState({ key: markerKey, list: [] }));
     return () => { alive = false; };
   }, [markerKey]);
-  const markers = markerState?.key === markerKey ? markerState.list : [];
+  // Your practice buys and sells, drawn alongside the real trades so you can
+  // see where your entries and exits landed against the market. Refetched
+  // after each practice trade (portfolioVersion).
+  const paperKey = overlays.practice && userId ? `${userId}|${symbol}|${portfolioVersion}` : '';
+  useEffect(() => {
+    if (!paperKey) return;
+    let alive = true;
+    api.paper(userId!).then((book) => {
+      const list: ChartMarker[] = [];
+      for (const p of book.positions) {
+        if (p.collection.symbol !== symbol) continue;
+        const base = { wallet: '', mint: '', name: 'You', avatar: null, tier: null, practice: true };
+        list.push({ ...base, t: Math.floor(p.openedAt / 1000), price: p.entryPrice, side: 'buy' });
+        if (p.exitPrice != null && p.closedAt != null) list.push({ ...base, t: Math.floor(p.closedAt / 1000), price: p.exitPrice, side: 'sell' });
+      }
+      if (alive) setPaper({ key: paperKey, list });
+    }).catch(() => alive && setPaper({ key: paperKey, list: [] }));
+    return () => { alive = false; };
+  }, [paperKey, userId, symbol]);
+  const markers = [
+    ...(markerState?.key === markerKey ? markerState.list : []),
+    ...(paperKey && paper?.key === paperKey ? paper.list : []),
+  ];
   useTitle(data && `${data.name} floor price, chart & top flippers | FloorFeed`);
 
   const fetchData = useCallback(() => {
@@ -119,7 +142,7 @@ export default function CollectionScreen() {
   // USD per unit, for the "Min size" overlay filter.
   const usdRate = st.floor && st.floorUsd ? st.floorUsd / st.floor : null;
   const withUsd = (sub: string | undefined, n: number | null | undefined) => { const d = toUsd(n, cur); return d ? (sub ? `${d} · ${sub}` : d) : sub; };
-  const shownMarkers = overlays.minSize && usdRate != null ? markers.filter((m) => m.price * usdRate >= 1000) : markers;
+  const shownMarkers = overlays.minSize && usdRate != null ? markers.filter((m) => m.practice || m.price * usdRate >= 1000) : markers;
   const priceCard = (
     <Card title="Price" right={
       <View style={s.toolbar}>
@@ -231,6 +254,7 @@ export default function CollectionScreen() {
           <Text style={s.overlayLabel}>Chart overlays</Text>
           <Toggle label="Proven traders" on={overlays.proven} onPress={() => setOverlays((o) => ({ ...o, proven: !o.proven }))} />
           <Toggle label="My trades" on={overlays.mine} onPress={() => setOverlays((o) => ({ ...o, mine: !o.mine }))} />
+          <Toggle label="My practice" on={overlays.practice} onPress={() => setOverlays((o) => ({ ...o, practice: !o.practice }))} />
           <Toggle label="Thesis" on={overlays.takes} onPress={() => setOverlays((o) => ({ ...o, takes: !o.takes }))} />
           <Toggle label="Following only" on={overlays.following} onPress={() => setOverlays((o) => ({ ...o, following: !o.following }))} />
           {usdRate != null && <Toggle label="Min size (>$1K)" on={overlays.minSize} onPress={() => setOverlays((o) => ({ ...o, minSize: !o.minSize }))} />}

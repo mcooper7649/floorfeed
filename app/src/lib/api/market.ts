@@ -219,6 +219,7 @@ export type ChartMarker = {
   t: number; price: number; side: 'buy' | 'sell' | 'take'; wallet: string; mint: string;
   name: string | null; avatar: string | null; tier: Tier;
   text?: string; takeId?: number; // takes: posted when the floor was at `price`
+  practice?: boolean; // your own practice trade (drawn client-side from the paper book)
 };
 
 // One NFT (GET /items/:symbol/:id). id = Solana mint or EVM contract:tokenId.

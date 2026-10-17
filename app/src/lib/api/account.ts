@@ -12,6 +12,7 @@ export type PaperPosition = {
   open: boolean;
   pnlSol: number;
   openedAt: number;
+  closedAt?: number | null; // ms, closed positions
   copiedFrom: string | null;
   breakEven?: number | null; // open positions: the floor at which selling gets the cost back
 };

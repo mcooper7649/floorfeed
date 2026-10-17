@@ -128,6 +128,7 @@ export function accountRoutes(app: FastifyInstance) {
         feesSol: fees,
         breakEven: p.closed_at == null ? breakEven : null, // the floor this open position needs to be in profit
         openedAt: p.opened_at,
+        closedAt: p.closed_at,
         copiedFrom: p.copied_from,
       };
     });

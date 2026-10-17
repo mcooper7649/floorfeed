@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View, type ViewStyle } from 'react-native';
 
 import { ChainBadge } from '@/components/chain-badge';
 import { CollIcon } from '@/components/coll-icon';
@@ -12,6 +12,8 @@ import { useSession } from '@/lib/session';
 
 const RECENT_KEY = 'floorfeed.recentSearches';
 const MAX = 7;
+// Web: scroll only when the list overflows ('scroll' always draws scrollbars; RN's types lack 'auto').
+const autoScroll = { overflow: 'auto' } as unknown as ViewStyle;
 const isWallet = (q: string) => /^0x[0-9a-fA-F]{40}$/.test(q) || /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(q);
 
 // One collections fetch shared by every mount; refreshed when older than 5 min.
@@ -149,7 +151,7 @@ export function SearchBox() {
         accessibilityLabel="Search collections or wallets"
       />
       {open && (
-        <View style={s.menu} accessibilityRole="menu">
+        <View style={[s.menu, autoScroll]} accessibilityRole="menu">
           {!rows.length && !query && <Text style={s.note}>Loading collections…</Text>}
           {sections.map((sec, si) => (
             <View key={si}>
@@ -208,7 +210,7 @@ const s = StyleSheet.create({
   },
   inputOpen: { borderColor: C.dim },
   menu: {
-    position: 'absolute', top: 46, left: 0, right: 0, minWidth: 340, maxHeight: 520, overflow: 'auto',
+    position: 'absolute', top: 46, left: 0, right: 0, minWidth: 340, maxHeight: 520,
     backgroundColor: C.card, borderRadius: 14, borderWidth: 1, borderColor: C.border, paddingVertical: 6,
     shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 24, shadowOffset: { width: 0, height: 12 },
   },
