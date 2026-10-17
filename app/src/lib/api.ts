@@ -625,9 +625,10 @@ export const api = {
     if (p.following) q.set('following', p.following);
     return req<FeedItem[]>(`/feed?${q}`);
   },
-  events: (p: { view: FeedView; before?: number; following?: string; chain?: FeedChain; kinds?: 'all' | 'buys' | 'flips' }) => {
+  events: (p: { view: FeedView; before?: number; following?: string; chain?: FeedChain; kinds?: 'all' | 'buys' | 'flips'; hideBots?: boolean }) => {
     const q = new URLSearchParams({ view: p.view, limit: '30' });
     if (p.kinds && p.kinds !== 'all') q.set('kinds', p.kinds);
+    if (p.hideBots) q.set('bots', 'hide');
     if (p.chain && p.chain !== 'all') q.set('chain', p.chain);
     if (p.before) q.set('before', String(p.before));
     if (p.following) q.set('following', p.following);

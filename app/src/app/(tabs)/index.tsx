@@ -5,7 +5,7 @@ import { AlertsBell } from '@/components/alerts-bell';
 import { EventCard } from '@/components/event-card';
 import { Empty, Screen } from '@/components/screen';
 import { SuggestedFollows } from '@/components/suggested-follows';
-import { Segmented } from '@/components/segmented';
+import { Segmented, Toggle } from '@/components/segmented';
 import { Card } from '@/components/ui';
 import { ThesisFeedRow } from '@/components/thesis';
 import { WelcomeCard } from '@/components/welcome-card';
@@ -42,6 +42,14 @@ export default function FeedScreen() {
   const [tab, setTab] = useState<Tab>('buys');
   const [buySort, setBuySort] = useState<BuySort>('top');
   const [flipSort, setFlipSort] = useState<FlipSort>('all');
+  // Market-making wallets (AMM pools, bid bots) trade constantly; hidden by default, remembered per browser.
+  const [hideBots, setHideBotsState] = useState(() => {
+    try { return globalThis.localStorage?.getItem('floorfeed.hideBots') !== '0'; } catch { return true; }
+  });
+  const setHideBots = (v: boolean) => {
+    setHideBotsState(v);
+    try { globalThis.localStorage?.setItem('floorfeed.hideBots', v ? '1' : '0'); } catch { /* private mode */ }
+  };
   const theses = useThesisFeed();
   const [chain, setChain] = useState<FeedChain>('all');
   const [items, setItems] = useState<FeedEvent[]>([]);
@@ -55,8 +63,8 @@ export default function FeedScreen() {
   const load = useCallback(async (before?: number) => {
     if (scope === 'following' && !userId) return { events: [], next: null };
     const view: FeedView = tab === 'flips' ? (flipSort === 'wins' ? 'wins' : 'latest') : buySort;
-    return api.events({ view, kinds: tab === 'flips' ? 'flips' : 'buys', before, chain, following: scope === 'following' ? userId! : undefined });
-  }, [scope, tab, buySort, flipSort, chain, userId]);
+    return api.events({ view, kinds: tab === 'flips' ? 'flips' : 'buys', hideBots, before, chain, following: scope === 'following' ? userId! : undefined });
+  }, [scope, tab, buySort, flipSort, chain, userId, hideBots]);
 
   const fetchFirst = useCallback(() => {
     load()
@@ -98,6 +106,7 @@ export default function FeedScreen() {
           <Segmented label="Whose trades" value={scope} onChange={(k) => pick(() => setScope(k))}
             items={[{ key: 'all', label: 'Everyone' }, { key: 'following', label: 'Following', count: following.size }]} />
           <Segmented label="Chain" value={chain} onChange={(k) => pick(() => setChain(k))} items={CHAINS} />
+          <Toggle label="Hide bots" on={hideBots} onChange={(v) => pick(() => setHideBots(v))} />
         </View>
       )}
       <Text style={[T.meta, s.hint, { paddingHorizontal: pad }]}>{hintFor(tab, buySort, flipSort)}</Text>

@@ -288,10 +288,19 @@ function diversify(events: FeedEvent[], limit: number) {
     e.score! * 0.6 ** (seenW.get(actor(e) ?? "") ?? 0) * 0.8 ** (seenC.get(e.collection.symbol) ?? 0) *
     0.9 ** (seenK.get(eco(e)) ?? 0);
   const out: FeedEvent[] = [];
+  // Clusters score highest (many wallets at once) and would fill Top on
+  // their own: at most one card in three is a cluster, unless nothing else is left.
+  let clusters = 0;
+  const clusterOk = () => clusters < Math.ceil((out.length + 1) / 3);
   while (out.length < limit && pool.length) {
-    let bi = 0;
-    for (let i = 1; i < pool.length; i++) if (adj(pool[i]) > adj(pool[bi])) bi = i;
+    const okC = clusterOk() || pool.every((e) => e.kind === "cluster");
+    let bi = -1;
+    for (let i = 0; i < pool.length; i++) {
+      if (pool[i].kind === "cluster" && !okC) continue;
+      if (bi < 0 || adj(pool[i]) > adj(pool[bi])) bi = i;
+    }
     const [e] = pool.splice(bi, 1);
+    if (e.kind === "cluster") clusters++;
     out.push(e);
     const a = actor(e);
     if (a) seenW.set(a, (seenW.get(a) ?? 0) + 1);
@@ -309,8 +318,12 @@ const KIND_SET: Record<Exclude<Kinds, "all">, Set<string>> = {
   buys: new Set(["buy", "sweep", "cluster"]),
   flips: new Set(["flip"]),
 };
-export function feedEvents(opts: { view: View; before?: number; limit: number; followed?: Set<string>; chain?: "all" | "solana" | "evm"; kinds?: Kinds }) {
+export function feedEvents(opts: {
+  view: View; before?: number; limit: number; followed?: Set<string>; chain?: "all" | "solana" | "evm"; kinds?: Kinds;
+  hideBots?: boolean; // drop trades by market-making wallets (AMM pools, bid bots); clusters stay
+}) {
   const want = opts.kinds && opts.kinds !== "all" ? KIND_SET[opts.kinds] : null;
+  const keep = (e: FeedEvent) => (!want || want.has(e.kind)) && (!opts.hideBots || e.kind === "cluster" || e.wallet.tier !== "mm");
   const now = Math.floor(Date.now() / 1000);
   const f = opts.followed;
   const chain = opts.chain === "solana" ? "AND c.chain = 'solana'" : opts.chain === "evm" ? "AND c.chain != 'solana'" : "";
@@ -326,7 +339,7 @@ export function feedEvents(opts: { view: View; before?: number; limit: number; f
     const rows = db.prepare(`${rowSelect} WHERE t.block_time >= ? ${who} ORDER BY t.block_time DESC LIMIT 5000`)
       .all(now - TOP_WINDOW, ...fargs) as Row[];
     let events = build(rows, true);
-    if (want) events = events.filter((e) => want.has(e.kind));
+    events = events.filter(keep);
     if (f) events = events.filter((e) => involves(e, f));
     for (const e of events) e.score = signal(e) * 0.5 ** ((now - e.t) / HALF_LIFE);
     return { view: opts.view, events: diversify(events, opts.limit), next: null };
@@ -343,7 +356,7 @@ export function feedEvents(opts: { view: View; before?: number; limit: number; f
   let events = build(rows, false);
   // Wins: profitable flips by people, not AMM pool bots.
   if (opts.view === "wins") events = events.filter((e) => e.kind === "flip" && e.wallet.tier !== "mm");
-  if (want) events = events.filter((e) => want.has(e.kind));
+  events = events.filter(keep);
   if (f) events = events.filter((e) => involves(e, f));
   events.sort((a, b) => b.t - a.t);
   // Don't cut a page inside the oldest second we loaded (it may be partial).
