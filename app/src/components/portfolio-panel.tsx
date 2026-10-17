@@ -10,7 +10,7 @@ import { EvmOfferSheet } from '@/components/evm-offer-sheet';
 import { EvmSellSheet } from '@/components/evm-sell-sheet';
 import { menuProps, useQuickMenu, type MenuItem } from '@/components/quick-menu';
 import { networkLines } from '@/components/networks-card';
-import { ListingRows, OfferRows, OrderTabs, useMyOrders, type OpenMenu, type PanelAction, type Tab } from '@/components/your-orders';
+import { ListingRows, OfferRows, OrderTabs, useMyOrders, type Filled, type OpenMenu, type PanelAction, type Tab } from '@/components/your-orders';
 import { C } from '@/constants/brand';
 import { T } from '@/constants/type';
 import { api, type Chain, type EvmNetwork, type Holding, type Mark } from '@/lib/api';
@@ -219,6 +219,21 @@ export function YourNftsBody({ nfts, onOpen }: { nfts: YourNfts; onOpen?: () => 
   const quick = useQuickMenu();
   const [act, setAct] = useState<PanelAction | null>(null);
   const menus = { onOpen, reload: orders.reload, menu: quick.open as OpenMenu, act: setAct };
+  // An offer was accepted while you were away from it: say so (the NFT list reloads itself).
+  const [filled, setFilled] = useState<Filled | null>(null);
+  useEffect(() => {
+    const on = (e: Event) => {
+      setFilled((e as CustomEvent<Filled>).detail);
+      setTab('owned');
+    };
+    window.addEventListener?.('floorfeed:filled', on);
+    return () => window.removeEventListener?.('floorfeed:filled', on);
+  }, []);
+  useEffect(() => {
+    if (!filled) return;
+    const t = setTimeout(() => setFilled(null), 60_000);
+    return () => clearTimeout(t);
+  }, [filled]);
   if (!wallets) {
     return (
       <View style={s.empty}>
@@ -253,6 +268,11 @@ export function YourNftsBody({ nfts, onOpen }: { nfts: YourNfts; onOpen?: () => 
           </View>
         </View>
       </Pressable>
+      {filled && (
+        <Pressable onPress={() => setFilled(null)} style={s.filled} accessibilityRole="button" accessibilityLabel="Dismiss">
+          <Text style={s.filledTxt} numberOfLines={2}>✓ Your {filled.name} offer of {amt(filled.price, filled.unit, 4)} was accepted. The NFT is in your wallet.</Text>
+        </Pressable>
+      )}
       {/* Listings and offers are OpenSea orders, so only with an Ethereum wallet. */}
       {ew.address && (
         <OrderTabs tab={tab} onTab={setTab}
@@ -406,5 +426,7 @@ const s = StyleSheet.create({
   small: { color: C.dim, fontSize: 12, fontVariant: ['tabular-nums'] },
   empty: { paddingHorizontal: 12, paddingVertical: 12, gap: 8 },
   link: { ...T.label, color: C.accent },
+  filled: { marginHorizontal: 12, marginBottom: 8, padding: 10, borderRadius: 8, borderWidth: 1, borderColor: C.up, backgroundColor: C.card },
+  filledTxt: { color: C.up, fontSize: 12, fontWeight: '600' },
   foot: { color: C.muted, fontSize: 11, paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.border },
 });

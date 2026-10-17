@@ -271,7 +271,12 @@ function RealPortfolio({ solAddress, evmAddress }: { solAddress: string | null; 
   useEffect(() => {
     const onListing = () => { setTimeout(fetchData, 5_000); setTimeout(fetchData, 20_000); };
     window.addEventListener?.('floorfeed:listing', onListing);
-    return () => window.removeEventListener?.('floorfeed:listing', onListing);
+    // A trade, or an offer of yours that was accepted: the NFT list and coins change.
+    window.addEventListener?.('floorfeed:activity', onListing);
+    return () => {
+      window.removeEventListener?.('floorfeed:listing', onListing);
+      window.removeEventListener?.('floorfeed:activity', onListing);
+    };
   }, [fetchData]);
   const refresh = () => { setRefreshing(true); fetchData(); };
 

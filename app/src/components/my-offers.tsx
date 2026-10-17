@@ -1,10 +1,11 @@
 import { router } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { EvmOfferSheet } from '@/components/evm-offer-sheet';
 import { NftImage } from '@/components/nft-image';
 import { useQuickMenu, type MenuItem } from '@/components/quick-menu';
+import { announceFilled } from '@/components/your-orders';
 import { Card, ListRow, RowAction, SectionHeader } from '@/components/ui';
 import { C } from '@/constants/brand';
 import { chainName } from '@/constants/chains';
@@ -31,8 +32,14 @@ export function MyOffers({ address }: { address: string }) {
   const [editing, setEditing] = useState<MyOffer | null>(null);
   const quick = useQuickMenu();
 
+  const last = useRef<{ address: string; offers: MyOffer[] } | null>(null);
   const load = useCallback(() => {
-    api.evmOffers(address).then((r) => setData({ address, offers: r.offers })).catch(() => {});
+    api.evmOffers(address).then((r) => {
+      // An offer that vanished without a cancel was accepted (your-orders.tsx).
+      if (last.current?.address === address) announceFilled(last.current.offers, r.offers);
+      last.current = { address, offers: r.offers };
+      setData({ address, offers: r.offers });
+    }).catch(() => {});
   }, [address]);
   useEffect(() => {
     load();

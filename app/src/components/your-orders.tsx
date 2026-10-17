@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ChainBadge } from '@/components/chain-badge';
@@ -10,7 +10,7 @@ import { C } from '@/constants/brand';
 import { T } from '@/constants/type';
 import { track } from '@/lib/analytics';
 import { api, type Chain, type MyListing, type MyOffer } from '@/lib/api';
-import { announceListing, cancelEvmListing, daysLeft } from '@/lib/evm-listing';
+import { announceListing, cancelEvmListing, cancelledHere, daysLeft } from '@/lib/evm-listing';
 import { useEvmWallet } from '@/lib/evm-wallet';
 import { amt, usd } from '@/lib/format';
 import { usePrices } from '@/lib/prices';
@@ -20,22 +20,41 @@ import { usePrices } from '@/lib/prices';
 // every 5 minutes while visible, and soon after a listing or offer changes
 // anywhere on the page (OpenSea takes a few seconds to index it).
 
-const EVERY = 5 * 60_000;
+const EVERY = 2 * 60_000; // also how soon a filled offer or a sale is noticed (server caches a minute)
 const visible = () => typeof document === 'undefined' || document.visibilityState === 'visible';
+
+// An offer that leaves the open orders without being cancelled here, before
+// it expires, was accepted: the NFT is in the wallet now. Holdings and cash listen for 'floorfeed:activity' and reload;
+// the panel shows 'floorfeed:filled' as a note.
+// (Only offers: a listing also leaves when its NFT is sold into an offer, so its vanishing proves nothing.)
+export type Filled = { name: string; price: number; unit: string; at: number };
+export function announceFilled(prev: MyOffer[] | null, next: MyOffer[] | null) {
+  if (!prev || !next) return;
+  const now = Date.now() / 1000;
+  const filled: Filled[] = prev
+    .filter((o) => !next.some((x) => x.orderHash === o.orderHash) && !cancelledHere.has(o.orderHash.toLowerCase()) && o.expiresAt > now + 30)
+    .map((o) => ({ name: o.name.replace(/^Any /, ''), price: o.price, unit: o.unit, at: Date.now() }));
+  if (!filled.length) return;
+  globalThis.dispatchEvent?.(new CustomEvent('floorfeed:activity'));
+  for (const f of filled) globalThis.dispatchEvent?.(new CustomEvent('floorfeed:filled', { detail: f }));
+}
 
 export function useMyOrders(address: string | null) {
   const [data, setData] = useState<{ address: string; listings: MyListing[] | null; offers: MyOffer[] | null } | null>(null);
+  const last = useRef<typeof data>(null);
   const load = useCallback(() => {
     if (!address) return;
     Promise.all([
       api.evmListings(address).then((r) => r.listings).catch(() => null),
       api.evmOffers(address).then((r) => r.offers).catch(() => null),
-    ]).then(([listings, offers]) => setData((d) => ({
-      address,
+    ]).then(([listings, offers]) => {
+      const prev = last.current?.address === address ? last.current : null;
       // A failed refresh keeps what was there.
-      listings: listings ?? (d?.address === address ? d.listings : null),
-      offers: offers ?? (d?.address === address ? d.offers : null),
-    })));
+      const next = { address, listings: listings ?? prev?.listings ?? null, offers: offers ?? prev?.offers ?? null };
+      last.current = next;
+      setData(next);
+      if (prev && offers) announceFilled(prev.offers, offers);
+    });
   }, [address]);
   useEffect(() => {
     load();
