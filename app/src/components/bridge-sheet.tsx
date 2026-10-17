@@ -10,6 +10,7 @@ import { api, type BridgeQuote } from '@/lib/api';
 import { useEvmWallet } from '@/lib/evm-wallet';
 import { useWallet } from '@/lib/wallet';
 import { sol } from '@/lib/format';
+import { usePrices } from '@/lib/prices';
 import { recordTx } from '@/lib/activity';
 import { track } from '@/lib/analytics';
 
@@ -48,6 +49,7 @@ export function BridgeSheet(props: Props) {
 }
 
 function Sheet({ open, onClose, onDone, to: toProp, from: fromProp, amount: amountProp, note }: Props) {
+  const { toUsd } = usePrices();
   const w = useEvmWallet();
   const sw = useWallet();
   const addrOf = (c: string) => (c === 'solana' ? sw.address : w.address);
@@ -85,7 +87,9 @@ function Sheet({ open, onClose, onDone, to: toProp, from: fromProp, amount: amou
   // Origins: networks with a balance and a wallet that can sign there, same token as the destination first.
   const canSign = (c: string) => (c === 'solana' ? !!sw.sendTransaction : !!w.send);
   const origins = NETWORKS.filter((c) => c !== to && (bal?.[c] ?? 0) > 0 && canSign(c))
-    .sort((a, b) => Number(unitOf(b) === unitOf(to)) - Number(unitOf(a) === unitOf(to)) || (bal![b] - bal![a]));
+    // then by what each balance is worth (2 SOL vs 0.25 ETH compares in dollars, not raw amounts).
+    .sort((a, b) => Number(unitOf(b) === unitOf(to)) - Number(unitOf(a) === unitOf(to))
+      || ((toUsd(bal![b], unitOf(b)) ?? bal![b]) - (toUsd(bal![a], unitOf(a)) ?? bal![a])));
   const origin = from && origins.includes(from as (typeof NETWORKS)[number]) ? from : origins[0] ?? null;
   const user = origin ? addrOf(origin) : null;
   const recipient = addrOf(to);
@@ -190,7 +194,7 @@ function Sheet({ open, onClose, onDone, to: toProp, from: fromProp, amount: amou
     <Modal visible={open} transparent animationType="fade" onRequestClose={close}>
       <Pressable style={s.backdrop} onPress={close}>
         <Pressable style={s.sheet} onPress={() => {}}>
-          <Text style={s.title}>{toProp ? `Move funds to ${chainName(to)}` : 'Move funds between networks'}</Text>
+          <Text style={s.title}>{toProp ? (origin && unitOf(origin) !== unitOf(to) ? `Get ${unitOf(to)} on ${chainName(to)}` : `Move funds to ${chainName(to)}`) : 'Move funds between networks'}</Text>
 
           {!w.address && !sw.address ? (
             <Text style={s.meta}>Sign in or connect a wallet first.</Text>
@@ -299,7 +303,9 @@ function Sheet({ open, onClose, onDone, to: toProp, from: fromProp, amount: amou
               {q && ((q.tx && w.send) || (q.solTx && sw.sendTransaction)) && (
                 <Pressable accessibilityRole="button" onPress={bridge} disabled={step.kind === 'confirm'}
                   style={[s.primary, step.kind === 'confirm' && { opacity: 0.7 }]}>
-                  <Text style={s.primaryTxt}>{step.kind === 'confirm' ? 'Confirm in your wallet…' : `Move ${sol(q.receive, 4, q.receiveUnit)} to ${chainName(q.to)}`}</Text>
+                  <Text style={s.primaryTxt}>{step.kind === 'confirm' ? 'Confirm in your wallet…' : q.sendUnit !== q.receiveUnit
+                    ? `Swap ${sol(q.send, 4, q.sendUnit)} for ${sol(q.receive, 4, q.receiveUnit)}`
+                    : `Move ${sol(q.receive, 4, q.receiveUnit)} to ${chainName(q.to)}`}</Text>
                 </Pressable>
               )}
               {q && recipient && q.from === 'solana' !== (q.to === 'solana') && (

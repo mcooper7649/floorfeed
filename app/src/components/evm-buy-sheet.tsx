@@ -184,7 +184,12 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
                       Each network keeps its own balance, so NFTs on {chainName(q.chain)} need {unit} on {chainName(q.chain)}. You can move it here without leaving FloorFeed.
                     </Text>
                   )}
-                  {elsewhere.length > 0 && sw.sendTransaction && unit === 'ETH' && (
+                  {elsewhere.length === 0 && unit !== 'ETH' && (
+                    <Text style={s.meta}>
+                      NFTs on {chainName(q.chain)} are paid in {unit}. FloorFeed can swap ETH from another network{sw.sendTransaction ? ', or SOL,' : ''} into {unit} on {chainName(q.chain)} in one step, then you buy.
+                    </Text>
+                  )}
+                  {elsewhere.length > 0 && sw.sendTransaction && (
                     <Pressable accessibilityRole="button" onPress={() => { track('bridge_click', { chain: q.chain, from: 'solana' }); setBridging({ to: q.chain, amount: bridgeAmount ?? undefined, from: 'solana' }); }}>
                       <Text style={[s.meta, { color: C.accent }]}>Or pay with SOL from your Solana wallet</Text>
                     </Pressable>
@@ -193,7 +198,12 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
                     <Pressable accessibilityRole="button" onPress={() => { track('bridge_click', { chain: q.chain }); setBridging({ to: q.chain, amount: bridgeAmount ?? undefined }); }} style={s.primary}>
                       <Text style={s.primaryTxt}>Move {unit} to {chainName(q.chain)}</Text>
                     </Pressable>
-                  ) : sw.sendTransaction && unit === 'ETH' ? (
+                  ) : unit !== 'ETH' ? (
+                    // No HYPE / APE / RON / MON anywhere: swap ETH (or SOL) into it on the way (Relay).
+                    <Pressable accessibilityRole="button" onPress={() => { track('bridge_click', { chain: q.chain, from: 'swap' }); setBridging({ to: q.chain, amount: bridgeAmount ?? undefined }); }} style={s.primary}>
+                      <Text style={s.primaryTxt}>Get {unit} on {chainName(q.chain)}</Text>
+                    </Pressable>
+                  ) : sw.sendTransaction ? (
                     <Pressable accessibilityRole="button" onPress={() => { track('bridge_click', { chain: q.chain, from: 'solana' }); setBridging({ to: q.chain, amount: bridgeAmount ?? undefined, from: 'solana' }); }} style={s.primary}>
                       <Text style={s.primaryTxt}>Pay with SOL: move it to {chainName(q.chain)}</Text>
                     </Pressable>

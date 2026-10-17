@@ -53,7 +53,8 @@ export function TradeBox({ data }: { data: CollectionDetail }) {
   const cur = data.currency;
   const floor = data.stats.floor;
   const evm = data.chain !== 'solana';
-  const tradable = !evm || cur === 'ETH'; // paper and real both run on SOL and ETH collections
+  // Paper and real both run on collections priced in a chain's own coin (server UNITS); others (USDC...) are browse-only.
+  const tradable = (['SOL', 'ETH', 'HYPE', 'RON', 'APE', 'MON'] as string[]).includes(cur);
   const real = mode === 'real';
   const n = real ? 1 : count; // real buys are one NFT at a time for now
 
@@ -84,7 +85,7 @@ export function TradeBox({ data }: { data: CollectionDetail }) {
   if (!tradable) {
     return (
       <Panel title="Trade">
-        <Text style={T.meta}>This collection trades in {cur}. FloorFeed tracks its floor and sales, but paper and real buys run on SOL and ETH collections only.</Text>
+        <Text style={T.meta}>This collection trades in {cur}. FloorFeed tracks its floor and sales, but buys here run on collections priced in a network&apos;s own coin (SOL, ETH, HYPE, RON, APE, MON).</Text>
         <Pressable onPress={() => Linking.openURL(data.externalUrl)} style={s.secondary}><Text style={s.secondaryTxt}>Open on OpenSea ↗</Text></Pressable>
       </Panel>
     );
