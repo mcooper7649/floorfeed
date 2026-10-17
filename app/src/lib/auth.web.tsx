@@ -38,6 +38,7 @@ const OFF: AuthState = {
   sendSolTx: null,
   exportSolana: null,
   exportEvm: null,
+  security: null,
 };
 
 const Ctx = createContext<AuthState>(OFF);
@@ -118,6 +119,7 @@ function PrivyLoader({ children }: { children: ReactNode }) {
         sendSolTx: privy.signSolTx ? async (b64) => api.solSend(await privy.signSolTx!(b64)) : null,
         exportSolana: privy.exportSolana,
         exportEvm: privy.exportEvm,
+        security: privy.security,
       }
     : {
         ...OFF,

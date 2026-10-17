@@ -28,6 +28,24 @@ export type AuthState = {
   sendSolTx: ((base64: string) => Promise<string>) | null;
   exportSolana: (() => Promise<void>) | null;
   exportEvm: (() => Promise<void>) | null;
+  // Sign-in methods and 2-step verification (Settings → Security). Null until signed in.
+  security: Security | null;
+};
+
+// A way to sign in to the account. More than one means a lost inbox or Google
+// account doesn't lock you out (and your wallet with it).
+export type LoginKind = 'email' | 'google' | 'passkey';
+export type Login = { kind: LoginKind; id: string; label: string; addedAt: number | null };
+export type MfaMethod = 'totp' | 'sms' | 'passkey';
+export type Security = {
+  createdAt: number | null; // when the account was created (ms)
+  logins: Login[];
+  mfa: MfaMethod[];          // 2-step methods this user has set up
+  mfaAvailable: MfaMethod[]; // methods switched on for FloorFeed in Privy's dashboard
+  passkeyLogin: boolean;     // passkeys can be used to sign in
+  link: (kind: LoginKind) => void; // opens Privy's flow to add one
+  unlink: (l: Login) => Promise<void>;
+  manageMfa: () => void;     // Privy's 2-step setup screen (add, remove, change)
 };
 
 // EIP-712 typed data as our API builds it (EIP712Domain is added when signing).

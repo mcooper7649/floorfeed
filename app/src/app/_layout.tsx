@@ -4,6 +4,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { Platform, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 
+import { AccountSetup } from '@/components/account-setup';
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { DiscoveryPanel } from '@/components/discovery-panel';
 import { PortfolioPanel } from '@/components/portfolio-panel';
@@ -19,6 +20,7 @@ import { EvmWalletProvider } from '@/lib/evm-wallet';
 import { useLayout } from '@/lib/layout';
 import { PanelProvider, usePanel } from '@/lib/panel';
 import { PricesProvider } from '@/lib/prices';
+import { ProfileProvider } from '@/lib/profile';
 import { TradeModeProvider } from '@/lib/mode';
 import { SessionProvider } from '@/lib/session';
 import { WalletProvider } from '@/lib/wallet';
@@ -37,6 +39,7 @@ export default function RootLayout() {
     <ThemeProvider value={theme}>
       <AuthProvider>
       <SessionProvider>
+      <ProfileProvider>
       <AlertsProvider>
       <WalletProvider>
       <EvmWalletProvider>
@@ -61,15 +64,19 @@ export default function RootLayout() {
             <Stack.Screen name="history" options={{ title: 'History', headerBackTitle: 'Back', headerShown: !web }} />
             <Stack.Screen name="support" options={{ title: 'Support', headerBackTitle: 'Back', headerShown: !web }} />
             <Stack.Screen name="how-it-works" options={{ title: 'How it works', headerBackTitle: 'Back', headerShown: !web }} />
+            <Stack.Screen name="profile" options={{ title: 'Profile', headerBackTitle: 'Back', headerShown: !web }} />
+            <Stack.Screen name="settings" options={{ title: 'Settings', headerBackTitle: 'Back', headerShown: !web }} />
           </Stack>
         </Shell>
         <UpdateBanner />
+        <AccountSetup />
       </PricesProvider>
       </PanelProvider>
       </TradeModeProvider>
       </EvmWalletProvider>
       </WalletProvider>
       </AlertsProvider>
+      </ProfileProvider>
       </SessionProvider>
       </AuthProvider>
     </ThemeProvider>

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { authorize, privyUser } from "../auth.ts";
 import { config } from "../config.ts";
 import { bearer, secretMatches } from "../http.ts";
-import { TakeError, collectionTakes, deleteTake, getProfile, postTake, recentTheses, reportTake, setProfileName, signedMessage, toggleLike } from "../takes.ts";
+import { TakeError, collectionTakes, deleteTake, getProfile, nameProblem, postTake, recentTheses, reportTake, setProfileName, signedMessage, toggleLike } from "../takes.ts";
 
 const takeReply = (reply: FastifyReply, err: unknown) => {
   if (err instanceof TakeError) return reply.code(err.status).send({ error: err.message });
@@ -35,6 +35,14 @@ export function takeRoutes(app: FastifyInstance) {
     if (!userId) return reply.code(401).send({ error: "Sign in again." });
     const { name } = z.object({ name: z.string().max(40) }).parse(req.body);
     try { return setProfileName(userId, name); } catch (err) { return takeReply(reply, err); }
+  });
+  // Is this name free for me? (live check while typing; nothing is saved)
+  app.get("/profile/name-check", async (req, reply) => {
+    const userId = await privyUser(req);
+    if (!userId) return reply.code(401).send({ error: "Sign in again." });
+    const { name } = z.object({ name: z.string().max(40) }).parse(req.query);
+    const problem = nameProblem(userId, name);
+    return problem ? { ok: false, error: problem.error } : { ok: true };
   });
   app.get("/takes/message", async (req) => {
     const q = z.object({ collection: z.string(), text: z.string().max(2000), ts: z.coerce.number().int() }).parse(req.query);

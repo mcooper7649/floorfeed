@@ -48,17 +48,35 @@ const NAME_RE = /^[A-Za-z0-9_.-]{3,20}$/;
 const RESERVED = /^(floorfeed|admin|moderator|mod|support|official|ai|system|null|undefined)$/i;
 const profileOf = db.prepare(`SELECT name, updated_at FROM profiles WHERE user_id = ?`);
 
+const profileStats = db.prepare(`
+  SELECT (SELECT COUNT(*) FROM user_takes WHERE user_id = @u AND hidden = 0) AS theses,
+         (SELECT COALESCE(SUM(likes), 0) FROM user_takes WHERE user_id = @u AND hidden = 0) AS likes,
+         (SELECT COUNT(*) FROM follows WHERE user_id = @u) AS following,
+         (SELECT COUNT(*) FROM paper_positions WHERE user_id = @u) AS practiceTrades`);
+
+// The signed-in user's own profile page and settings (GET /profile).
 export function getProfile(userId: string) {
-  const p = profileOf.get(userId) as { name: string } | undefined;
-  return { name: p?.name ?? null, fallback: memberName(userId) };
+  const p = profileOf.get(userId) as { name: string; updated_at: number } | undefined;
+  const stats = profileStats.get({ u: userId }) as { theses: number; likes: number; following: number; practiceTrades: number };
+  return { name: p?.name ?? null, fallback: memberName(userId), nameChangedAt: p?.updated_at ?? null, stats };
+}
+
+// Why a name can't be used by this user, or null if it can (also the live
+// "is it free?" check while typing during onboarding).
+export function nameProblem(userId: string, raw: string): { error: string; status: number } | null {
+  const name = raw.trim();
+  if (!NAME_RE.test(name)) return { error: "Use 3–20 letters, numbers, dots, dashes or underscores.", status: 400 };
+  if (RESERVED.test(name) || /floorfeed/i.test(name)) return { error: "That name is reserved.", status: 400 };
+  const taken = db.prepare(`SELECT user_id FROM profiles WHERE name_lower = ?`).get(name.toLowerCase()) as { user_id: string } | undefined;
+  if (taken && taken.user_id !== userId) return { error: "That name is taken.", status: 409 };
+  return null;
 }
 
 export function setProfileName(userId: string, raw: string) {
   const name = raw.trim();
-  if (!NAME_RE.test(name)) throw new TakeError("Use 3–20 letters, numbers, dots, dashes or underscores.");
-  if (RESERVED.test(name) || /floorfeed/i.test(name)) throw new TakeError("That name is reserved.");
+  const problem = nameProblem(userId, name);
+  if (problem) throw new TakeError(problem.error, problem.status);
   const taken = db.prepare(`SELECT user_id FROM profiles WHERE name_lower = ?`).get(name.toLowerCase()) as { user_id: string } | undefined;
-  if (taken && taken.user_id !== userId) throw new TakeError("That name is taken.", 409);
   const prev = profileOf.get(userId) as { updated_at: number } | undefined;
   if (prev && !taken && Date.now() - prev.updated_at < 60_000) throw new TakeError("You just changed your name. Try again in a minute.", 429);
   db.prepare(`INSERT INTO profiles (user_id, name, name_lower, updated_at) VALUES (?, ?, ?, ?)

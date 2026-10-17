@@ -1,4 +1,5 @@
 import { Image } from 'expo-image';
+import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -82,6 +83,18 @@ export function WalletButton() {
   );
 }
 
+// Profile and Settings (2-step, recovery, preferences) from the account menu.
+function AccountLinks({ onGo }: { onGo: () => void }) {
+  const go = (to: '/profile' | '/settings') => { onGo(); router.push(to); };
+  return (
+    <View style={s.signedRow}>
+      <Pressable accessibilityRole="link" onPress={() => go('/profile')}><Text style={[s.link, { color: C.accent }]}>Profile</Text></Pressable>
+      <Text style={s.meta}>·</Text>
+      <Pressable accessibilityRole="link" onPress={() => go('/settings')}><Text style={[s.link, { color: C.accent }]}>Settings and security</Text></Pressable>
+    </View>
+  );
+}
+
 // Picker when disconnected; account details + disconnect when connected.
 export function WalletSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const w = useWallet();
@@ -131,6 +144,7 @@ export function WalletSheet({ open, onClose }: { open: boolean; onClose: () => v
                 Your wallet&apos;s key is secured by Privy and never reaches FloorFeed.
               </Text>
               <ProfileName />
+              <AccountLinks onGo={onClose} />
               <Pressable accessibilityRole="button" onPress={openDeposit} style={s.primary}>
                 <Text style={s.primaryTxt}>Deposit SOL</Text>
               </Pressable>
@@ -182,6 +196,7 @@ export function WalletSheet({ open, onClose }: { open: boolean; onClose: () => v
               {auth.supported && (auth.userId ? (
                 <View style={{ gap: 8 }}>
                 <ProfileName />
+                <AccountLinks onGo={onClose} />
                 <View style={s.signedRow}>
                   <Text style={[s.meta, { flex: 1 }]}>Signed in{auth.label ? ` as ${auth.label}` : ''}</Text>
                   <Pressable accessibilityRole="button" onPress={signOut}><Text style={s.link}>Sign out</Text></Pressable>

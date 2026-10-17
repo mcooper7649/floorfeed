@@ -15,11 +15,18 @@ export type TakeItem = UserTake | AiTake;
 export type FeedColl = { symbol: string; name: string; image: string | null; currency: string; chain: Chain };
 export type ThesisFeedItem = (UserTake & { collection: FeedColl }) | (AiTake & { collection: FeedColl });
 
+// Your own profile (signed in): the chosen name, what's shown without one, and a few counts.
+export type MyProfile = {
+  name: string | null; fallback: string; nameChangedAt: number | null;
+  stats: { theses: number; likes: number; following: number; practiceTrades: number };
+};
+
 export const takesApi = {
   takes: (symbol: string, userId?: string | null) => req<TakeItem[]>(path`/collections/${symbol}/takes` + qs({ userId })),
   theses: (userId?: string | null) => req<ThesisFeedItem[]>('/theses' + qs({ limit: 40, userId })),
-  profile: () => req<{ name: string | null; fallback: string }>('/profile'),
+  profile: () => req<MyProfile>('/profile'),
   setProfileName: (name: string) => send<{ name: string }>('PUT', '/profile', { name }),
+  checkProfileName: (name: string) => req<{ ok: boolean; error?: string }>('/profile/name-check' + qs({ name })),
   // The text a wallet signs to mark a take as posted by a holder.
   takeMessage: (collection: string, text: string, ts: number) => req<{ message: string }>('/takes/message' + qs({ collection, text, ts })),
   postTake: (b: { collection: string; text: string; wallet?: string; signature?: string; ts?: number }) =>
