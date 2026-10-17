@@ -5,6 +5,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { ChainBadge } from '@/components/chain-badge';
 import { CollIcon } from '@/components/coll-icon';
 import { FlashBg, SalePulse, TickArrow, useBump, useTick } from '@/components/flash';
+import { ListingRows, OfferRows, OrderTabs, useMyOrders, type Tab } from '@/components/your-orders';
 import { C } from '@/constants/brand';
 import { T } from '@/constants/type';
 import { api, type Chain, type Holding, type Mark } from '@/lib/api';
@@ -176,6 +177,9 @@ function Panel({ onCollapse }: { onCollapse: () => void }) {
 // Total, rows and footnote. `onOpen` runs before a row opens its NFT (the phone sheet closes).
 export function YourNftsBody({ nfts, onOpen }: { nfts: YourNfts; onOpen?: () => void }) {
   const { wallets, list, error, rows, totalUsd, priced, plUsd, plPct, totalChange } = nfts;
+  const ew = useEvmWallet();
+  const orders = useMyOrders(ew.address);
+  const [tab, setTab] = useState<Tab>('owned');
   if (!wallets) {
     return (
       <View style={s.empty}>
@@ -196,14 +200,27 @@ export function YourNftsBody({ nfts, onOpen }: { nfts: YourNfts; onOpen?: () => 
             : totalChange != null && <Text style={{ color: totalChange >= 0 ? C.up : C.down }}> · {pct(totalChange)} 24h</Text>}
         </Text>
       </View>
-      {rows.length === 0 ? (
+      {/* Listings and offers are OpenSea orders, so only with an Ethereum wallet. */}
+      {ew.address && (
+        <OrderTabs tab={tab} onTab={setTab}
+          counts={{ owned: rows.length, listed: orders.listings?.length ?? null, offers: orders.offers?.length ?? null }} />
+      )}
+      {tab === 'listed' && ew.address ? (
+        <ListingRows listings={orders.listings} onOpen={onOpen} reload={orders.reload} />
+      ) : tab === 'offers' && ew.address ? (
+        <OfferRows offers={orders.offers} onOpen={onOpen} reload={orders.reload} />
+      ) : rows.length === 0 ? (
         <Text style={[T.meta, s.empty]}>No NFTs from collections FloorFeed tracks in your wallets yet.</Text>
       ) : (
         <ScrollView contentContainerStyle={s.list}>
           {rows.map((r) => <NftRow key={`${r.n.chain}:${r.n.mint}`} {...r} onOpen={onOpen} />)}
         </ScrollView>
       )}
-      <Text style={s.foot}>Valued at the estimated bid (floor −3%). Prices update every 30s.</Text>
+      <Text style={s.foot}>
+        {tab === 'listed' && ew.address ? 'Your OpenSea listings. Cancelling is free on newer ones.'
+          : tab === 'offers' && ew.address ? 'Nothing leaves your wallet until someone accepts.'
+          : 'Valued at the estimated bid (floor −3%). Prices update every 30s.'}
+      </Text>
     </>
   );
 }
