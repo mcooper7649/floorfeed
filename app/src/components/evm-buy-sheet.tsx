@@ -242,7 +242,7 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
           <View style={s.footer}>
             {onPaper && step.kind !== 'sent' && (
               <Pressable accessibilityRole="button" onPress={() => { close(); onPaper(); }} style={[s.secondary, { flex: 1 }]}>
-                <Text style={s.secondaryTxt}>Practice trade instead</Text>
+                <Text style={s.secondaryTxt}>Practice instead</Text>
               </Pressable>
             )}
             <Pressable accessibilityRole="button" onPress={close} style={[s.secondary, { flex: 1 }]}>
@@ -295,8 +295,8 @@ const s = StyleSheet.create({
   primary: { backgroundColor: C.accent, borderRadius: 12, paddingVertical: 13, alignItems: 'center' },
   primaryTxt: { ...T.button, color: C.accentInk },
   footer: { flexDirection: 'row', gap: 10 },
-  secondary: { borderRadius: 12, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: C.border, backgroundColor: C.cardHi },
-  secondaryTxt: { ...T.button, color: C.text },
+  secondary: { borderRadius: 12, paddingVertical: 12, paddingHorizontal: 8, alignItems: 'center', borderWidth: 1, borderColor: C.border, backgroundColor: C.cardHi },
+  secondaryTxt: { ...T.button, color: C.text, textAlign: 'center' },
   option: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: C.border, backgroundColor: C.cardHi },
   icon: { width: 28, height: 28, borderRadius: 6 },
   optionTxt: { ...T.bodyStrong, flex: 1 },

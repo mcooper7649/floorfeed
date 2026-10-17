@@ -19,7 +19,7 @@ export function BuySheet({ symbol, open, onClose, onPaper }: {
   symbol: string;
   open: boolean;
   onClose: () => void;
-  onPaper?: () => void; // "Practice trade instead"
+  onPaper?: () => void; // "Practice instead"
 }) {
   const withUsd = useWithUsd();
   const w = useWallet();
@@ -100,7 +100,7 @@ export function BuySheet({ symbol, open, onClose, onPaper }: {
           <View style={s.footer}>
             {onPaper && (
               <Pressable accessibilityRole="button" onPress={() => { onClose(); onPaper(); }} style={[s.secondary, { flex: 1 }]}>
-                <Text style={s.secondaryTxt}>Practice trade instead</Text>
+                <Text style={s.secondaryTxt}>Practice instead</Text>
               </Pressable>
             )}
             <Pressable accessibilityRole="button" onPress={onClose} style={[s.secondary, { flex: 1 }]}>
@@ -140,6 +140,6 @@ const s = StyleSheet.create({
   primary: { backgroundColor: C.accent, borderRadius: 12, paddingVertical: 13, alignItems: 'center' },
   primaryTxt: { ...T.button, color: C.accentInk },
   footer: { flexDirection: 'row', gap: 10 },
-  secondary: { borderRadius: 12, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: C.border, backgroundColor: C.cardHi },
-  secondaryTxt: { ...T.button, color: C.text },
+  secondary: { borderRadius: 12, paddingVertical: 12, paddingHorizontal: 8, alignItems: 'center', borderWidth: 1, borderColor: C.border, backgroundColor: C.cardHi },
+  secondaryTxt: { ...T.button, color: C.text, textAlign: 'center' },
 });
