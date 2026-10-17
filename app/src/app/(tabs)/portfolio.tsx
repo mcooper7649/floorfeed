@@ -9,6 +9,7 @@ import { EvmSellSheet } from '@/components/evm-sell-sheet';
 import { NetworksCard, networkLines } from '@/components/networks-card';
 import { MODE_COLOR, ModeToggle } from '@/components/mode-toggle';
 import { MyListings } from '@/components/my-listings';
+import { MyOffers } from '@/components/my-offers';
 import { NftImage } from '@/components/nft-image';
 import { Screen } from '@/components/screen';
 import { Button, Card, ListRow, RowAction, SectionHeader } from '@/components/ui';
@@ -318,6 +319,7 @@ function RealPortfolio({ solAddress, evmAddress }: { solAddress: string | null; 
           <WalletsCard />
           <NetworksCard sol={solAddress ? sh?.sol ?? null : null} networks={evmAddress ? en : []} onChanged={fetchData} />
           {evmAddress && <MyListings address={evmAddress} onChanged={() => setTimeout(fetchData, 3_000)} />}
+          {evmAddress && <MyOffers address={evmAddress} />}
           <SectionHeader title="Holdings" count={rows.length || undefined} />
         </View>
       }

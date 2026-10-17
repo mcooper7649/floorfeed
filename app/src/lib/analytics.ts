@@ -9,7 +9,7 @@ import { Platform } from 'react-native';
 export type EventName =
   | 'sign_in' | 'follow' | 'unfollow' | 'alerts_on' | 'alerts_off'
   | 'paper_buy' | 'paper_sell' | 'copy_tap'
-  | 'buy_open' | 'buy_click' | 'buy_signed' | 'sell_open' | 'sell_approved' | 'sell_signed' | 'bridge_click' | 'bridge_open' | 'bridge_signed' | 'unwrap_signed' | 'network_send_open' | 'network_send' | 'mint_signed' | 'mint_out' | 'mint_open' | 'mint_remind' | 'launch_draft' | 'launch_art' | 'launch_signed' | 'launch_mint' | 'list_open' | 'list_signed' | 'list_cancel' | 'deposit_open'
+  | 'buy_open' | 'buy_click' | 'buy_signed' | 'sell_open' | 'sell_approved' | 'sell_signed' | 'bridge_click' | 'bridge_open' | 'bridge_signed' | 'unwrap_signed' | 'network_send_open' | 'network_send' | 'mint_signed' | 'mint_out' | 'mint_open' | 'mint_remind' | 'launch_draft' | 'launch_art' | 'launch_signed' | 'launch_mint' | 'list_open' | 'list_signed' | 'list_cancel' | 'offer_open' | 'offer_signed' | 'offer_cancel' | 'wrap_signed' | 'deposit_open'
   | 'wallet_connect' | 'mode_real'
   | 'welcome_shown' | 'welcome_cta' | 'welcome_dismiss' | 'suggested_follow' | 'guide_open' | 'guide_part' | 'take_post' | 'support_sent' | 'history_export';
 

@@ -411,6 +411,32 @@ export type MyListing = {
   price: number; unit: string; expiresAt: number; listedAt: number; orderHash: string; cancelFree: boolean;
   floor: number | null; boughtAt: number | null; url: string;
 };
+// Making an offer on OpenSea: one NFT (`kind: 'item'`) or any in the collection.
+export type EvmOfferQuote = {
+  kind: 'item' | 'collection'; chain: string; native: string; mint: string | null; name: string; image: string | null;
+  collection: { symbol: string; name: string; floor: number | null };
+  days: number[];
+  token?: { address: string; symbol: string; decimals: number };
+  wrappable?: boolean;      // the token is the chain's coin wrapped (WETH on ETH chains), so we can wrap it here
+  wrapped?: number;         // the buyer's balance of the offer token
+  nativeBalance?: number;
+  allowance?: number | null; // what OpenSea may spend of it; null = unlimited
+  operator?: string | null;
+  feePct?: number;           // what the seller gives up when they accept (comes out of the offer)
+  bestOffer?: { price: number; currency: string } | null;
+  mine?: { orderHash: string; price: number; expiresAt: number; cancelFree: boolean }[];
+  executable: boolean; reason: string | null; marketUrl?: string;
+};
+export type EvmOfferBuild = {
+  chain: string; chainId: number; kind: 'item' | 'collection'; parameters: Record<string, unknown>;
+  criteria: Record<string, unknown> | null; typedData: import('./auth-types').TypedData;
+};
+export type MyOffer = {
+  chain: string; orderHash: string; kind: 'item' | 'collection' | 'trait';
+  symbol: string | null; collection: string | null; mint: string | null; name: string; image: string | null;
+  price: number; unit: string; quantity: number; expiresAt: number; createdAt: number; cancelFree: boolean;
+  floor: number | null; url: string;
+};
 export type EvmListBuild = { chain: string; chainId: number; net: number; parameters: Record<string, unknown>; typedData: import('./auth-types').TypedData };
 export type EvmCancelBuild =
   | { kind: 'offchain'; chain: string; protocolAddress: string; typedData: import('./auth-types').TypedData }
@@ -535,6 +561,17 @@ export const api = {
     send('POST', '/trade/evm/list-build', b) as Promise<EvmListBuild>,
   evmListSubmit: (b: { chain: string; parameters: Record<string, unknown>; signature: string }) =>
     send('POST', '/trade/evm/list-submit', b) as Promise<{ orderHash: string | null }>,
+  evmOfferQuote: (symbol: string, buyer: string, id?: string | null) =>
+    req<EvmOfferQuote>(`/trade/evm/offer-quote/${encodeURIComponent(symbol)}?buyer=${buyer}${id ? `&id=${encodeURIComponent(id)}` : ''}`),
+  evmWrapTx: (b: { symbol: string; owner: string; amount: number }) =>
+    send('POST', '/trade/evm/wrap-tx', b) as Promise<EvmTxOut & { amount: number; symbol: string }>,
+  evmOfferApproveTx: (b: { symbol: string; owner: string; operator: string }) =>
+    send('POST', '/trade/evm/offer-approve-tx', b) as Promise<EvmTxOut & { symbol: string }>,
+  evmOfferBuild: (b: { symbol: string; id?: string | null; buyer: string; price: number; days: number }) =>
+    send('POST', '/trade/evm/offer-build', b) as Promise<EvmOfferBuild>,
+  evmOfferSubmit: (b: { chain: string; kind: 'item' | 'collection'; parameters: Record<string, unknown>; signature: string; criteria?: Record<string, unknown> | null }) =>
+    send('POST', '/trade/evm/offer-submit', b) as Promise<{ orderHash: string | null }>,
+  evmOffers: (address: string) => req<{ offers: MyOffer[] }>(`/trade/evm/offers/${address}`),
   support: (b: SupportReport) => send('POST', '/support', b) as Promise<{ ok: true; id: number }>,
   evmListings: (address: string) => req<{ listings: MyListing[] }>(`/trade/evm/listings/${address}`),
   evmCancelBuild: (b: { chain: string; orderHash: string; seller: string }) =>

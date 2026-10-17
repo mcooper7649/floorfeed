@@ -24,6 +24,7 @@ import { bridgeQuote, bridgeStatus } from "./bridge.ts";
 import { dropDetail, dropMintTx } from "./drops.ts";
 import { marks } from "./marks.ts";
 import { evmCancelBuild, evmCancelSubmit, evmListBuild, evmListQuote, evmListSubmit, evmMyListings, evmWalletListings } from "./list-evm.ts";
+import { evmOfferApproveTx, evmOfferBuild, evmOfferQuote, evmOfferSubmit, evmWalletOffers, evmWrapTx, forgetOffers } from "./offer-evm.ts";
 import { EVM_ADDRESS_RE, evmApproveTx, evmBroadcast, evmPrepare, evmBalances, evmBuyTx, evmHoldings, evmNetworks, evmNftTransferTx, evmQuote, evmSellQuote, evmSellTx, evmSendTx, evmTransferFee, evmUnwrapTx, totalEth } from "./trade-evm.ts";
 import { solSendTx } from "./send.ts";
 import { startIngest } from "./ingest.ts";
@@ -805,7 +806,42 @@ app.post("/trade/evm/cancel-build", async (req, reply) => {
 app.post("/trade/evm/cancel-submit", async (req, reply) => {
   const b = z.object({ chain: z.string(), protocolAddress: z.string().regex(EVM_ADDRESS_RE), orderHash: z.string().regex(/^0x[0-9a-fA-F]{64}$/),
     signature: z.string().regex(/^0x[0-9a-fA-F]{128,200}$/), seller: z.string().regex(EVM_ADDRESS_RE) }).parse(req.body);
+  forgetOffers(b.seller); // the same cancel serves offers
   try { return await evmCancelSubmit(b); } catch (err) { return reply.code(409).send({ error: (err as Error).message }); }
+});
+
+// Making offers on OpenSea (offer-evm.ts): on one NFT (`id`) or the whole
+// collection. Quote, wrap and approve transactions, typed data to sign, submit.
+app.get("/trade/evm/offer-quote/:symbol", async (req, reply) => {
+  const { symbol } = req.params as { symbol: string };
+  const q = z.object({ id: z.string().regex(MINT_RE).optional(), buyer: z.string().regex(EVM_ADDRESS_RE) }).parse(req.query);
+  try { return await evmOfferQuote(symbol, q.id ?? null, q.buyer); } catch (err) { return reply.code(409).send({ error: (err as Error).message }); }
+});
+app.post("/trade/evm/wrap-tx", async (req, reply) => {
+  const b = z.object({ symbol: z.string().max(80), owner: z.string().regex(EVM_ADDRESS_RE), amount: z.number().positive() }).parse(req.body);
+  try { return await evmWrapTx(b); } catch (err) { return reply.code(409).send({ error: (err as Error).message }); }
+});
+app.post("/trade/evm/offer-approve-tx", async (req, reply) => {
+  const b = z.object({ symbol: z.string().max(80), owner: z.string().regex(EVM_ADDRESS_RE), operator: z.string().regex(EVM_ADDRESS_RE) }).parse(req.body);
+  try { return await evmOfferApproveTx(b); } catch (err) { return reply.code(409).send({ error: (err as Error).message }); }
+});
+app.post("/trade/evm/offer-build", async (req, reply) => {
+  const b = z.object({ symbol: z.string().max(80), id: z.string().regex(MINT_RE).nullish(), buyer: z.string().regex(EVM_ADDRESS_RE),
+    price: z.number().positive(), days: z.number().int() }).parse(req.body);
+  try { return await evmOfferBuild(b); } catch (err) { return reply.code(409).send({ error: (err as Error).message }); }
+});
+app.post("/trade/evm/offer-submit", async (req, reply) => {
+  const b = z.object({ chain: z.string(), kind: z.enum(["item", "collection"]), parameters: z.any(),
+    signature: z.string().regex(/^0x[0-9a-fA-F]{128,200}$/), criteria: z.record(z.string(), z.any()).nullish() }).parse(req.body);
+  try { return await evmOfferSubmit(b); } catch (err) { return reply.code(409).send({ error: (err as Error).message }); }
+});
+app.get("/trade/evm/offers/:address", async (req, reply) => {
+  const { address } = req.params as { address: string };
+  if (!EVM_ADDRESS_RE.test(address)) return reply.code(400).send({ error: "Not an EVM address" });
+  try { return { offers: await evmWalletOffers(address) }; } catch (err) {
+    req.log.warn({ err }, "evm offers");
+    return reply.code(502).send({ error: "Couldn't load your offers from OpenSea" });
+  }
 });
 
 app.post("/trade/evm/approve-tx", async (req, reply) => {

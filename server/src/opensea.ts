@@ -382,9 +382,57 @@ export async function getOsDrops(type: "featured" | "upcoming" | "recently_minte
 
 // A collection's fees as OpenSea charges them on a listing: its own fee plus
 // creator fees, each with whether it's required. Percent, e.g. 1 = 1%.
+// `offerCurrency` is the token offers on it are made in (WETH, WAPE...).
 export async function getOsFees(slug: string) {
-  const c = await get<{ fees?: { fee: number; recipient: string; required: boolean }[]; required_zone?: string | null }>(`/collections/${slug}`);
-  return { fees: c.fees ?? [], requiredZone: c.required_zone ?? null };
+  const c = await get<{
+    fees?: { fee: number; recipient: string; required: boolean }[]; required_zone?: string | null;
+    pricing_currencies?: { offer_currency?: { address: string; symbol: string; decimals: number } | null } | null;
+  }>(`/collections/${slug}`);
+  const oc = c.pricing_currencies?.offer_currency;
+  return {
+    fees: c.fees ?? [], requiredZone: c.required_zone ?? null,
+    offerCurrency: oc && /^0x[0-9a-fA-F]{40}$/.test(oc.address) ? { address: oc.address.toLowerCase(), symbol: oc.symbol, decimals: oc.decimals } : null,
+  };
+}
+
+// --- making offers (offer-evm.ts) ---
+
+// An offer on one NFT is posted like a listing; a collection offer is built
+// first (OpenSea fills in the criteria and its zone) and posted to /offers.
+export async function postOsItemOffer(chain: string, body: unknown) {
+  return post<{ order?: { order_hash?: string } }>(`/orders/${osChain(chain)}/seaport/offers`, body);
+}
+export async function buildOsCollectionOffer(offerer: string, slug: string, quantity: number, protocolAddress: string) {
+  return post<{
+    partialParameters: { consideration: OsOrderItem[]; zone: string; zoneHash: string };
+    criteria: Record<string, unknown>;
+  }>("/offers/build", { offerer, quantity, criteria: { collection: { slug } }, protocol_address: protocolAddress });
+}
+export async function postOsCollectionOffer(body: unknown) {
+  return post<{ order_hash?: string }>("/offers", body);
+}
+// The best collection offer, per NFT (offers can ask for several).
+export async function getOsBestCollectionOffer(slug: string) {
+  const r = await get<{ offers?: { price?: { value: string; decimals: number; currency: string }; price_per_item?: { value: string; decimals: number; currency: string };
+    remaining_quantity?: number; status?: string }[] }>(`/offers/collection/${slug}?limit=5`);
+  const best = (r.offers ?? []).filter((o) => (o.status ?? "ACTIVE") === "ACTIVE")
+    .map((o) => o.price_per_item ?? o.price).filter((p): p is NonNullable<typeof p> => !!p)
+    .map((p) => ({ price: Number(p.value) / 10 ** p.decimals, currency: p.currency }))
+    .sort((a, b) => b.price - a.price)[0];
+  return best ?? null;
+}
+// This wallet's live OpenSea offers (all chains), newest first.
+export async function getOsMyOffers(maker: string) {
+  const q = new URLSearchParams({ limit: "100", cb: String(Math.floor(Date.now() / 5_000)) });
+  const r = await get<{ offers?: {
+    order_hash: string; chain: string; asset?: { identifier: string | null; contract: string } | null;
+    remaining_quantity?: number; order_created_at?: number; status?: string;
+    criteria?: { collection?: { slug: string } | null; traits?: unknown[] | null } | null;
+    price?: { currency: string; decimals: number; value: string };
+    price_per_item?: { currency: string; decimals: number; value: string };
+  }[] }>(`/account/${maker}/offers?${q}`);
+  return (r.offers ?? []).filter((o) => (o.status ?? "ACTIVE") === "ACTIVE")
+    .sort((a, b) => (b.order_created_at ?? 0) - (a.order_created_at ?? 0));
 }
 
 export async function postOsListing(chain: string, body: unknown) {

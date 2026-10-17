@@ -251,6 +251,21 @@ export const GUIDE: GuideSection[] = [
     ],
   },
   {
+    id: "offers",
+    part: "real",
+    title: "Making offers",
+    blocks: [
+      { p: "On Ethereum and its networks you can bid below the asking price. On an NFT's page, tap Make an offer, listed or not. From Buy floor, Make a collection offer bids on any NFT in the collection: whoever accepts first sells you one." },
+      { p: "An offer is a signature, not a payment. No gas, and nothing leaves your wallet until someone accepts. The fees come out of your offer, so if it's accepted you pay exactly what you offered." },
+      { steps: [
+        "Offers are made in WETH. If you don't have enough, FloorFeed wraps the ETH you need first (one transaction).",
+        "Once per network, allow OpenSea to use your WETH when an offer is accepted. Nothing is spent then.",
+        "Sign the offer. It's on OpenSea right away, for 1 to 30 days.",
+      ] },
+      { p: "Your offers on the Portfolio lists every live offer, and cancelling is free. If your offer reaches the asking price, the sheet suggests buying instead, because that's instant." },
+    ],
+  },
+  {
     id: "weth",
     part: "real",
     title: "WETH and unwrapping",

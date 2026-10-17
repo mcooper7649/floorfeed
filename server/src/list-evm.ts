@@ -13,17 +13,17 @@ import { evmHolds, evmPublicClient, isTradableChain, osConduit } from "./trade-e
 // one-time approval as selling into an offer. Orders go on OpenSea's signed
 // zone, so they can be cancelled off chain for free.
 
-const SEAPORT = "0x0000000000000068F116a894984e2DB1123eB395"; // Seaport 1.6, same address on every chain
-const SIGNED_ZONE = "0x000056f7000000ece9003ca63978907a00ffd100";
+export const SEAPORT = "0x0000000000000068F116a894984e2DB1123eB395"; // Seaport 1.6, same address on every chain
+export const SIGNED_ZONE = "0x000056f7000000ece9003ca63978907a00ffd100";
 const ZERO = "0x0000000000000000000000000000000000000000";
 const ZERO32 = `0x${"0".repeat(64)}` as Hex;
 // OpenSea's two conduits. Chains differ in which one OpenSea uses; we prefer
 // whichever this collection is already approved for.
-const CONDUIT_KEYS = [
+export const CONDUIT_KEYS = [
   "0x0000007b02230091a7ed01230072f7006a004d60a8d4e71d599b8104250f0000",
   "0x61159fefdfada89302ed55f8b9e89e2d67d8258712b3a3f89aa88525877f1d5e",
 ] as const;
-const PREFERS_SECOND = new Set(["abstract", "hyperevm", "ink"]);
+export const PREFERS_SECOND = new Set(["abstract", "hyperevm", "ink"]);
 // Chains where OpenSea listings are priced in the native coin (Ronin lists in WETH).
 const NATIVE_LISTING = new Set(["ethereum", "base", "abstract", "ink", "arbitrum", "hyperevm", "apechain", "monad", "robinhood"]);
 const DAYS = [1, 7, 30] as const;
@@ -78,7 +78,7 @@ export const SEAPORT_TYPES = {
     { name: "startAmount", type: "uint256" }, { name: "endAmount", type: "uint256" }, { name: "recipient", type: "address" },
   ],
 } as const;
-const domain = (chainId: number) => ({ name: "Seaport", version: "1.6", chainId, verifyingContract: SEAPORT });
+export const domain = (chainId: number) => ({ name: "Seaport", version: "1.6", chainId, verifyingContract: SEAPORT });
 
 function parseMint(symbol: string, id: string) {
   const meta = EVM_SALES.find((c) => c.slug === symbol);
@@ -111,12 +111,12 @@ function payments(price: bigint, seller: string, fees: { bps: number; recipient:
   return [{ amount: sellerAmount, recipient: seller }, ...feeItems.filter((f) => f.amount > 0n)];
 }
 
-async function requiredFees(slug: string) {
-  const { fees, requiredZone } = await getOsFees(slug);
+export async function requiredFees(slug: string) {
+  const { fees, requiredZone, offerCurrency } = await getOsFees(slug);
   return {
     fees: fees.filter((f) => f.required && f.fee > 0 && /^0x[0-9a-fA-F]{40}$/.test(f.recipient))
       .map((f) => ({ bps: Math.round(f.fee * 100), recipient: f.recipient.toLowerCase() })),
-    requiredZone,
+    requiredZone, offerCurrency,
   };
 }
 
@@ -225,10 +225,10 @@ export async function evmListSubmit(p: { chain: string; parameters: OsOrderParam
 export async function evmCancelBuild(p: { chain: string; orderHash: string; seller: string }) {
   if (!isTradableChain(p.chain)) throw new Error("Unsupported chain");
   const o = await getOsOrder(p.chain, p.orderHash, true);
-  if (!o || o.protocol_data.parameters.offerer.toLowerCase() !== p.seller.toLowerCase()) throw new Error("That listing isn't yours.");
+  if (!o || o.protocol_data.parameters.offerer.toLowerCase() !== p.seller.toLowerCase()) throw new Error("That order isn't yours.");
   // An order that's inactive only because the NFT left the wallet can still be
   // cancelled (and should be: it would wake up if the NFT came back).
-  if (/cancel|fill|expir/i.test(o.status ?? "") || o.remaining_quantity === 0) throw new Error("That listing isn't live anymore.");
+  if (/cancel|fill|expir/i.test(o.status ?? "") || o.remaining_quantity === 0) throw new Error("That order isn't live anymore.");
   const l = { orderHash: o.order_hash, protocolAddress: o.protocol_address, parameters: o.protocol_data.parameters };
   const chainId = EVM_CHAINS[p.chain as keyof typeof EVM_CHAINS].id;
   if (l.parameters.zone.toLowerCase() === SIGNED_ZONE) {

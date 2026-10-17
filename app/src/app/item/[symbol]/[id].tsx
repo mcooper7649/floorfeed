@@ -5,6 +5,7 @@ import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, StyleSheet
 import { ChainBadge } from '@/components/chain-badge';
 import { EvmBuySheet } from '@/components/evm-buy-sheet';
 import { EvmListSheet } from '@/components/evm-list-sheet';
+import { EvmOfferSheet } from '@/components/evm-offer-sheet';
 import { EvmSellSheet } from '@/components/evm-sell-sheet';
 import { Avatar, TierBadge } from '@/components/event-card';
 import { NftImage, Pill } from '@/components/nft-image';
@@ -45,6 +46,7 @@ export default function ItemScreen() {
   const [buyOpen, setBuyOpen] = useState(false);
   const [sellOpen, setSellOpen] = useState(false);
   const [listOpen, setListOpen] = useState(false);
+  const [offerOpen, setOfferOpen] = useState(false);
   const evmWallet = useEvmWallet();
 
   useTitle(data && `${data.name ?? data.collection.name}${data.rarity ? ` · Rank ${data.rarity.rank.toLocaleString()}` : ''}: traits, rarity & sales | FloorFeed`);
@@ -68,6 +70,8 @@ export default function ItemScreen() {
   // The connected Ethereum wallet holds this NFT: offer the in-app sale (the quote re-checks ownership on chain).
   // (Not for launchpad drops yet: in-app selling needs a tracked market.)
   const mine = !data.drop && data.chain !== 'solana' && !!evmWallet.address && data.owner?.wallet?.toLowerCase() === evmWallet.address;
+  // Offers on someone else's NFT (EVM, Real mode), listed or not.
+  const canOffer = !mine && !data.drop && data.chain !== 'solana' && mode === 'real';
   const vsFloor = data.listing && data.collection.floor
     ? ((data.listing.price - data.collection.floor) / data.collection.floor) * 100 : null;
 
@@ -140,6 +144,11 @@ export default function ItemScreen() {
             </Text>
           </Pressable>
         )}
+        {canOffer && (
+          <Pressable accessibilityRole="button" onPress={() => setOfferOpen(true)} style={data.listing ? s.secondary : s.primary}>
+            <Text style={data.listing ? s.secondaryTxt : s.primaryTxt}>Make an offer</Text>
+          </Pressable>
+        )}
         <Pressable accessibilityRole="link" onPress={() => Linking.openURL(data.explorerUrl)} style={s.secondary}>
           <Text style={s.secondaryTxt}>Explorer ↗</Text>
         </Pressable>
@@ -205,6 +214,10 @@ export default function ItemScreen() {
       {nav}
       {data.chain !== 'solana' && <EvmBuySheet symbol={data.symbol} id={data.id} open={buyOpen} onClose={() => setBuyOpen(false)} />}
       {mine && <EvmSellSheet symbol={data.symbol} id={data.id} open={sellOpen} onClose={() => setSellOpen(false)} />}
+      {canOffer && offerOpen && (
+        <EvmOfferSheet symbol={data.symbol} id={data.id} listedAt={data.listing?.price ?? null} open
+          onClose={() => setOfferOpen(false)} onBuy={() => { setOfferOpen(false); setBuyOpen(true); }} />
+      )}
       {mine && listOpen && <EvmListSheet symbol={data.symbol} id={data.id} open onClose={() => setListOpen(false)} />}
       <ScrollView contentContainerStyle={{ padding: pad, paddingBottom: 60, width: '100%', maxWidth, alignSelf: 'center', gap: 24 }}>
         {wide ? (

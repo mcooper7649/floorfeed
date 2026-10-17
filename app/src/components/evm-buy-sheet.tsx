@@ -3,6 +3,7 @@ import { ActivityIndicator, Image, Linking, Modal, Pressable, StyleSheet, Text, 
 
 import { BridgeSheet } from '@/components/bridge-sheet';
 import { DepositSheet } from '@/components/deposit-sheet';
+import { EvmOfferSheet } from '@/components/evm-offer-sheet';
 import { ModeChip } from '@/components/mode-toggle';
 import { NftImage } from '@/components/nft-image';
 import { ReportLink } from '@/components/report-link';
@@ -44,6 +45,7 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
   const [bridging, setBridging] = useState<{ to: string; amount?: number; from?: string } | null>(null);
   const [arrived, setArrived] = useState<{ amount: number; unit: string; chain: string } | null>(null);
   const [nonce, setNonce] = useState(0);
+  const [offering, setOffering] = useState(false);
   const key = `${symbol}:${id ?? ''}:${w.address}:${nonce}`;
 
   useEffect(() => {
@@ -97,7 +99,7 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
   // Modal unmounts its children on web, which would hide them too.
   return (
     <>
-    <Modal visible={open && !deposit && !bridging} transparent animationType="fade" onRequestClose={close}>
+    <Modal visible={open && !deposit && !bridging && !offering} transparent animationType="fade" onRequestClose={close}>
       <Pressable style={s.backdrop} onPress={close}>
         <Pressable style={s.sheet} onPress={() => {}}>
           <View style={s.head}>
@@ -207,6 +209,11 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
               <Text style={s.fine}>
                 FloorFeed checks the purchase against the chain first. Your wallet shows the exact amount and asks you to confirm; nothing is sent until you do.
               </Text>
+              {w.signTypedData && (
+                <Pressable accessibilityRole="button" onPress={() => setOffering(true)} style={s.secondary}>
+                  <Text style={s.secondaryTxt}>{id ? 'Make an offer instead' : 'Make a collection offer instead'}</Text>
+                </Pressable>
+              )}
               <Pressable accessibilityRole="link" onPress={() => { track('buy_click', { chain: q.chain }); void Linking.openURL(q.marketUrl); }}>
                 <Text style={s.link}>View on OpenSea ↗</Text>
               </Pressable>
@@ -229,6 +236,10 @@ export function EvmBuySheet({ symbol, id, open, onClose, onPaper }: {
     <BridgeSheet open={!!bridging} to={bridging?.to} amount={bridging?.amount} from={bridging?.from}
       note="Includes a small cushion in case the cheapest listing sells while the funds move. Anything left over stays in your wallet."
       onDone={(a) => { setArrived(a); setNonce((n) => n + 1); }} onClose={() => { setBridging(null); setNonce((n) => n + 1); }} />
+    {offering && (
+      <EvmOfferSheet symbol={symbol} id={id} listedAt={price} open
+        onClose={() => { setOffering(false); close(); }} onBuy={() => setOffering(false)} />
+    )}
     <DepositSheet chain="ethereum" open={deposit} suggest={short ?? undefined}
       onClose={() => { setDeposit(false); setNonce((n) => n + 1); }} />
     </>
