@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DepositSheet } from '@/components/deposit-sheet';
@@ -17,6 +17,7 @@ import { useEvmWallet } from '@/lib/evm-wallet';
 import { useLayout } from '@/lib/layout';
 import { useWalletName } from '@/lib/names';
 import { useProfile } from '@/lib/profile';
+import { useSwipeDown } from '@/lib/swipe-down';
 import { useTradeMode } from '@/lib/mode';
 import { useWallet } from '@/lib/wallet';
 import { track } from '@/lib/analytics';
@@ -117,6 +118,7 @@ export function WalletSheet({ open, onClose }: { open: boolean; onClose: () => v
   // A centered card on wide screens; a bottom sheet on phones.
   const { wide } = useLayout();
   const { bottom } = useSafeAreaInsets();
+  const swipe = useSwipeDown(onClose, !wide);
 
   // Privy draws its own modal; close ours first so they don't stack.
   const signIn = () => { onClose(); auth.login(); };
@@ -131,10 +133,13 @@ export function WalletSheet({ open, onClose }: { open: boolean; onClose: () => v
   return (
     <>
     <Modal visible={open} transparent animationType={wide ? 'fade' : 'slide'} onRequestClose={onClose}>
-      <Pressable style={[s.backdrop, !wide && s.backdropPhone]} onPress={onClose}>
-        <Pressable style={[s.sheet, !wide && [s.sheetPhone, { paddingBottom: 16 + bottom }]]} onPress={() => {}}>
+      <View style={[s.backdrop, !wide && s.backdropPhone]}>
+        {/* Behind the sheet, not around it, so taps and drags on the sheet never reach it. */}
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
+        <Animated.View style={[s.sheet, !wide && [s.sheetPhone, { paddingBottom: 16 + bottom }], swipe.style]}
+          {...swipe.panHandlers} onLayout={swipe.onLayout}>
           {!wide && <View style={s.grab} />}
-          <ScrollView contentContainerStyle={{ gap: w.address || ew.address ? 16 : 14 }} showsVerticalScrollIndicator={false}>
+          <ScrollView onScroll={swipe.onScroll} scrollEventThrottle={16} contentContainerStyle={{ gap: w.address || ew.address ? 16 : 14 }} showsVerticalScrollIndicator={false}>
           {w.address || ew.address ? (
             <AccountView onClose={onClose} onDeposit={(c) => { onClose(); if (c === 'solana') setDeposit(true); else setEthDeposit(true); }}
               onSend={openSend} onSignIn={signIn} onSignOut={signOut} onPick={pick} />
@@ -158,8 +163,8 @@ export function WalletSheet({ open, onClose }: { open: boolean; onClose: () => v
             </>
           )}
           </ScrollView>
-        </Pressable>
-      </Pressable>
+        </Animated.View>
+      </View>
     </Modal>
     <DepositSheet open={deposit} onClose={() => setDeposit(false)} />
     <DepositSheet chain="ethereum" open={ethDeposit} onClose={() => setEthDeposit(false)} />
