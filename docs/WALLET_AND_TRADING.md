@@ -1,5 +1,7 @@
 # Wallets and real buys
 
+> **Historical plan (early October 2026).** Most of it shipped: sign-in and embedded wallets, real EVM buys, selling into offers, listings, offers, cancels and moves between networks. The [README](../README.md) describes what's live now; this file is kept for the reasoning behind the decisions.
+
 FloorFeed is moving from paper trading to real purchases. This is the plan,
 what already works, and what each next step needs.
 
