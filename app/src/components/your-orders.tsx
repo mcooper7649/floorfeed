@@ -5,6 +5,7 @@ import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-na
 import { ChainBadge } from '@/components/chain-badge';
 import { CollIcon } from '@/components/coll-icon';
 import { announceOffer } from '@/components/evm-offer-sheet';
+import { menuProps, type MenuItem } from '@/components/quick-menu';
 import { C } from '@/constants/brand';
 import { T } from '@/constants/type';
 import { track } from '@/lib/analytics';
@@ -54,6 +55,14 @@ export function useMyOrders(address: string | null) {
 
 export type Tab = 'owned' | 'listed' | 'offers';
 
+// What a quick-menu item asks the panel to open.
+export type PanelAction =
+  | { kind: 'list' | 'sell'; symbol: string; id: string }
+  | { kind: 'offer'; symbol: string; id: string | null; replacing: { orderHash: string; chain: string; price: number } };
+// Opens the quick menu at the pointer.
+export type OpenMenu = (e: unknown, items: MenuItem[], title?: string) => void;
+type Menus = { onOpen?: () => void; reload: () => void; menu: OpenMenu; act: (a: PanelAction) => void };
+
 // Owned · Listed · Offers, as one segmented control.
 export function OrderTabs({ tab, onTab, counts }: { tab: Tab; onTab: (t: Tab) => void; counts: Record<Tab, number | null> }) {
   const tabs: { key: Tab; label: string }[] = [{ key: 'owned', label: 'Owned' }, { key: 'listed', label: 'Listed' }, { key: 'offers', label: 'Offers' }];
@@ -76,9 +85,10 @@ export function OrderTabs({ tab, onTab, counts }: { tab: Tab; onTab: (t: Tab) =>
 type Order = {
   key: string; chain: string; orderHash: string; name: string; image: string | null; sub: string;
   price: number; unit: string; open: () => void; kind: 'listing' | 'offer'; mint: string | null; cancelFree: boolean;
+  edit: PanelAction | null; // what Edit opens (needs a collection FloorFeed tracks)
 };
 
-export function ListingRows({ listings, onOpen, reload }: { listings: MyListing[] | null; onOpen?: () => void; reload: () => void }) {
+export function ListingRows({ listings, ...m }: { listings: MyListing[] | null } & Menus) {
   if (listings == null) return <Text style={[T.meta, s.empty]}>Loading your listings…</Text>;
   if (!listings.length) return <Text style={[T.meta, s.empty]}>Nothing listed. Open an NFT you own and tap List for sale.</Text>;
   const rows: Order[] = listings.map((l) => {
@@ -86,33 +96,36 @@ export function ListingRows({ listings, onOpen, reload }: { listings: MyListing[
     return {
       key: l.orderHash, chain: l.chain, orderHash: l.orderHash, name: l.name, image: l.image, price: l.price, unit: l.unit,
       kind: 'listing', mint: l.mint, cancelFree: l.cancelFree,
+      edit: l.symbol ? { kind: 'list', symbol: l.symbol, id: l.mint } : null,
       sub: [daysLeft(l.expiresAt), vsFloor != null ? (Math.abs(vsFloor) < 0.005 ? 'at floor' : `${Math.abs(vsFloor * 100).toFixed(0)}% ${vsFloor > 0 ? 'over' : 'under'} floor`) : null].filter(Boolean).join(' · '),
       open: () => (l.symbol ? router.push({ pathname: '/item/[symbol]/[id]', params: { symbol: l.symbol, id: l.mint } }) : Linking.openURL(l.url)),
     };
   });
-  return <OrderList rows={rows} onOpen={onOpen} reload={reload} />;
+  return <OrderList rows={rows} {...m} />;
 }
 
-export function OfferRows({ offers, onOpen, reload }: { offers: MyOffer[] | null; onOpen?: () => void; reload: () => void }) {
+export function OfferRows({ offers, ...m }: { offers: MyOffer[] | null } & Menus) {
   if (offers == null) return <Text style={[T.meta, s.empty]}>Loading your offers…</Text>;
   if (!offers.length) return <Text style={[T.meta, s.empty]}>No open offers. Tap Make an offer on any Ethereum NFT, or on a collection.</Text>;
   const rows: Order[] = offers.map((o) => ({
     key: o.orderHash, chain: o.chain, orderHash: o.orderHash, name: o.name, image: o.image, price: o.price, unit: o.unit,
     kind: 'offer', mint: o.mint, cancelFree: o.cancelFree,
+    edit: o.symbol && o.kind !== 'trait' ? { kind: 'offer', symbol: o.symbol, id: o.mint, replacing: { orderHash: o.orderHash, chain: o.chain, price: o.price } } : null,
     // "Any X" already says it's a collection offer; the time left goes first so it survives truncation.
     sub: [daysLeft(o.expiresAt), o.kind === 'trait' ? 'trait' : o.kind === 'collection' && o.quantity > 1 ? `wants ${o.quantity}` : null].filter(Boolean).join(' · '),
     open: () => (o.symbol && o.mint ? router.push({ pathname: '/item/[symbol]/[id]', params: { symbol: o.symbol, id: o.mint } })
       : o.symbol ? router.push({ pathname: '/collection/[symbol]', params: { symbol: o.symbol } }) : Linking.openURL(o.url)),
   }));
-  return <OrderList rows={rows} onOpen={onOpen} reload={reload} />;
+  return <OrderList rows={rows} {...m} />;
 }
 
-function OrderList({ rows, onOpen, reload }: { rows: Order[]; onOpen?: () => void; reload: () => void }) {
+function OrderList({ rows, onOpen, reload, menu, act }: { rows: Order[] } & Menus) {
   const [gone, setGone] = useState<Set<string>>(() => new Set());
   return (
     <ScrollView contentContainerStyle={s.list}>
       {rows.filter((r) => !gone.has(r.key)).map((r) => (
-        <OrderRow key={r.key} r={r} onOpen={onOpen} onGone={() => { setGone((g) => new Set(g).add(r.key)); setTimeout(reload, 4_000); }} />
+        <OrderRow key={r.key} r={r} onOpen={onOpen} menu={menu} act={act}
+          onGone={() => { setGone((g) => new Set(g).add(r.key)); setTimeout(reload, 4_000); }} />
       ))}
     </ScrollView>
   );
@@ -120,7 +133,7 @@ function OrderList({ rows, onOpen, reload }: { rows: Order[]; onOpen?: () => voi
 
 type RowState = 'idle' | 'confirm' | 'working' | { error: string };
 
-function OrderRow({ r, onOpen, onGone }: { r: Order; onOpen?: () => void; onGone: () => void }) {
+function OrderRow({ r, onOpen, onGone, menu, act }: { r: Order; onOpen?: () => void; onGone: () => void; menu: OpenMenu; act: (a: PanelAction) => void }) {
   const w = useEvmWallet();
   const { toUsd } = usePrices();
   const [st, setSt] = useState<RowState>('idle');
@@ -138,10 +151,17 @@ function OrderRow({ r, onOpen, onGone }: { r: Order; onOpen?: () => void; onGone
       setSt({ error: /reject|denied|cancel/i.test(m) && !/didn't cancel|can't cancel/i.test(m) ? 'Cancelled in your wallet. Still open.' : m });
     }
   };
+  const what = r.kind === 'offer' ? 'offer' : 'listing';
+  const items: MenuItem[] = [
+    ...(r.edit ? [{ label: `Edit ${what}`, onPress: () => act(r.edit!) }] : []),
+    { label: `Cancel ${what}`, danger: true, onPress: () => { void cancel(); } },
+    'sep',
+    { label: r.mint ? 'View NFT' : 'View collection', onPress: () => { onOpen?.(); r.open(); } },
+  ];
   return (
     <View>
       <Pressable style={({ hovered }: { hovered?: boolean }) => [s.row, hovered && { backgroundColor: C.card }]}
-        onPress={() => { onOpen?.(); r.open(); }}>
+        onPress={() => { onOpen?.(); r.open(); }} {...menuProps((e) => menu(e, items, r.name))}>
         <View style={{ width: 40, height: 40 }}>
           <CollIcon uri={r.image} name={r.name} size={40} radius={8} />
         </View>

@@ -5,11 +5,15 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { ChainBadge } from '@/components/chain-badge';
 import { CollIcon } from '@/components/coll-icon';
 import { FlashBg, SalePulse, TickArrow, useBump, useTick } from '@/components/flash';
-import { ListingRows, OfferRows, OrderTabs, useMyOrders, type Tab } from '@/components/your-orders';
+import { EvmListSheet } from '@/components/evm-list-sheet';
+import { EvmOfferSheet } from '@/components/evm-offer-sheet';
+import { EvmSellSheet } from '@/components/evm-sell-sheet';
+import { menuProps, useQuickMenu, type MenuItem } from '@/components/quick-menu';
+import { ListingRows, OfferRows, OrderTabs, useMyOrders, type OpenMenu, type PanelAction, type Tab } from '@/components/your-orders';
 import { C } from '@/constants/brand';
 import { T } from '@/constants/type';
 import { api, type Chain, type Holding, type Mark } from '@/lib/api';
-import { type ListingChange } from '@/lib/evm-listing';
+import { announceListing, cancelEvmListing, type ListingChange } from '@/lib/evm-listing';
 import { useEvmWallet } from '@/lib/evm-wallet';
 import { amt, pct, signedSol, signedUsd, usd } from '@/lib/format';
 import { PANEL_GAP, PANEL_WIDTH, usePanel } from '@/lib/panel';
@@ -180,6 +184,10 @@ export function YourNftsBody({ nfts, onOpen }: { nfts: YourNfts; onOpen?: () => 
   const ew = useEvmWallet();
   const orders = useMyOrders(ew.address);
   const [tab, setTab] = useState<Tab>('owned');
+  // Right-click / long-press menus on every row, and the sheets their items open.
+  const quick = useQuickMenu();
+  const [act, setAct] = useState<PanelAction | null>(null);
+  const menus = { onOpen, reload: orders.reload, menu: quick.open as OpenMenu, act: setAct };
   if (!wallets) {
     return (
       <View style={s.empty}>
@@ -206,36 +214,70 @@ export function YourNftsBody({ nfts, onOpen }: { nfts: YourNfts; onOpen?: () => 
           counts={{ owned: rows.length, listed: orders.listings?.length ?? null, offers: orders.offers?.length ?? null }} />
       )}
       {tab === 'listed' && ew.address ? (
-        <ListingRows listings={orders.listings} onOpen={onOpen} reload={orders.reload} />
+        <ListingRows listings={orders.listings} {...menus} />
       ) : tab === 'offers' && ew.address ? (
-        <OfferRows offers={orders.offers} onOpen={onOpen} reload={orders.reload} />
+        <OfferRows offers={orders.offers} {...menus} />
       ) : rows.length === 0 ? (
         <Text style={[T.meta, s.empty]}>No NFTs from collections FloorFeed tracks in your wallets yet.</Text>
       ) : (
         <ScrollView contentContainerStyle={s.list}>
-          {rows.map((r) => <NftRow key={`${r.n.chain}:${r.n.mint}`} {...r} onOpen={onOpen} />)}
+          {rows.map((r) => <NftRow key={`${r.n.chain}:${r.n.mint}`} {...r} onOpen={onOpen} menu={quick.open as OpenMenu} act={setAct} />)}
         </ScrollView>
       )}
       <Text style={s.foot}>
         {tab === 'listed' && ew.address ? 'Your OpenSea listings. Cancelling is free on newer ones.'
           : tab === 'offers' && ew.address ? 'Nothing leaves your wallet until someone accepts.'
           : 'Valued at the estimated bid (floor −3%). Prices update every 30s.'}
+        {ew.address ? (onOpen ? ' Long-press a row for quick actions.' : ' Right-click a row for quick actions.') : ''}
       </Text>
+      {quick.node}
+      {act?.kind === 'list' && <EvmListSheet symbol={act.symbol} id={act.id} open onClose={() => setAct(null)} onDone={orders.reload} />}
+      {act?.kind === 'sell' && <EvmSellSheet symbol={act.symbol} id={act.id} open onClose={() => setAct(null)} onSold={orders.reload} />}
+      {act?.kind === 'offer' && (
+        <EvmOfferSheet symbol={act.symbol} id={act.id} replacing={act.replacing} open onClose={() => setAct(null)} />
+      )}
     </>
   );
 }
 
 // One NFT. Flashes green/red when its value moves, and pulses "+N sales" when
 // its collection trades (a quick read on volume).
-function NftRow({ n, unit, value, usd: dollars, change, sales, pl, plUsd, onOpen }: {
-  onOpen?: () => void; n: Item; unit: string; value: number | null; usd: number | null; change: number | null; sales: number | null;
+function NftRow({ n, unit, value, usd: dollars, change, sales, pl, plUsd, onOpen, menu, act }: {
+  onOpen?: () => void; menu: OpenMenu; act: (a: PanelAction) => void; n: Item; unit: string; value: number | null; usd: number | null; change: number | null; sales: number | null;
   pl: { pct: number; amt: number } | null; plUsd: number | null;
 }) {
   const { tick, at } = useTick(value);
   const bump = useBump(sales);
+  const ew = useEvmWallet();
+  const [note, setNote] = useState<{ text: string; bad?: boolean } | null>(null);
+  const view = () => { onOpen?.(); router.push({ pathname: '/item/[symbol]/[id]', params: { symbol: n.collection.symbol, id: n.mint } }); };
+  // Selling and listing in-app are OpenSea (EVM) only, and not for launchpad drops yet.
+  const tradable = n.chain !== 'solana' && !n.drop && !!ew.address;
+  const cancelListing = async () => {
+    if (!n.listing) return;
+    setNote({ text: 'Sign to cancel…' });
+    try {
+      await cancelEvmListing(ew, { chain: n.chain, orderHash: n.listing.orderHash, name: n.name ?? n.collection.name, mint: n.mint });
+      setNote(null);
+    } catch (e) {
+      const m = (e as Error).message;
+      if (/isn't live anymore/i.test(m)) { announceListing(n.mint, null); setNote(null); return; }
+      setNote({ text: /reject|denied|cancel/i.test(m) && !/didn't cancel|can't cancel/i.test(m) ? 'Still listed' : m, bad: true });
+    }
+  };
+  const target = { symbol: n.collection.symbol, id: n.mint };
+  const items: MenuItem[] = tradable ? [
+    ...(n.listing
+      ? [{ label: 'Edit listing', onPress: () => act({ kind: 'list', ...target }) },
+         { label: 'Cancel listing', danger: true, onPress: () => { void cancelListing(); } }]
+      : [{ label: 'List for sale', onPress: () => act({ kind: 'list', ...target }) }]),
+    { label: 'Sell to best offer', onPress: () => act({ kind: 'sell', ...target }) },
+    'sep',
+    { label: 'View NFT', onPress: view },
+  ] : [{ label: 'View NFT', onPress: view }];
   return (
     <Pressable style={({ hovered }: { hovered?: boolean }) => [s.row, hovered && { backgroundColor: C.card }]}
-      onPress={() => { onOpen?.(); router.push({ pathname: '/item/[symbol]/[id]', params: { symbol: n.collection.symbol, id: n.mint } }); }}>
+      onPress={view} {...menuProps((e) => menu(e, items, n.name ?? n.collection.name))}>
       <FlashBg tick={tick} at={at} />
       <View style={{ width: 40, height: 40 }}>
         <CollIcon uri={n.image} name={n.name ?? n.collection.name} size={40} radius={8} />
@@ -247,7 +289,8 @@ function NftRow({ n, unit, value, usd: dollars, change, sales, pl, plUsd, onOpen
         </View>
         <View style={s.sub}>
           <ChainBadge chain={n.chain as Chain} />
-          {n.listing ? <Text style={s.listed} numberOfLines={1}>Listed {amt(n.listing.price, unit, 3)}</Text>
+          {note ? <Text style={[s.coll, note.bad && { color: C.down }]} numberOfLines={1}>{note.text}</Text>
+            : n.listing ? <Text style={s.listed} numberOfLines={1}>Listed {amt(n.listing.price, unit, 3)}</Text>
             : <Text style={s.coll} numberOfLines={1}>{n.collection.name}</Text>}
         </View>
       </View>

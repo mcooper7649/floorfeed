@@ -33,19 +33,21 @@ const snap = (n: number, up = false) => String((up ? Math.ceil(n * 1e4 - 1e-6) :
 const offStep = (n: number) => n > 0 && Math.abs(Math.round(n * 1e4) - n * 1e4) > 1e-6;
 export const announceOffer = () => globalThis.dispatchEvent?.(new CustomEvent('floorfeed:offer'));
 
-export function EvmOfferSheet({ symbol, id, listedAt, open, onClose, onBuy }: {
+export function EvmOfferSheet({ symbol, id, listedAt, open, onClose, onBuy, replacing }: {
   symbol: string;
   id?: string | null; // contract:tokenId; none = a collection offer
   listedAt?: number | null; // this NFT's (or the floor's) listing price, to compare
   open: boolean;
   onClose: () => void;
   onBuy?: () => void; // the offer reaches the listing: buy instead
+  // Editing an offer: the new one is placed, then this one is cancelled (free), so only the new price stands.
+  replacing?: { orderHash: string; chain: string; price: number } | null;
 }) {
   const w = useEvmWallet();
   const auth = useAuth();
   const { toUsd } = usePrices();
   const [quote, setQuote] = useState<{ key: string; q?: EvmOfferQuote; error?: string } | null>(null);
-  const [price, setPrice] = useState('');
+  const [price, setPrice] = useState(replacing ? String(replacing.price) : '');
   const [days, setDays] = useState(7);
   const [step, setStep] = useState<Step>({ kind: 'idle' });
   const [nonce, setNonce] = useState(0);
@@ -76,7 +78,7 @@ export function EvmOfferSheet({ symbol, id, listedAt, open, onClose, onBuy }: {
   const cur = needWrap > 0 ? 0 : needApprove ? 1 : 2; // the step the user is on
   const floor = q?.collection.floor ?? null;
   const best = q?.bestOffer ?? null;
-  const mine = q?.mine ?? [];
+  const mine = (q?.mine ?? []).filter((m) => m.orderHash !== replacing?.orderHash);
   const busy = step.kind === 'wrapping' || step.kind === 'approving' || step.kind === 'signing' || step.kind === 'cancelling';
   const both = (n: number, u: string) => { const d = toUsd(n, u); return d != null ? `${sol(n, 4, u)} · ${usd(d)}` : sol(n, 4, u); };
 
@@ -142,6 +144,19 @@ export function EvmOfferSheet({ symbol, id, listedAt, open, onClose, onBuy }: {
       await api.evmOfferSubmit({ chain: b.chain, kind: b.kind, parameters: b.parameters, signature, criteria: b.criteria });
       track('offer_signed', { chain: q.chain, kind: b.kind, days });
       announceOffer();
+      if (replacing) {
+        setStep({ kind: 'cancelling', hash: replacing.orderHash });
+        try {
+          await cancelEvmListing(w, { chain: replacing.chain, orderHash: replacing.orderHash, name: q.name });
+          announceOffer();
+        } catch (e) {
+          const m = (e as Error).message;
+          if (!/isn't live anymore/i.test(m)) {
+            setStep({ kind: 'error', message: `Your new offer is live, but the old one at ${sol(replacing.price, 4, token)} is still open too: ${cancelledMsg(m) ? 'you cancelled the signature' : m}. Cancel it from Your NFTs → Offers.` });
+            return;
+          }
+        }
+      }
       setStep({ kind: 'placed', price: value, days });
     } catch (e) { fail(e, 'The offer did not go through.'); }
   };
@@ -180,7 +195,7 @@ export function EvmOfferSheet({ symbol, id, listedAt, open, onClose, onBuy }: {
         <Pressable style={s.sheet} onPress={() => {}}>
           <ScrollView contentContainerStyle={{ gap: 14 }} showsVerticalScrollIndicator={false}>
           <View style={s.head}>
-            <Text style={s.title}>{id ? 'Make an offer' : 'Collection offer'}</Text>
+            <Text style={s.title}>{replacing ? 'Change your offer' : id ? 'Make an offer' : 'Collection offer'}</Text>
             <ModeChip mode="real" />
           </View>
 
@@ -346,7 +361,9 @@ export function EvmOfferSheet({ symbol, id, listedAt, open, onClose, onBuy }: {
               ) : (
                 <Pressable accessibilityRole="button" onPress={place} disabled={busy || !w.signTypedData}
                   style={[s.primary, busy && { opacity: 0.7 }]}>
-                  <Text style={s.primaryTxt}>{step.kind === 'signing' ? 'Sign the offer in your wallet…' : `Step 3 of 3 · Sign offer for ${sol(value, 4, token)}`}</Text>
+                  <Text style={s.primaryTxt}>{step.kind === 'signing' ? 'Sign the offer in your wallet…'
+                    : step.kind === 'cancelling' && replacing ? 'Now sign to cancel the old offer…'
+                    : `Step 3 of 3 · ${replacing ? 'Sign new offer for' : 'Sign offer for'} ${sol(value, 4, token)}`}</Text>
                 </Pressable>
               )}
               <Text style={s.fine}>
