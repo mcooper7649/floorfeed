@@ -5,6 +5,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { CollIcon } from '@/components/coll-icon';
 import { FlashBg, TickArrow, useTick } from '@/components/flash';
 import { MODE_COLOR } from '@/components/mode-toggle';
+import { menuProps, useQuickMenu, type MenuItem } from '@/components/quick-menu';
 import { C } from '@/constants/brand';
 import { T } from '@/constants/type';
 import { track } from '@/lib/analytics';
@@ -16,7 +17,8 @@ import { useSession } from '@/lib/session';
 // Practice NFTs for the Your NFTs panel and phone sheet: what you bought with
 // simulated money, valued at today's floor after fees (what selling now would
 // get), with a one-tap Sell. Each practice buy is one floor NFT, so several
-// buys of one collection show as one row with a count.
+// buys of one collection show as one row with a count. Right-click (long-press
+// on phones) a row for Sell / View collection.
 
 const EVERY = 30_000; // the server marks open positions at the latest floor
 const PURPLE = MODE_COLOR.paper;
@@ -107,6 +109,7 @@ export type PracticeNfts = ReturnType<typeof usePracticeNfts>;
 
 export function PracticeNftsBody({ nfts, onOpen }: { nfts: PracticeNfts; onOpen?: () => void }) {
   const [tab, setTab] = useState<'open' | 'closed'>('open');
+  const quick = useQuickMenu();
   if (!nfts.loaded) return <ActivityIndicator color={PURPLE} style={{ marginTop: 24 }} />;
   const { groups, closed, count, valueUsd, openPnlUsd, openPnlPct, realizedUsd } = nfts;
   const browse = () => { onOpen?.(); router.push('/markets'); };
@@ -153,14 +156,15 @@ export function PracticeNftsBody({ nfts, onOpen }: { nfts: PracticeNfts; onOpen?
       <ScrollView contentContainerStyle={s.list}>
         {tab === 'open'
           ? groups.length
-            ? groups.map((g) => <HoldingRow key={g.symbol} g={g} onOpen={onOpen} sell={nfts.sell} />)
+            ? groups.map((g) => <HoldingRow key={g.symbol} g={g} onOpen={onOpen} sell={nfts.sell} menu={quick.open} />)
             : <Text style={[T.meta, s.note]}>Nothing open. Everything you bought has been sold.</Text>
           : closed.length
-            ? closed.slice(0, 50).map((p) => <SoldRow key={p.id} p={p} onOpen={onOpen} />)
+            ? closed.slice(0, 50).map((p) => <SoldRow key={p.id} p={p} onOpen={onOpen} menu={quick.open} />)
             : <Text style={[T.meta, s.note]}>Nothing sold yet.</Text>}
       </ScrollView>
 
       <Text style={s.foot}>Simulated money at live floors. Values are what selling now would get, after fees.</Text>
+      {quick.node}
     </>
   );
 }
@@ -201,7 +205,9 @@ function SellAll({ nfts }: { nfts: PracticeNfts }) {
   );
 }
 
-function HoldingRow({ g, onOpen, sell }: { g: PracticeGroup; onOpen?: () => void; sell: (id: number) => Promise<void> }) {
+type OpenMenu = ReturnType<typeof useQuickMenu>['open'];
+
+function HoldingRow({ g, onOpen, sell, menu }: { g: PracticeGroup; onOpen?: () => void; sell: (id: number) => Promise<void>; menu: OpenMenu }) {
   const { tick, at } = useTick(g.value);
   const [state, setState] = useState<'idle' | 'selling' | 'error'>('idle');
   const view = () => { onOpen?.(); router.push({ pathname: '/collection/[symbol]', params: { symbol: g.symbol } }); };
@@ -211,8 +217,13 @@ function HoldingRow({ g, onOpen, sell }: { g: PracticeGroup; onOpen?: () => void
     sell(g.positions[0].id).then(() => setState('idle')).catch(() => setState('error'));
   };
   const up = g.pnl >= 0;
+  const items: MenuItem[] = [
+    { label: n > 1 ? 'Sell one' : 'Sell', onPress: doSell },
+    'sep',
+    { label: 'View collection', onPress: view },
+  ];
   return (
-    <Pressable onPress={view} style={({ hovered }: { hovered?: boolean }) => [s.row, hovered && { backgroundColor: C.card }]}>
+    <Pressable onPress={view} {...menuProps((e) => menu(e, items, g.name))} style={({ hovered }: { hovered?: boolean }) => [s.row, hovered && { backgroundColor: C.card }]}>
       <FlashBg tick={tick} at={at} />
       <View>
         <CollIcon uri={g.image} name={g.name} size={44} radius={10} />
@@ -239,14 +250,15 @@ function HoldingRow({ g, onOpen, sell }: { g: PracticeGroup; onOpen?: () => void
   );
 }
 
-function SoldRow({ p, onOpen }: { p: PaperPosition; onOpen?: () => void }) {
+function SoldRow({ p, onOpen, menu }: { p: PaperPosition; onOpen?: () => void; menu: OpenMenu }) {
   const { toUsd } = usePrices();
   const unit = p.currency ?? 'SOL';
   const pnlUsd = toUsd(p.pnlSol, unit);
   const up = p.pnlSol >= 0;
   const view = () => { onOpen?.(); router.push({ pathname: '/collection/[symbol]', params: { symbol: p.collection.symbol } }); };
   return (
-    <Pressable onPress={view} style={({ hovered }: { hovered?: boolean }) => [s.row, hovered && { backgroundColor: C.card }]}>
+    <Pressable onPress={view} {...menuProps((e) => menu(e, [{ label: 'View collection', onPress: view }], p.collection.name))}
+      style={({ hovered }: { hovered?: boolean }) => [s.row, hovered && { backgroundColor: C.card }]}>
       <CollIcon uri={p.collection.image ?? null} name={p.collection.name} size={36} radius={8} />
       <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
         <Text style={s.name} numberOfLines={1}>{p.collection.name}</Text>
