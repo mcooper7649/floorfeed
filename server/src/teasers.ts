@@ -11,6 +11,42 @@ export type Teaser = { id: string; text: string; image?: string };
 const SITE = "floorfeed.io";
 
 export const TEASERS: Teaser[] = [
+  // --- Batch 7 (2026-10-17): make offers, the launchpad + Mint tab, Floor Feeders teasers (no dates, no price) ---
+  { id: "feeders-meet", image: "feeders-moods.gif",
+    text: "Meet the Floor Feeders.\n\n2,222 animated pixel degens at a diner counter, eating floor listings off a plate. Every one drawn in code, pixel by pixel.\n\nMinting soon on floorfeed.io, on Robinhood Chain." },
+  { id: "offer-make",
+    text: "You can now make offers on NFTs inside FloorFeed.\n\nOffer on one NFT, or on any NFT in a collection. It's a real OpenSea offer signed by your own wallet, and you see exactly what it costs before you sign." },
+  { id: "launch-own",
+    text: "Launch your own NFT collection on FloorFeed.\n\nUpload the art and metadata, set your mint phases and prices, and deploy a contract you own on Ethereum, Base or Robinhood Chain. It shows up in FloorFeed's Mint tab when it goes live." },
+  { id: "feeders-moods", image: "feeders-moods.gif",
+    text: "Every Floor Feeder has a Feeding Mood:\n\nSnacking: floors flat\nFeasting: floors dipped, buying the dip\nFood Coma: floors pumped\nStarving: floors ran away\n\nWhich one are you this week?" },
+  { id: "offer-weth",
+    text: "Why does an NFT offer need WETH instead of ETH?\n\nAn offer is a promise to pay later, so the marketplace needs a token it can pull when someone accepts. FloorFeed wraps your ETH, sets the allowance and signs the offer in three steps, with a tracker so you always know which one you're on." },
+  { id: "launch-phases",
+    text: "Launching on FloorFeed? Run a team mint, an allowlist and a public sale as separate phases, each with its own price, per-wallet limit and time window.\n\nThe allowlist is checked by the contract itself, on-chain." },
+  { id: "feeders-plate", image: "feeders-chef.gif",
+    text: "The plate is the point.\n\nEvery Floor Feeder is eating the floor: tiny NFT listings served on a diner plate, a paper plate, porcelain, gold, or for the unlucky ones, a trash can lid." },
+  { id: "offer-cancel",
+    text: "Changed your mind about an offer? Cancel it from your FloorFeed Portfolio.\n\nLike listings, offers cancel off-chain with a signature, so it costs no gas." },
+  { id: "launch-reveal",
+    text: "Mint now, reveal later, done fairly.\n\nCollections on FloorFeed's launchpad can mint hidden and reveal afterwards. The reveal assigns artwork from a random starting point, so nobody can pick out the rares at mint." },
+  { id: "feeders-holders",
+    text: "Floor Feeders aren't just a PFP.\n\nHolding one is meant to unlock special access on FloorFeed, and we plan to waive FloorFeed's own fees for holders. (Marketplace fees and creator royalties would still apply.)" },
+  { id: "launch-fee",
+    text: "What it costs to launch a collection on FloorFeed: gas to deploy, then a flat 0.0001 ETH per NFT minted, locked into your contract when you create it.\n\nNo cut of your sales. The contract and the royalties are yours." },
+  { id: "list-offer-loop",
+    text: "On Ethereum and L2s, FloorFeed now covers every side of an NFT trade:\n\nBuy the cheapest listing. Make an offer. List at your price. Sell into the best offer.\n\nOne app, your own wallet, and every order lives on OpenSea." },
+  { id: "feeders-gold", image: "feeders-gold.gif",
+    text: "2,222 Floor Feeders, 10 types.\n\nMost are Brown, Light or Deep. 159 are Cyborg, 126 are Skeleton, 58 are Chrome.\n\nJust 38 are Gold." },
+  { id: "mint-remind",
+    text: "Upcoming drop you don't want to miss?\n\nTap Remind me on FloorFeed's Mint tab and you'll get a ping 5 minutes before it opens." },
+  { id: "feeders-launchpad",
+    text: "Floor Feeders will be the first collection minted on FloorFeed's own launchpad.\n\nWe built the launchpad, then used it ourselves: the same contracts any creator gets." },
+  { id: "offer-collection",
+    text: "Collection offers: offer once, get any NFT from the collection.\n\nFor when you want in and don't care which one. Make one on FloorFeed from any collection's page, on Ethereum and L2s." },
+  { id: "feeders-banner", image: "feeders-banner.gif",
+    text: "Floor Feeders. 2,222 degens, one diner counter.\n\nFollow along so you don't miss the mint." },
+
   // --- Batch 6 (2026-10-15): SOL<->EVM bridge, OpenSea listing, Your NFTs panel, Move %, live flashes, guide v2 ---
   { id: "sol-bridge", image: "bridge.jpg",
     text: "You can now bridge between Solana and every EVM chain inside FloorFeed.\n\nSOL in, ETH out on Base, Ink, Abstract or wherever the NFT lives. Or the other way around. Quote first, then a live status until it lands." },
@@ -263,18 +299,8 @@ export const TEASERS: Teaser[] = [
     text: "Every Solana collection on FloorFeed now has weeks of sales history behind its chart, not just the last day. Open any of the 40 and switch to 30D." },
 
   // Roadmap
-  { id: "soon-alerts",
-    text: "Coming to FloorFeed: push alerts when a wallet you follow buys.\n\nYou shouldn't have to refresh all day to catch smart money." },
-  { id: "soon-buy",
-    text: "Coming soon: buy straight from the feed.\n\nSee the trade, check the cheapest listing, sign with your wallet. Done, without leaving FloorFeed." },
-  { id: "soon-mints",
-    text: "On the FloorFeed roadmap: a mints feed.\n\nWhich new collections are proven wallets minting, before the secondary market wakes up." },
-  { id: "soon-fees",
-    text: "Working on: marketplace fees and royalties in every P&L number on FloorFeed.\n\nReal profit, not gross. If a flip only broke even after fees, it shouldn't count as a win." },
   { id: "soon-native",
     text: "Native iOS and Android apps for FloorFeed are on the way. Same feed, plus notifications that land the second a wallet you follow moves." },
-  { id: "soon-eth",
-    text: "Solana collections on FloorFeed have deep sales history. Ethereum, Base and Polygon are next: full price charts, recent sales and top flippers for EVM collections too." },
 
   // Batch 2 (2026-10-12)
   { id: "explain-sweep", image: "feed.jpg",
