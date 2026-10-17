@@ -107,6 +107,22 @@ function UsdTag({ n, unit, signed }: { n: number; unit: string; signed?: boolean
   return <Text style={s.usdTag}> · {signed && !d.startsWith('−') ? `+${d}` : d}</Text>;
 }
 
+// How today's floor compares with what was paid, from the buyer's side:
+// "floor now 83% above their avg" (green, they're up) or "… below this buy"
+// (red). vsFloorPct is (price − floor now) / floor now.
+function floorNow(vsFloorPct: number | null, what: string) {
+  if (vsFloorPct == null || vsFloorPct <= -100) return null;
+  const gain = (1 / (1 + vsFloorPct / 100) - 1) * 100;
+  const g = Math.abs(gain);
+  if (g < 0.5) return { text: `floor now at ${what}`, short: 'At floor', color: C.dim, tone: 'dark' as const };
+  const n = g >= 100 ? g.toFixed(0) : g.toFixed(1);
+  return {
+    text: `floor now ${n}% ${gain > 0 ? 'above' : 'below'} ${what}`,
+    short: `Floor ${gain > 0 ? '+' : '−'}${n}%`,
+    color: gain > 0 ? C.up : C.down, tone: gain > 0 ? 'up' as const : 'down' as const,
+  };
+}
+
 function Kicker({ text, color }: { text: string; color: string }) {
   return <Text style={[s.kicker, { color }]}>{text}</Text>;
 }
@@ -166,7 +182,7 @@ function BuyCard({ e, tile }: { e: BuyEvent; tile?: boolean }) {
     return () => { alive = false; };
   }, [e.signature, e.take]);
 
-  const below = e.vsFloorPct != null && e.vsFloorPct <= 0;
+  const fn = floorNow(e.vsFloorPct, 'this buy');
   const aiTake = takeState !== 'none' && (
     <View style={s.take}>
       <Text style={s.takeLabel}>AI take</Text>
@@ -184,7 +200,7 @@ function BuyCard({ e, tile }: { e: BuyEvent; tile?: boolean }) {
         <Link href={itemHref(e.collection.symbol, e.mint)} asChild>
           <Pressable>
             <NftImage uri={e.image} name={e.collection.name}>
-              {e.vsFloorPct != null && <Pill text={`${pct(e.vsFloorPct)} vs floor`} tone={below ? 'up' : 'dark'} style={{ top: 10, left: 10 }} />}
+              {fn && <Pill text={fn.short} tone={fn.tone} style={{ top: 10, left: 10 }} />}
               <Pill text={`${timeAgo(e.t)} ago`} style={{ top: 10, right: 10 }} />
             </NftImage>
           </Pressable>
@@ -212,7 +228,7 @@ function BuyCard({ e, tile }: { e: BuyEvent; tile?: boolean }) {
             <Text style={s.verb}>bought <Text style={s.coll}>{e.collection.name}</Text></Text>
             <Text style={s.big}>{sol(e.price, 3, e.collection.currency)}<UsdTag n={e.price} unit={e.collection.currency} /></Text>
             <Text style={s.meta}>
-              {e.vsFloorPct != null && <Text style={{ color: below ? C.up : C.dim }}>{pct(e.vsFloorPct)} vs floor · </Text>}
+              {fn && <Text style={{ color: fn.color }}>{fn.text} · </Text>}
               {timeAgo(e.t)} ago
             </Text>
           </View>
@@ -286,14 +302,14 @@ function FlipCard({ e, tile }: { e: FlipEvent; tile?: boolean }) {
 
 function SweepCard({ e, tile }: { e: SweepEvent; tile?: boolean }) {
   const withUsd = useWithUsd();
-  const below = e.vsFloorPct != null && e.vsFloorPct <= 0;
+  const fn = floorNow(e.vsFloorPct, 'their avg');
   const detail = (
     <View style={{ gap: 2 }}>
       <Text style={s.verb}>swept <Text style={s.coll}>{e.count} × {e.collection.name}</Text></Text>
       <Text style={s.big}>{sol(e.total, 2, e.collection.currency)}<UsdTag n={e.total} unit={e.collection.currency} /></Text>
       <Text style={s.meta}>
         avg {withUsd(sol(e.avg, 2, e.collection.currency), e.avg, e.collection.currency)}
-        {e.vsFloorPct != null && <Text style={{ color: below ? C.up : C.dim }}> · {pct(e.vsFloorPct)} vs floor</Text>}
+        {fn && <Text style={{ color: fn.color }}> · {fn.text}</Text>}
         {' '}· {timeAgo(e.t)} ago
       </Text>
     </View>
@@ -336,7 +352,7 @@ function ClusterCard({ e, tile }: { e: ClusterEvent; tile?: boolean }) {
   const withUsd = useWithUsd();
   const top = e.wallets.filter((w) => w.tier === 'elite' || w.tier === 'pro').length;
   const hours = Math.max(1, Math.round((e.t - e.since) / 3600));
-  const below = e.vsFloorPct != null && e.vsFloorPct <= 0;
+  const fn = floorNow(e.vsFloorPct, 'their avg');
   const named = e.wallets.slice(0, 2).map(traderName).join(', ');
   const more = e.count - Math.min(2, e.wallets.length);
   const body = (
@@ -361,7 +377,7 @@ function ClusterCard({ e, tile }: { e: ClusterEvent; tile?: boolean }) {
       </View>
       <Text style={s.meta}>
         {e.buys} buys · avg {withUsd(sol(e.avg, 2, e.collection.currency), e.avg, e.collection.currency)}
-        {e.vsFloorPct != null && <Text style={{ color: below ? C.up : C.dim }}> · {pct(e.vsFloorPct)} vs floor</Text>}
+        {fn && <Text style={{ color: fn.color }}> · {fn.text}</Text>}
         {' '}· {timeAgo(e.t)} ago
       </Text>
     </View>
