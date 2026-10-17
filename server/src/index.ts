@@ -2,6 +2,7 @@ import cors from "@fastify/cors";
 import Fastify from "fastify";
 import { ZodError } from "zod";
 import { startAlerts } from "./alerts.ts";
+import { startAdmin } from "./admin.ts";
 import { startAnalytics } from "./analytics.ts";
 import { COLLECTIONS, config } from "./config.ts";
 import { smartMoney } from "./discover.ts";
@@ -66,6 +67,7 @@ startPracticeSeasons();
 startNames();
 startAlerts();
 startAnalytics();
+startAdmin(); // reads bridge fees back from Relay
 startMints();
 // Smart-money holdings take a few seconds to compute: keep them warm.
 setTimeout(() => smartMoney(), 60_000).unref();

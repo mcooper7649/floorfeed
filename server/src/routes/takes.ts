@@ -2,8 +2,7 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 import { authorize, privyUser } from "../auth.ts";
-import { config } from "../config.ts";
-import { bearer, secretMatches } from "../http.ts";
+import { isAdmin } from "../admin.ts";
 import { TakeError, collectionTakes, deleteTake, getProfile, nameProblem, postTake, recentTheses, reportTake, setProfileName, setShowOnWallets, signedMessage, toggleLike } from "../takes.ts";
 import { syncPrivyWallets } from "../user-wallets.ts";
 
@@ -84,10 +83,10 @@ export function takeRoutes(app: FastifyInstance) {
     if (!userId) return reply.code(401).send({ error: "Sign in again." });
     try { return deleteTake(id, userId); } catch (err) { return takeReply(reply, err); }
   });
-  // Moderation: bearer token only (not the dashboard cookie).
+  // Moderation: an admin's bearer (Privy or the admin token), never the dashboard cookie.
   app.delete("/admin/takes/:id", async (req, reply) => {
     const { id } = TakeId.parse(req.params);
-    if (!secretMatches(bearer(req) ?? "", config.adminToken)) return reply.code(404).send();
+    if (!(await isAdmin(req, { changes: true }))) return reply.code(404).send();
     try { return deleteTake(id, null); } catch (err) { return takeReply(reply, err); }
   });
 }

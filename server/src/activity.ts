@@ -2,7 +2,7 @@ import { db } from "./db.ts";
 import { bridgeStatus, solTxInfo } from "./bridge.ts";
 import { forgetHoldings } from "./chain.ts";
 import { EVM_CHAINS } from "./config.ts";
-import { evmTxInfo, forgetBalances } from "./trade-evm.ts";
+import { buyFeePct, evmTxInfo, forgetBalances } from "./trade-evm.ts";
 
 // A wallet's FloorFeed transactions (buys, sells, approvals, bridges, sends,
 // unwraps) with their real on-chain outcome, so users can confirm a trade went
@@ -29,6 +29,12 @@ CREATE TABLE IF NOT EXISTS wallet_activity (
 );
 CREATE INDEX IF NOT EXISTS wallet_activity_wallet ON wallet_activity (wallet, created_at DESC);
 `);
+// FloorFeed's own fee on the entry, for the admin panel (admin.ts): the
+// buy fee rate when a buy was recorded, and a bridge's Relay app fee once read.
+const cols = (db.prepare(`PRAGMA table_info(wallet_activity)`).all() as { name: string }[]).map((c) => c.name);
+if (!cols.includes("app_fee_bps")) db.exec(`ALTER TABLE wallet_activity ADD COLUMN app_fee_bps INTEGER`);
+if (!cols.includes("app_fee_usd")) db.exec(`ALTER TABLE wallet_activity ADD COLUMN app_fee_usd REAL`);
+if (!cols.includes("app_fee_checked")) db.exec(`ALTER TABLE wallet_activity ADD COLUMN app_fee_checked INTEGER NOT NULL DEFAULT 0`);
 
 export const ACTIVITY_KINDS = ["buy", "sell", "approve", "bridge", "send", "unwrap", "mint"] as const;
 type Row = {
@@ -38,8 +44,8 @@ type Row = {
 };
 
 const insert = db.prepare(`INSERT OR IGNORE INTO wallet_activity
-  (hash, wallet, chain, kind, title, amount, unit, symbol, mint, request_id, to_chain, created_at, updated_at)
-  VALUES (@hash, @wallet, @chain, @kind, @title, @amount, @unit, @symbol, @mint, @request_id, @to_chain, @now, @now)`);
+  (hash, wallet, chain, kind, title, amount, unit, symbol, mint, request_id, to_chain, app_fee_bps, created_at, updated_at)
+  VALUES (@hash, @wallet, @chain, @kind, @title, @amount, @unit, @symbol, @mint, @request_id, @to_chain, @fee_bps, @now, @now)`);
 const setStatus = db.prepare("UPDATE wallet_activity SET status = ?, out_tx = COALESCE(?, out_tx), updated_at = ? WHERE hash = ?");
 const remove = db.prepare("DELETE FROM wallet_activity WHERE hash = ?");
 const list = db.prepare("SELECT * FROM wallet_activity WHERE wallet = ? ORDER BY created_at DESC LIMIT ?");
@@ -61,6 +67,8 @@ export function recordActivity(a: {
     hash: solana ? a.hash : a.hash.toLowerCase(), wallet, chain: a.chain, kind: a.kind, title: a.title.slice(0, 140),
     amount: a.amount ?? null, unit: a.unit ?? null, symbol: a.symbol ?? null, mint: a.mint ?? null,
     request_id: a.requestId ?? null, to_chain: a.toChain ?? null, now: now(),
+    // In-app OpenSea buys pay FloorFeed's buy fee, when one is set (trade-evm.ts).
+    fee_bps: a.kind === "buy" && !solana ? Math.round((buyFeePct() ?? 0) * 100) || null : null,
   });
 }
 

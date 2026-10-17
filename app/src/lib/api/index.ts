@@ -1,6 +1,7 @@
 // The FloorFeed API client. One module per area, mirroring server/src/routes;
 // `api` keeps every endpoint under one flat name.
 import { accountApi } from './account';
+import { adminApi } from './admin';
 import { launchApi } from './launch';
 import { marketApi } from './market';
 import { mintsApi } from './mints';
@@ -10,6 +11,7 @@ import { walletApi } from './wallet';
 
 export { apiUrl, setTokenGetter } from './client';
 export type * from './account';
+export type * from './admin';
 export type * from './launch';
 export type * from './market';
 export type * from './mints';
@@ -25,4 +27,5 @@ export const api = {
   ...tradeApi,
   ...mintsApi,
   ...launchApi,
+  ...adminApi,
 };

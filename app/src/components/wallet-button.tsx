@@ -14,6 +14,7 @@ import { api, type Capabilities } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { shortAddr } from '@/lib/format';
 import { useEvmWallet } from '@/lib/evm-wallet';
+import { useIsAdmin } from '@/lib/admin';
 import { useLayout } from '@/lib/layout';
 import { useWalletName } from '@/lib/names';
 import { useProfile } from '@/lib/profile';
@@ -270,7 +271,8 @@ function AccountView({ onClose, onDismiss, onDeposit, onSend, onSignIn, onSignOu
   const looked = useWalletName(w.address ?? ew.address);
   const [browser, setBrowser] = useState(false);
   const signedIn = !!auth.userId;
-  const go = (to: '/profile' | '/settings' | '/history' | '/support') => { onClose(); router.push(to); };
+  const isAdmin = useIsAdmin();
+  const go = (to: '/profile' | '/settings' | '/history' | '/support' | '/admin') => { onClose(); router.push(to); };
 
   const name = signedIn ? profile?.name ?? profile?.fallback ?? null : looked;
   const shown = name ?? shortAddr((w.address ?? ew.address)!);
@@ -367,6 +369,8 @@ function AccountView({ onClose, onDismiss, onDeposit, onSend, onSignIn, onSignOu
         <MenuRow glyph="↻" label="History" sub="Every buy, sale, deposit and send" onPress={() => go('/history')} />
         <View style={s.divider} />
         <MenuRow glyph="?" label="Help and support" onPress={() => go('/support')} />
+        {isAdmin && <View style={s.divider} />}
+        {isAdmin && <MenuRow glyph="★" label="Admin" sub="Revenue, users, marketing, moderation" onPress={() => go('/admin')} />}
       </View>
 
       {signedIn && (

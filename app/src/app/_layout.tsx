@@ -66,6 +66,7 @@ export default function RootLayout() {
             <Stack.Screen name="how-it-works" options={{ title: 'How it works', headerBackTitle: 'Back', headerShown: !web }} />
             <Stack.Screen name="profile" options={{ title: 'Profile', headerBackTitle: 'Back', headerShown: !web }} />
             <Stack.Screen name="settings" options={{ title: 'Settings', headerBackTitle: 'Back', headerShown: !web }} />
+            <Stack.Screen name="admin" options={{ title: 'Admin', headerBackTitle: 'Back', headerShown: !web }} />
           </Stack>
         </Shell>
         <UpdateBanner />

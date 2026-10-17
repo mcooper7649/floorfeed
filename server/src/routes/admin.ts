@@ -1,6 +1,7 @@
 // Analytics beacons, the admin dashboard, support reports and the Helius webhook.
-import type { FastifyInstance, FastifyReply } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
+import { activity, isAdmin, marketing, moderation, restoreTake, revenue, setLaunchHidden, system, users } from "../admin.ts";
 import { checkAlerts } from "../alerts.ts";
 import { dashboard, record, summary, type Hit } from "../analytics.ts";
 import { collectionOfMint } from "../chain.ts";
@@ -42,17 +43,41 @@ export function adminRoutes(app: FastifyInstance) {
     return summary(q.days);
   });
 
+  // The owner's admin panel (admin.ts; app /admin). 404 for everyone else.
+  app.get("/admin/me", async (req) => ({ admin: await isAdmin(req) }));
+  const panel = <T,>(f: (days: number) => T | Promise<T>) => async (req: FastifyRequest, reply: FastifyReply) => {
+    if (!(await isAdmin(req))) return reply.code(404).send();
+    const { days } = z.object({ days: Days }).parse(req.query);
+    return reply.header("cache-control", "no-store").send(await f(days));
+  };
+  app.get("/admin/revenue", panel(revenue));
+  app.get("/admin/users", panel(users));
+  app.get("/admin/marketing", panel(marketing));
+  app.get("/admin/activity", panel(activity));
+  app.get("/admin/moderation", panel(() => moderation()));
+  app.get("/admin/system", panel(() => system()));
+  app.post("/admin/takes/:id/restore", async (req, reply) => {
+    if (!(await isAdmin(req, { changes: true }))) return reply.code(404).send();
+    const { id } = z.object({ id: z.coerce.number().int() }).parse(req.params);
+    return restoreTake(id) ? { ok: true } : reply.code(404).send({ error: "Not found." });
+  });
+  app.post("/admin/launches/:id/:action", async (req, reply) => {
+    if (!(await isAdmin(req, { changes: true }))) return reply.code(404).send();
+    const { id, action } = z.object({ id: z.string(), action: z.enum(["hide", "show"]) }).parse(req.params);
+    return setLaunchHidden(id, action === "hide") ? { ok: true } : reply.code(404).send({ error: "Not found." });
+  });
+
   // Support form (support.ts): anyone can report; the admin token lists / closes.
   app.post("/support", async (req, reply) => {
     try { return await submitReport(req, req.body); } catch (err) { return supportReply(reply, err); }
   });
   app.get("/admin/support", async (req, reply) => {
-    if (!adminOk(req)) return reply.code(404).send();
+    if (!(await isAdmin(req))) return reply.code(404).send();
     const q = z.object({ status: z.enum(["open", "closed", "all"]).default("open"), limit: z.coerce.number().int().min(1).max(500).default(100) }).parse(req.query);
     return reply.header("cache-control", "no-store").send({ reports: listReports(q.status, q.limit) });
   });
   app.post("/admin/support/:id/:action", async (req, reply) => {
-    if (!adminOk(req)) return reply.code(404).send();
+    if (!(await isAdmin(req, { changes: true }))) return reply.code(404).send();
     const { id, action } = z.object({ id: z.coerce.number().int(), action: z.enum(["close", "reopen"]) }).parse(req.params);
     try { return setReportStatus(id, action === "close" ? "closed" : "open"); } catch (err) { return supportReply(reply, err); }
   });
