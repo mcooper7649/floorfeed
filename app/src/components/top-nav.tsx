@@ -1,8 +1,8 @@
 import { Link, router, usePathname } from 'expo-router';
-import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { AlertsBell } from '@/components/alerts-bell';
+import { SearchBox } from '@/components/search-box';
 import { WalletButton } from '@/components/wallet-button';
 import { C } from '@/constants/brand';
 import { T, display } from '@/constants/type';
@@ -26,15 +26,9 @@ export function TopNav({ back }: { back?: boolean }) {
   // Mid-width windows drop the search box so the links and wallet still fit;
   // Markets has its own search.
   const roomy = useWindowDimensions().width >= 1300;
-  const [q, setQ] = useState('');
 
   // On wide web the root layout draws the one header; pages' own back bars step aside.
   if (back && wide) return null;
-
-  const search = () => {
-    const query = q.trim();
-    router.push({ pathname: '/markets', params: query ? { q: query } : {} });
-  };
 
   return (
     <View style={s.bar}>
@@ -69,17 +63,7 @@ export function TopNav({ back }: { back?: boolean }) {
               })}
             </View>
             <View style={s.spacer} />
-            {roomy && <TextInput
-              value={q}
-              onChangeText={setQ}
-              onSubmitEditing={search}
-              placeholder="Search collections"
-              placeholderTextColor={C.dim}
-              style={s.search}
-              autoCorrect={false}
-              autoCapitalize="none"
-              accessibilityLabel="Search collections"
-            />}
+            {roomy && <SearchBox />}
             <AlertsBell />
             <WalletButton />
           </>
@@ -103,8 +87,4 @@ const s = StyleSheet.create({
   link: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
   linkOn: { backgroundColor: C.cardHi },
   linkTxt: { ...T.bodyStrong, color: C.dim },
-  search: {
-    width: 280, minWidth: 150, flexShrink: 1, backgroundColor: C.card, borderRadius: 12, borderWidth: 1, borderColor: C.border,
-    color: C.text, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15,
-  },
 });
