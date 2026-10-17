@@ -163,7 +163,7 @@ export function updateDraft(id: string, userId: string, raw: unknown) {
 
 export const getDraft = (id: string, userId: string) => view(owned(id, userId));
 export const myLaunches = (userId: string) =>
-  (db.prepare(`SELECT * FROM launches WHERE user_id = ? ORDER BY updated_at DESC LIMIT 50`).all(userId) as Row[]).map(view);
+  (db.prepare(`SELECT * FROM launches WHERE user_id = ? AND status != 'hidden' ORDER BY updated_at DESC LIMIT 50`).all(userId) as Row[]).map(view);
 
 export function deleteDraft(id: string, userId: string) {
   const r = owned(id, userId);
