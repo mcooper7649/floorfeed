@@ -279,7 +279,9 @@ export async function walletHistory(wallets: string[]) {
     }
     return { entries: merged, failed: "failed" in market };
   }));
-  const entries = parts.flatMap((p) => p.entries).sort((a, b) => b.at - a.at);
+  // OpenSea sometimes reports the same transfer twice: one entry per id.
+  const seen = new Set<string>();
+  const entries = parts.flatMap((p) => p.entries).filter((e) => !seen.has(e.id) && !!seen.add(e.id)).sort((a, b) => b.at - a.at);
   return { entries, more, partial: parts.some((p) => p.failed) };
 }
 

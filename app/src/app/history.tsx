@@ -71,7 +71,11 @@ export default function HistoryPage() {
   }, [load]);
 
   const current = data?.key === key ? data : null;
-  const all = useMemo(() => (current && 'h' in current ? current.h.entries : []), [current]);
+  // One row per id (rows are keyed by it; a repeat would linger after filtering).
+  const all = useMemo(() => {
+    const seen = new Set<string>();
+    return (current && 'h' in current ? current.h.entries : []).filter((e) => !seen.has(e.id) && !!seen.add(e.id));
+  }, [current]);
   const busy = all.some(inFlight);
   useEffect(() => {
     if (!busy) return;
