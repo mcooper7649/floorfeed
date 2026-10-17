@@ -2,6 +2,7 @@ import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DepositSheet } from '@/components/deposit-sheet';
 import { ChainBadge } from '@/components/chain-badge';
@@ -13,6 +14,7 @@ import { api, type Capabilities } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { shortAddr } from '@/lib/format';
 import { useEvmWallet } from '@/lib/evm-wallet';
+import { useLayout } from '@/lib/layout';
 import { useWalletName } from '@/lib/names';
 import { useProfile } from '@/lib/profile';
 import { useTradeMode } from '@/lib/mode';
@@ -112,6 +114,9 @@ export function WalletSheet({ open, onClose }: { open: boolean; onClose: () => v
   const [ethDeposit, setEthDeposit] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
   const openSend = () => { onClose(); setSendOpen(true); };
+  // A centered card on wide screens; a bottom sheet on phones.
+  const { wide } = useLayout();
+  const { bottom } = useSafeAreaInsets();
 
   // Privy draws its own modal; close ours first so they don't stack.
   const signIn = () => { onClose(); auth.login(); };
@@ -125,9 +130,10 @@ export function WalletSheet({ open, onClose }: { open: boolean; onClose: () => v
 
   return (
     <>
-    <Modal visible={open} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={s.backdrop} onPress={onClose}>
-        <Pressable style={s.sheet} onPress={() => {}}>
+    <Modal visible={open} transparent animationType={wide ? 'fade' : 'slide'} onRequestClose={onClose}>
+      <Pressable style={[s.backdrop, !wide && s.backdropPhone]} onPress={onClose}>
+        <Pressable style={[s.sheet, !wide && [s.sheetPhone, { paddingBottom: 16 + bottom }]]} onPress={() => {}}>
+          {!wide && <View style={s.grab} />}
           <ScrollView contentContainerStyle={{ gap: w.address || ew.address ? 16 : 14 }} showsVerticalScrollIndicator={false}>
           {w.address || ew.address ? (
             <AccountView onClose={onClose} onDeposit={(c) => { onClose(); if (c === 'solana') setDeposit(true); else setEthDeposit(true); }}
@@ -496,6 +502,9 @@ const s = StyleSheet.create({
   bal: T.metaNum,
   backdrop: { flex: 1, backgroundColor: '#000000AA', alignItems: 'center', justifyContent: 'center', padding: 16 },
   sheet: { width: '100%', maxWidth: 420, maxHeight: '92%', backgroundColor: C.card, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: C.border },
+  backdropPhone: { justifyContent: 'flex-end', padding: 0 },
+  sheetPhone: { maxWidth: 560, maxHeight: '90%', borderBottomLeftRadius: 0, borderBottomRightRadius: 0, borderBottomWidth: 0, paddingTop: 8 },
+  grab: { alignSelf: 'center', width: 36, height: 4, borderRadius: 2, backgroundColor: C.border, marginBottom: 12 },
   title: T.title,
   note: T.meta,
   meta: T.meta,
