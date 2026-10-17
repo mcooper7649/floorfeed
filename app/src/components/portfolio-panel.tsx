@@ -354,6 +354,7 @@ function NftRow({ n, unit, value, usd: dollars, change, sales, pl, plUsd, onOpen
   const ew = useEvmWallet();
   const [note, setNote] = useState<{ text: string; bad?: boolean } | null>(null);
   const view = () => { onOpen?.(); router.push({ pathname: '/item/[symbol]/[id]', params: { symbol: n.collection.symbol, id: n.mint } }); };
+  const viewCollection = () => { onOpen?.(); router.push(n.drop ? { pathname: '/c/[chain]/[address]', params: n.drop } : { pathname: '/collection/[symbol]', params: { symbol: n.collection.symbol } }); };
   // Selling and listing in-app are OpenSea (EVM) only, and not for launchpad drops yet.
   const tradable = n.chain !== 'solana' && !n.drop && !!ew.address;
   const cancelListing = async () => {
@@ -377,7 +378,8 @@ function NftRow({ n, unit, value, usd: dollars, change, sales, pl, plUsd, onOpen
     { label: 'Sell to best offer', onPress: () => act({ kind: 'sell', ...target }) },
     'sep',
     { label: 'View NFT', onPress: view },
-  ] : [{ label: 'View NFT', onPress: view }];
+    { label: 'View collection', onPress: viewCollection },
+  ] : [{ label: 'View NFT', onPress: view }, { label: 'View collection', onPress: viewCollection }];
   return (
     <Pressable style={({ hovered }: { hovered?: boolean }) => [s.row, hovered && { backgroundColor: C.card }]}
       onPress={view} {...menuProps((e) => menu(e, items, n.name ?? n.collection.name))}>

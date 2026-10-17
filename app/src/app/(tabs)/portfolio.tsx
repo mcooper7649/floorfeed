@@ -397,6 +397,7 @@ function RealPortfolio({ solAddress, evmAddress }: { solAddress: string | null; 
           ? `https://magiceden.io/item-details/${n.mint}`
           : openseaAsset(n.evmChain ?? 'ethereum', n.mint);
         const view = () => router.push({ pathname: '/item/[symbol]/[id]', params: { symbol: n.collection.symbol, id: n.mint } });
+        const viewCollection = () => router.push(n.drop ? { pathname: '/c/[chain]/[address]', params: n.drop } : { pathname: '/collection/[symbol]', params: { symbol: n.collection.symbol } });
         const cancelListing = async () => {
           if (!n.listing) return;
           setNotice({ mint: n.mint, text: 'Sign in your wallet to cancel the listing…' });
@@ -412,17 +413,17 @@ function RealPortfolio({ solAddress, evmAddress }: { solAddress: string | null; 
         // Right-click / long-press: the same quick actions as the Your NFTs panel.
         const items: MenuItem[] = n.drop ? [
           { label: 'Open on OpenSea ↗', onPress: () => { void Linking.openURL(sellUrl); } },
-          'sep', { label: 'View NFT', onPress: view },
+          'sep', { label: 'View NFT', onPress: view }, { label: 'View collection', onPress: viewCollection },
         ] : n.chain === 'evm' ? [
           ...(n.listing
             ? [{ label: 'Edit listing', onPress: () => setListing(n) },
                { label: 'Cancel listing', danger: true, onPress: () => { void cancelListing(); } }]
             : [{ label: 'List for sale', onPress: () => setListing(n) }]),
           { label: 'Sell to best offer', onPress: () => setSelling(n) },
-          'sep', { label: 'View NFT', onPress: view },
+          'sep', { label: 'View NFT', onPress: view }, { label: 'View collection', onPress: viewCollection },
         ] : [
           { label: 'Sell on Magic Eden ↗', onPress: () => { void Linking.openURL(sellUrl); } },
-          'sep', { label: 'View NFT', onPress: view },
+          'sep', { label: 'View NFT', onPress: view }, { label: 'View collection', onPress: viewCollection },
         ];
         const note = notice?.mint === n.mint ? notice : null;
         return (
