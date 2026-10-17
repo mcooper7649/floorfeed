@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { DepositSheet } from '@/components/deposit-sheet';
-import { ProfileName } from '@/components/profile-name';
+import { ChainBadge } from '@/components/chain-badge';
 import { SendSheet } from '@/components/send-sheet';
 import { ModeChip, ModeToggle } from '@/components/mode-toggle';
 import { C } from '@/constants/brand';
@@ -18,6 +18,8 @@ import { useProfile } from '@/lib/profile';
 import { useTradeMode } from '@/lib/mode';
 import { useWallet } from '@/lib/wallet';
 import { track } from '@/lib/analytics';
+
+const AMBER = '#F5B547'; // needs attention (same as Radar's caution hint)
 
 // SOL balance for the connected address, refreshed when the address changes.
 export function useBalance(address: string | null) {
@@ -61,7 +63,6 @@ export function WalletButton() {
   if (!w.supported) return null;
   // The Solana wallet when there is one, otherwise the Ethereum wallet.
   const address = w.address ?? ew.address;
-  const icon = w.address ? w.walletIcon : ew.walletIcon;
 
   return (
     <>
@@ -70,7 +71,6 @@ export function WalletButton() {
         {address ? (
           <>
             <ModeChip mode={mode} />
-            {icon ? <Image source={icon} style={s.icon} /> : null}
             <WalletLabel address={address} />
             {w.address
               ? balance != null && <Text style={s.bal}>{balance.toFixed(2)} SOL</Text>
@@ -85,18 +85,6 @@ export function WalletButton() {
   );
 }
 
-// Profile and Settings (2-step, recovery, preferences) from the account menu.
-function AccountLinks({ onGo }: { onGo: () => void }) {
-  const go = (to: '/profile' | '/settings') => { onGo(); router.push(to); };
-  return (
-    <View style={s.signedRow}>
-      <Pressable accessibilityRole="link" onPress={() => go('/profile')}><Text style={[s.link, { color: C.accent }]}>Profile</Text></Pressable>
-      <Text style={s.meta}>·</Text>
-      <Pressable accessibilityRole="link" onPress={() => go('/settings')}><Text style={[s.link, { color: C.accent }]}>Settings and security</Text></Pressable>
-    </View>
-  );
-}
-
 // Who's signed in, in the header: your FloorFeed account name when the wallet
 // is one of yours, else the wallet's .sol / ENS name (or its FloorFeed owner's),
 // else the short address.
@@ -107,19 +95,21 @@ function WalletLabel({ address }: { address: string }) {
   const own = profile?.name && (address === auth.embeddedAddress || address.toLowerCase() === auth.evmAddress?.toLowerCase()
     || profile.wallets.some((x) => x.toLowerCase() === address.toLowerCase()));
   const name = own ? profile!.name : looked;
-  return <Text style={name ? s.name : s.addr} numberOfLines={1}>{name ?? shortAddr(address)}</Text>;
+  return (
+    <>
+      <Avatar name={name ?? address} size={24} />
+      <Text style={name ? s.name : s.addr} numberOfLines={1}>{name ?? shortAddr(address)}</Text>
+    </>
+  );
 }
 
-// Picker when disconnected; account details + disconnect when connected.
+// Sign in / pick a wallet when nothing is connected; the account menu when something is.
 export function WalletSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const w = useWallet();
   const ew = useEvmWallet();
   const auth = useAuth();
-  const balance = useBalance(w.address);
   const [deposit, setDeposit] = useState(false);
   const [ethDeposit, setEthDeposit] = useState(false);
-  const openDeposit = () => { onClose(); setDeposit(true); };
-  const openEthDeposit = () => { onClose(); setEthDeposit(true); };
   const [sendOpen, setSendOpen] = useState(false);
   const openSend = () => { onClose(); setSendOpen(true); };
 
@@ -138,91 +128,10 @@ export function WalletSheet({ open, onClose }: { open: boolean; onClose: () => v
     <Modal visible={open} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={s.backdrop} onPress={onClose}>
         <Pressable style={s.sheet} onPress={() => {}}>
-          <ScrollView contentContainerStyle={{ gap: 14 }} showsVerticalScrollIndicator={false}>
-          {w.kind === 'embedded' ? (
-            <>
-              <Text style={s.title}>Your account</Text>
-              {auth.label ? <Text style={s.meta}>Signed in as {auth.label}</Text> : null}
-              <Text style={s.label}>Trading mode</Text>
-              <ModeToggle />
-              <Text style={s.label}>Solana wallet, used in Real mode</Text>
-              <View style={s.acct}>
-                <View style={[s.iconBig, s.embeddedIcon]}><Text style={s.embeddedGlyph}>F</Text></View>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.addrBig} selectable>{w.address}</Text>
-                  <Text style={s.meta}>
-                    FloorFeed wallet · {balance != null ? `${balance.toFixed(4)} SOL` : 'loading balance…'}
-                  </Text>
-                </View>
-              </View>
-              <Text style={s.note}>
-                Your wallet&apos;s key is secured by Privy and never reaches FloorFeed.
-              </Text>
-              <ProfileName />
-              <AccountLinks onGo={onClose} />
-              <Pressable accessibilityRole="button" onPress={openDeposit} style={s.primary}>
-                <Text style={s.primaryTxt}>Deposit SOL</Text>
-              </Pressable>
-              <Pressable accessibilityRole="button" onPress={openSend} style={s.secondary}>
-                <Text style={s.secondaryTxt}>Send or withdraw</Text>
-              </Pressable>
-              <EvmSection onDeposit={openEthDeposit} />
-              {w.available.length > 0 && (
-                <>
-                  <Text style={s.label}>Or use a browser wallet</Text>
-                  {w.available.map((o) => (
-                    <Pressable accessibilityRole="button" key={o.name} onPress={() => pick(o.name)} disabled={w.connecting} style={s.option}>
-                      <Image source={o.icon} style={s.iconBig} />
-                      <Text style={s.optionTxt}>{o.name}</Text>
-                      <Text style={s.meta}>{w.connecting ? 'Check your wallet…' : 'Detected'}</Text>
-                    </Pressable>
-                  ))}
-                </>
-              )}
-              <Pressable accessibilityRole="button" onPress={signOut} style={s.secondary}>
-                <Text style={s.secondaryTxt}>Sign out</Text>
-              </Pressable>
-            </>
-          ) : w.address ? (
-            <>
-              <Text style={s.title}>Your wallet</Text>
-              <Text style={s.label}>Trading mode</Text>
-              <ModeToggle />
-              <Text style={s.label}>Solana wallet, used in Real mode</Text>
-              <View style={s.acct}>
-                {w.walletIcon ? <Image source={w.walletIcon} style={s.iconBig} /> : null}
-                <View style={{ flex: 1 }}>
-                  <Text style={s.addrBig} selectable>{w.address}</Text>
-                  <Text style={s.meta}>
-                    {w.walletName} · {balance != null ? `${balance.toFixed(4)} SOL` : 'loading balance…'}
-                  </Text>
-                </View>
-              </View>
-              <Text style={s.note}>
-                FloorFeed only sees your public address. Nothing is signed or sent without a prompt in {w.walletName}.
-              </Text>
-              <Pressable accessibilityRole="button" onPress={openDeposit} style={s.primary}>
-                <Text style={s.primaryTxt}>Deposit SOL</Text>
-              </Pressable>
-              <EvmSection onDeposit={openEthDeposit} />
-              <Pressable accessibilityRole="button" onPress={async () => { await w.disconnect(); onClose(); }} style={s.secondary}>
-                <Text style={s.secondaryTxt}>Disconnect</Text>
-              </Pressable>
-              {auth.supported && (auth.userId ? (
-                <View style={{ gap: 8 }}>
-                <ProfileName />
-                <AccountLinks onGo={onClose} />
-                <View style={s.signedRow}>
-                  <Text style={[s.meta, { flex: 1 }]}>Signed in{auth.label ? ` as ${auth.label}` : ''}</Text>
-                  <Pressable accessibilityRole="button" onPress={signOut}><Text style={s.link}>Sign out</Text></Pressable>
-                </View>
-                </View>
-              ) : (
-                <Pressable accessibilityRole="button" onPress={signIn}>
-                  <Text style={s.link}>Sign in to keep your follows and practice trades across devices</Text>
-                </Pressable>
-              ))}
-            </>
+          <ScrollView contentContainerStyle={{ gap: w.address || ew.address ? 16 : 14 }} showsVerticalScrollIndicator={false}>
+          {w.address || ew.address ? (
+            <AccountView onClose={onClose} onDeposit={(c) => { onClose(); if (c === 'solana') setDeposit(true); else setEthDeposit(true); }}
+              onSend={openSend} onSignIn={signIn} onSignOut={signOut} onPick={pick} />
           ) : (
             <>
               {auth.supported && (
@@ -239,15 +148,7 @@ export function WalletSheet({ open, onClose }: { open: boolean; onClose: () => v
               )}
               {!auth.supported && <Text style={s.title}>Connect a wallet</Text>}
               <Text style={s.note}>FloorFeed never sees your keys or seed phrase. Your wallet asks before signing anything.</Text>
-              {ew.address ? (
-                <>
-                  <Text style={s.label}>Solana wallet</Text>
-                  <SolanaOptions onPick={pick} />
-                  <EvmSection onDeposit={openEthDeposit} />
-                </>
-              ) : (
-                <WalletPicker onSolana={pick} />
-              )}
+              <WalletPicker onSolana={pick} />
             </>
           )}
           </ScrollView>
@@ -336,46 +237,247 @@ function WalletPicker({ onSolana }: { onSolana: (name: string) => void }) {
   );
 }
 
-// Ethereum wallet, under the Solana one: the FloorFeed (Privy) wallet or a
-// connected browser wallet, its ETH balance, and Deposit ETH.
-function EvmSection({ onDeposit }: { onDeposit: () => void }) {
+// The account menu, top to bottom: who you are (tap for Profile), Practice /
+// Real, your wallets with their balances, where to go next (Profile, Settings
+// and security, History, Help), and Sign out. Without a FloorFeed account (a
+// browser wallet only) the identity card offers sign-in instead.
+function AccountView({ onClose, onDeposit, onSend, onSignIn, onSignOut, onPick }: {
+  onClose: () => void;
+  onDeposit: (chain: 'solana' | 'ethereum') => void;
+  onSend: () => void;
+  onSignIn: () => void;
+  onSignOut: () => void;
+  onPick: (name: string) => void;
+}) {
+  const w = useWallet();
   const ew = useEvmWallet();
-  const bal = useEvmBalance(ew.address);
-  if (!ew.supported) return null;
+  const auth = useAuth();
+  const { profile } = useProfile();
+  const looked = useWalletName(w.address ?? ew.address);
+  const [browser, setBrowser] = useState(false);
+  const signedIn = !!auth.userId;
+  const go = (to: '/profile' | '/settings' | '/history' | '/support') => { onClose(); router.push(to); };
+
+  const name = signedIn ? profile?.name ?? profile?.fallback ?? null : looked;
+  const shown = name ?? shortAddr((w.address ?? ew.address)!);
+  const sec = auth.security;
+  // Same nudge as onboarding's "Protect your account" step.
+  const unprotected = signedIn && !!sec && (sec.mfa.length === 0 || sec.logins.length < 2);
+  const canSend = w.kind === 'embedded' || ew.kind === 'embedded';
+  const extras = w.kind === 'embedded' ? w.available : [];
+
+  return (
+    <>
+      <View style={s.headRow}>
+        <Pressable accessibilityRole={signedIn ? 'link' : undefined} disabled={!signedIn} onPress={() => go('/profile')}
+          style={({ hovered }: { hovered?: boolean }) => [s.who, hovered && { backgroundColor: C.cardHi }]}>
+          <Avatar name={shown} size={44} />
+          <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+            <Text style={s.whoName} numberOfLines={1}>{shown}</Text>
+            <Text style={s.meta} numberOfLines={1}>
+              {signedIn ? (auth.label ?? 'Signed in') : `${w.walletName ?? ew.walletName ?? 'Wallet'} connected`}
+            </Text>
+          </View>
+          {signedIn && <Text style={s.chev}>›</Text>}
+        </Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={onClose} hitSlop={10} style={s.close}>
+          <Text style={s.closeTxt}>✕</Text>
+        </Pressable>
+      </View>
+
+      {!signedIn && auth.supported && (
+        <Pressable accessibilityRole="button" onPress={onSignIn} style={s.signInCard}>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={s.rowTitle}>Sign in to FloorFeed</Text>
+            <Text style={s.meta}>Pick a name, keep your follows and practice trades on every device.</Text>
+          </View>
+          <Text style={[s.chev, { color: C.accent }]}>›</Text>
+        </Pressable>
+      )}
+
+      <ModeToggle />
+
+      <View style={{ gap: 8 }}>
+        <Text style={s.label}>Wallets</Text>
+        <View style={s.group}>
+          {w.address ? (
+            <WalletRow chain="solana" address={w.address} wallet={w.kind === 'embedded' ? null : w.walletName}
+              onDeposit={() => onDeposit('solana')}
+              onDisconnect={w.kind === 'embedded' ? undefined : async () => { await w.disconnect(); onClose(); }} />
+          ) : (
+            <MissingWallet chain="solana" open={browser} onToggle={() => setBrowser((v) => !v)} onPick={onPick} />
+          )}
+          {ew.supported && <View style={s.divider} />}
+          {ew.supported && (ew.address ? (
+            <WalletRow chain="ethereum" address={ew.address} wallet={ew.kind === 'embedded' ? null : ew.walletName}
+              onDeposit={() => onDeposit('ethereum')}
+              onDisconnect={ew.kind === 'extension' ? ew.disconnect : undefined} />
+          ) : (
+            <MissingWallet chain="ethereum" />
+          ))}
+        </View>
+        {canSend && (
+          <Pressable accessibilityRole="button" onPress={onSend} style={s.secondary}>
+            <Text style={s.secondaryTxt}>Send or withdraw</Text>
+          </Pressable>
+        )}
+        <Text style={s.caption}>
+          {w.kind === 'embedded' || ew.kind === 'embedded'
+            ? 'Keys for FloorFeed wallets are secured by Privy and never reach FloorFeed.'
+            : 'FloorFeed only sees your public address. Your wallet asks before signing anything.'}
+        </Text>
+        {extras.length > 0 && (
+          <>
+            <Pressable accessibilityRole="button" onPress={() => setBrowser((v) => !v)} hitSlop={6}>
+              <Text style={s.linkSmall}>{browser ? 'Hide browser wallets' : 'Use a browser wallet instead'}</Text>
+            </Pressable>
+            {browser && extras.map((o) => (
+              <Pressable accessibilityRole="button" key={o.name} onPress={() => onPick(o.name)} disabled={w.connecting} style={s.option}>
+                <Image source={o.icon} style={s.icon} />
+                <Text style={s.optionTxt}>{o.name}</Text>
+                <Text style={s.meta}>{w.connecting ? 'Check your wallet…' : 'Connect'}</Text>
+              </Pressable>
+            ))}
+          </>
+        )}
+      </View>
+
+      <View style={s.group}>
+        {signedIn && <MenuRow glyph="◉" label="Profile" sub="Your name, theses and stats" onPress={() => go('/profile')} />}
+        {signedIn && <View style={s.divider} />}
+        {signedIn && (
+          <MenuRow glyph="⚙" label="Settings and security" onPress={() => go('/settings')}
+            sub={unprotected ? 'Turn on 2-step and add a backup sign-in' : '2-step, recovery, preferences'} warn={unprotected} />
+        )}
+        {signedIn && <View style={s.divider} />}
+        <MenuRow glyph="↻" label="History" sub="Every buy, sale, deposit and send" onPress={() => go('/history')} />
+        <View style={s.divider} />
+        <MenuRow glyph="?" label="Help and support" onPress={() => go('/support')} />
+      </View>
+
+      {signedIn && (
+        <Pressable accessibilityRole="button" onPress={onSignOut} hitSlop={6} style={s.signOut}>
+          <Text style={s.signOutTxt}>Sign out</Text>
+        </Pressable>
+      )}
+    </>
+  );
+}
+
+// A round initial, the account's face in the header and the account menu.
+export function Avatar({ name, size = 32 }: { name: string; size?: number }) {
+  const ch = (name.replace(/^0x/i, '').match(/[A-Za-z0-9]/)?.[0] ?? '?').toUpperCase();
+  return (
+    <View style={[s.avatar, { width: size, height: size, borderRadius: size / 2 }]}>
+      <Text style={[s.avatarTxt, { fontSize: size * 0.42 }]}>{ch}</Text>
+    </View>
+  );
+}
+
+function WalletRow({ chain, address, wallet, onDeposit, onDisconnect }: {
+  chain: 'solana' | 'ethereum'; address: string; wallet: string | null;
+  onDeposit: () => void; onDisconnect?: () => void;
+}) {
+  const sol = useBalance(chain === 'solana' ? address : null);
+  const eth = useEvmBalance(chain === 'ethereum' ? address : null);
+  const [copied, setCopied] = useState(false);
+  const bal = chain === 'solana' ? (sol != null ? `${sol.toFixed(4)} SOL` : '…') : (eth != null ? `${eth.toFixed(4)} ETH` : '…');
+  const copy = () => {
+    if (typeof navigator === 'undefined' || !navigator.clipboard) return;
+    navigator.clipboard.writeText(address).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }).catch(() => {});
+  };
+  return (
+    <View style={s.walletRow}>
+      <ChainBadge chain={chain} />
+      <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+        <Text style={s.balTxt} numberOfLines={1}>{bal}</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Copy ${chain} address`} onPress={copy} hitSlop={4}>
+          <Text style={s.meta} numberOfLines={1}>
+            {copied ? 'Address copied' : `${shortAddr(address)} ⧉`}{wallet ? ` · ${wallet}` : ''}
+          </Text>
+        </Pressable>
+      </View>
+      {onDisconnect && (
+        <Pressable accessibilityRole="button" onPress={onDisconnect} hitSlop={6}><Text style={s.linkSmall}>Disconnect</Text></Pressable>
+      )}
+      <Pressable accessibilityRole="button" accessibilityLabel={`Deposit ${chain === 'solana' ? 'SOL' : 'ETH'}`} onPress={onDeposit} style={s.pill}>
+        <Text style={s.pillTxt}>Deposit</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+// A network with no wallet yet: connect one from the browser.
+function MissingWallet({ chain, open, onToggle, onPick }: {
+  chain: 'solana' | 'ethereum'; open?: boolean; onToggle?: () => void; onPick?: (name: string) => void;
+}) {
+  const ew = useEvmWallet();
+  if (chain === 'solana') {
+    return (
+      <View style={{ gap: 8 }}>
+        <View style={s.walletRow}>
+          <ChainBadge chain="solana" />
+          <Text style={[s.meta, { flex: 1 }]}>No Solana wallet</Text>
+          <Pressable accessibilityRole="button" onPress={onToggle} style={s.pill}><Text style={s.pillTxt}>{open ? 'Cancel' : 'Connect'}</Text></Pressable>
+        </View>
+        {open && onPick && <SolanaOptions onPick={onPick} />}
+      </View>
+    );
+  }
   return (
     <View style={{ gap: 8 }}>
-      <Text style={s.label}>Ethereum wallet, used in Real mode</Text>
-      {ew.address ? (
-        <>
-          <View style={s.evmRow}>
-            {ew.walletIcon ? <Image source={ew.walletIcon} style={s.icon} /> : null}
-            <Text style={s.addr} selectable>{shortAddr(ew.address)}</Text>
-            <Text style={[s.meta, { flex: 1 }]}>{ew.walletName} · {bal != null ? `${bal.toFixed(4)} ETH` : '…'}</Text>
-          </View>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <Pressable accessibilityRole="button" onPress={onDeposit} style={[s.secondary, { flex: 1 }]}>
-              <Text style={s.secondaryTxt}>Deposit ETH</Text>
-            </Pressable>
-            {ew.kind === 'extension' && (
-              <Pressable accessibilityRole="button" onPress={ew.disconnect} style={[s.secondary, { flex: 1 }]}>
-                <Text style={s.secondaryTxt}>Disconnect</Text>
-              </Pressable>
-            )}
-          </View>
-        </>
-      ) : ew.available.length ? (
-        ew.available.map((o) => (
-          <Pressable accessibilityRole="button" key={o.name} onPress={() => ew.connect(o.name)} disabled={ew.connecting} style={s.option}>
-            <Image source={o.icon} style={s.iconBig} />
-            <Text style={s.optionTxt}>{o.name}</Text>
-            <Text style={s.meta}>{ew.connecting ? 'Check your wallet…' : 'Connect'}</Text>
-          </Pressable>
-        ))
-      ) : (
-        <Text style={s.meta}>Sign in for a free Ethereum wallet, or install MetaMask to connect one.</Text>
-      )}
+      <View style={s.walletRow}>
+        <ChainBadge chain="ethereum" />
+        <Text style={[s.meta, { flex: 1 }]}>{ew.available.length ? 'No Ethereum wallet' : 'Install MetaMask to connect one'}</Text>
+      </View>
+      {ew.available.map((o) => (
+        <Pressable accessibilityRole="button" key={o.name} onPress={() => ew.connect(o.name)} disabled={ew.connecting} style={s.option}>
+          <Image source={o.icon} style={s.icon} />
+          <Text style={s.optionTxt}>{o.name}</Text>
+          <Text style={s.meta}>{ew.connecting ? 'Check your wallet…' : 'Connect'}</Text>
+        </Pressable>
+      ))}
       {ew.error ? <Text style={s.err}>{ew.error}</Text> : null}
     </View>
+  );
+}
+
+function MenuRow({ glyph, label, sub, warn, onPress }: { glyph: string; label: string; sub?: string; warn?: boolean; onPress: () => void }) {
+  return (
+    <Pressable accessibilityRole="link" onPress={onPress}
+      style={({ hovered, pressed }: { hovered?: boolean; pressed?: boolean }) => [s.menuRow, (hovered || pressed) && { backgroundColor: C.card }]}>
+      <View style={s.glyph}><Text style={s.glyphTxt}>{glyph}</Text></View>
+      <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
+        <Text style={s.rowTitle}>{label}</Text>
+        {sub ? <Text style={[s.meta, warn && { color: AMBER }]} numberOfLines={1}>{sub}</Text> : null}
+      </View>
+      {warn && <View style={s.dot} />}
+      <Text style={s.chev}>›</Text>
+    </Pressable>
+  );
+}
+
+// Phones have no top bar: a round account button for the page header that
+// opens the same menu (the header WalletButton's job on desktop).
+export function AccountButton() {
+  const w = useWallet();
+  const ew = useEvmWallet();
+  const auth = useAuth();
+  const { profile } = useProfile();
+  const address = w.address ?? ew.address;
+  const looked = useWalletName(address);
+  const [open, setOpen] = useState(false);
+  if (!w.supported) return null;
+  const name = auth.userId ? profile?.name ?? profile?.fallback ?? null : looked;
+  return (
+    <>
+      <Pressable accessibilityRole="button" accessibilityLabel={address ? 'Your account' : 'Sign in'} onPress={() => setOpen(true)} hitSlop={6}>
+        {address
+          ? <Avatar name={name ?? address} size={34} />
+          : <View style={s.signInPill}><Text style={s.signInPillTxt}>{auth.supported ? 'Sign in' : 'Connect'}</Text></View>}
+      </Pressable>
+      <WalletSheet open={open} onClose={() => setOpen(false)} />
+    </>
   );
 }
 
@@ -415,6 +517,33 @@ const s = StyleSheet.create({
   label: { ...T.label, marginTop: 4 },
   link: { ...T.label, textAlign: 'center' },
   signedRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  embeddedIcon: { backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center' },
-  embeddedGlyph: { color: C.accentInk, fontWeight: '700', fontSize: 18 },
+  headRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  who: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 6, margin: -6, borderRadius: 14 },
+  whoName: { ...T.title, fontSize: 20, lineHeight: 26 },
+  close: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: C.cardHi },
+  closeTxt: { color: C.dim, fontSize: 13, fontWeight: '700' },
+  avatar: { backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center' },
+  avatarTxt: { color: C.accentInk, fontWeight: '800' },
+  chev: { color: C.muted, fontSize: 22, lineHeight: 24, fontWeight: '300' },
+  signInCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 14,
+    borderWidth: 1, borderColor: C.accent + '66', backgroundColor: C.accent + '12',
+  },
+  group: { borderRadius: 14, borderWidth: 1, borderColor: C.border, backgroundColor: C.cardHi, overflow: 'hidden' },
+  divider: { height: StyleSheet.hairlineWidth, backgroundColor: C.border, marginLeft: 12 },
+  walletRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 11 },
+  balTxt: { ...T.num, fontSize: 15 },
+  pill: { borderRadius: 999, borderWidth: 1, borderColor: C.border, backgroundColor: C.card, paddingHorizontal: 12, paddingVertical: 6 },
+  pillTxt: { color: C.text, fontSize: 13, fontWeight: '600' },
+  caption: { ...T.caption },
+  linkSmall: { color: C.dim, fontSize: 13, fontWeight: '600' },
+  menuRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, paddingVertical: 11 },
+  glyph: { width: 30, height: 30, borderRadius: 9, backgroundColor: C.card, alignItems: 'center', justifyContent: 'center' },
+  glyphTxt: { color: C.text, fontSize: 15, fontWeight: '700' },
+  rowTitle: { ...T.bodyStrong },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: AMBER },
+  signOut: { alignSelf: 'center', paddingVertical: 4, paddingHorizontal: 12 },
+  signOutTxt: { color: C.down, fontSize: 14, fontWeight: '600' },
+  signInPill: { backgroundColor: C.accent, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
+  signInPillTxt: { ...T.button, color: C.accentInk, fontSize: 14 },
 });

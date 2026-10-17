@@ -2,13 +2,15 @@ import type { ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AccountButton } from '@/components/wallet-button';
 import { C } from '@/constants/brand';
 import { T, display } from '@/constants/type';
 import { useLayout } from '@/lib/layout';
 
 // Page header: display title, one line of context, and an optional control
 // (beside the title on wide screens, under it on phones). `corner` is a small
-// button that stays on the title's line at every width.
+// button that stays on the title's line at every width. Phones also get the
+// account button there (there is no top bar to hold it).
 export function Screen({ title, subtitle, right, corner, children }: {
   title: string;
   subtitle?: string;
@@ -24,7 +26,7 @@ export function Screen({ title, subtitle, right, corner, children }: {
           <View style={{ flex: wide ? 1 : undefined, gap: 4 }}>
             <View style={s.titleRow}>
               <Text {...display} style={[wide ? T.displayL : T.display, { flexShrink: 1 }]}>{title}</Text>
-              {corner}
+              {wide ? corner : <View style={s.corner}>{corner}<AccountButton /></View>}
             </View>
             {subtitle ? <Text style={T.meta}>{subtitle}</Text> : null}
           </View>
@@ -44,6 +46,7 @@ const s = StyleSheet.create({
   head: { paddingTop: 8, paddingBottom: 14, gap: 12 },
   headWide: { paddingTop: 28, paddingBottom: 20, flexDirection: 'row', alignItems: 'flex-end', gap: 24 },
   rightNarrow: { alignSelf: 'stretch' },
+  corner: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   empty: { ...T.meta, textAlign: 'center', padding: 32, lineHeight: 20 },
 });
