@@ -10,7 +10,7 @@ import { unitOf } from "./units.ts";
 // "hot" so ingest refreshes their floors every 2 minutes while a panel is open.
 
 const row = db.prepare("SELECT floor, updated_at FROM collections WHERE symbol = ?");
-const dayAgo = db.prepare("SELECT floor FROM collection_snapshots WHERE symbol = ? AND ts <= ? AND floor IS NOT NULL ORDER BY ts DESC LIMIT 1");
+const dayAgo = db.prepare("SELECT floor FROM collection_snapshots WHERE symbol = ? AND ts <= ? AND floor > 0 ORDER BY ts DESC LIMIT 1");
 const lastSale = db.prepare("SELECT price, block_time FROM trades WHERE collection = ? ORDER BY block_time DESC LIMIT 1");
 const salesSince = db.prepare("SELECT COUNT(*) n FROM trades WHERE collection = ? AND block_time >= ?");
 

@@ -44,7 +44,7 @@ const saleRows = db.prepare(`
   SELECT signature, mint, buyer, seller, price, block_time AS t, image, source
   FROM trades WHERE collection = ? ORDER BY block_time DESC LIMIT ?`);
 const floorAt = db.prepare(
-  `SELECT floor FROM collection_snapshots WHERE symbol = ? AND ts <= ? AND floor IS NOT NULL ORDER BY ts DESC LIMIT 1`);
+  `SELECT floor FROM collection_snapshots WHERE symbol = ? AND ts <= ? AND floor > 0 ORDER BY ts DESC LIMIT 1`);
 
 export function collectionSales(symbol: string, limit = 100) {
   const rows = saleRows.all(symbol, limit) as { signature: string; mint: string; buyer: string; seller: string; price: number; t: number; image: string | null; source: string | null }[];
@@ -65,7 +65,7 @@ export function collectionSales(symbol: string, limit = 100) {
 // --- About -----------------------------------------------------------------------
 
 const changeFrom = db.prepare(
-  `SELECT floor FROM collection_snapshots WHERE symbol = ? AND ts <= ? AND floor IS NOT NULL ORDER BY ts DESC LIMIT 1`);
+  `SELECT floor FROM collection_snapshots WHERE symbol = ? AND ts <= ? AND floor > 0 ORDER BY ts DESC LIMIT 1`);
 const info = db.prepare(`SELECT floor, supply, owners, listed, royalty_bps, seller_fee_bps, website, twitter, discord, contract
                          FROM collections WHERE symbol = ?`);
 const window24 = db.prepare(`SELECT buyer, seller, price FROM trades WHERE collection = ? AND block_time >= ?`);

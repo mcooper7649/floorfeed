@@ -80,10 +80,10 @@ const window24h = db.prepare(
 // Floor N hours ago = the newest snapshot at least that old (null until our
 // own snapshot history reaches back that far).
 const floorAt = db.prepare(
-  `SELECT floor FROM collection_snapshots WHERE symbol = ? AND ts <= ? AND floor IS NOT NULL ORDER BY ts DESC LIMIT 1`,
+  `SELECT floor FROM collection_snapshots WHERE symbol = ? AND ts <= ? AND floor > 0 ORDER BY ts DESC LIMIT 1`,
 );
 function changePct(symbol: string, floor: number | null, hoursAgo: number) {
-  if (floor == null) return null;
+  if (!floor) return null; // no floor (nothing listed): no change to show
   const then = (floorAt.get(symbol, Date.now() - hoursAgo * 3_600_000) as { floor: number } | undefined)?.floor;
   return then ? ((floor - then) / then) * 100 : null;
 }
@@ -170,7 +170,7 @@ function evmSpark(slug: string, now: number) {
 }
 
 const snapshotsSince = db.prepare(
-  `SELECT ts, floor FROM collection_snapshots WHERE symbol = ? AND ts >= ? AND floor IS NOT NULL ORDER BY ts`,
+  `SELECT ts, floor FROM collection_snapshots WHERE symbol = ? AND ts >= ? AND floor > 0 ORDER BY ts`,
 );
 function floorSpark(symbol: string) {
   const rows = snapshotsSince.all(symbol, Date.now() - 14 * DAY * 1000) as { ts: number; floor: number }[];
@@ -304,7 +304,7 @@ export async function collectionDetail(symbol: string, rangeDays: number) {
     sales: thin(sales).map(({ signature, price, t }) => ({ signature, price, t })),
     daily: daily(sales, bucketFor(rangeDays)),
     floorHistory: db.prepare(
-      `SELECT ts, floor FROM collection_snapshots WHERE symbol = ? AND ts >= ? ORDER BY ts`,
+      `SELECT ts, floor FROM collection_snapshots WHERE symbol = ? AND ts >= ? AND floor > 0 ORDER BY ts`,
     ).all(symbol, (now - rangeDays * DAY) * 1000),
     listings: await cheapestListings(symbol),
     topFlippers: collectionFlippers(symbol, 5),

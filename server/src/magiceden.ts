@@ -80,7 +80,7 @@ export async function getStats(symbol: string): Promise<CollectionStats> {
   }>(`/collections/${symbol}/stats`);
   const sol = (v?: number) => (v == null ? null : v / LAMPORTS);
   return {
-    floor: sol(s.floorPrice),
+    floor: s.floorPrice ? sol(s.floorPrice) : null, // 0 = nothing listed, not a free NFT
     listed: s.listedCount ?? null,
     avg24h: sol(s.avgPrice24hr),
     volume7d: sol(s.volume7d),

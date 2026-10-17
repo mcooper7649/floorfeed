@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { normalizeUnit, type Unit } from "./config.ts";
 // OpenSea API v2: collection stats + info (work keyless) and sale events
 // (need OPENSEA_API_KEY, sent when present). The limit is 120 req/min; a
@@ -5,18 +6,42 @@ import { normalizeUnit, type Unit } from "./config.ts";
 const BASE = "https://api.opensea.io/api/v2";
 const MIN_GAP_MS = 700;
 let last = 0;
-let chain: Promise<unknown> = Promise.resolve();
+
+// Two lanes share the rate limit. Calls made while serving someone's trade
+// (quotes, building and submitting orders, cancels: see `interactive`) go
+// ahead of background work (ingest, wallet listings, art), so a sheet never
+// waits behind a long backfill. Calls start one per gap without waiting for
+// the previous response, so one slow response doesn't hold up the rest.
+const lane = new AsyncLocalStorage<"hi">();
+const queues: { hi: (() => void)[]; lo: (() => void)[] } = { hi: [], lo: [] };
+let pumping = false;
+// Run `fn` (and everything it awaits) in the interactive lane.
+export const interactive = <T>(fn: () => T) => lane.run("hi", fn);
+// Back to the background lane inside an interactive call (non-essential extras).
+export const background = <T>(fn: () => T) => lane.exit(fn);
 
 function throttled<T>(fn: () => Promise<T>): Promise<T> {
-  const run = chain.then(async () => {
-    const wait = last + MIN_GAP_MS - Date.now();
-    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-    last = Date.now();
-    return fn();
+  return new Promise<T>((resolve, reject) => {
+    (lane.getStore() === "hi" ? queues.hi : queues.lo).push(() => { fn().then(resolve, reject); });
+    void pump();
   });
-  chain = run.catch(() => {});
-  return run;
 }
+async function pump() {
+  if (pumping) return;
+  pumping = true;
+  try {
+    while (queues.hi.length || queues.lo.length) {
+      const wait = last + MIN_GAP_MS - Date.now();
+      if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+      const job = queues.hi.shift() ?? queues.lo.shift()!;
+      last = Date.now();
+      job();
+    }
+  } finally {
+    pumping = false;
+  }
+}
+export const osQueue = () => ({ interactive: queues.hi.length, background: queues.lo.length });
 
 // Keyless access is intermittent: the same request can get 200 or a 401
 // "missing API key", so 401/429 are retried a couple of times. Setting
@@ -67,7 +92,7 @@ export async function getOsStats(slug: string) {
   }>(`/collections/${slug}/stats`);
   const iv = (name: string) => s.intervals.find((i) => i.interval === name);
   return {
-    floor: s.total.floor_price ?? null,
+    floor: s.total.floor_price || null, // OpenSea says 0 when nothing is listed: that is no floor, not a free NFT
     currency: s.total.floor_price_symbol || "ETH",
     owners: s.total.num_owners ?? null,
     volume24h: iv("one_day")?.volume ?? null,
@@ -349,7 +374,7 @@ export async function getOsTopCollections(chain: string, limit = 25) {
 export async function getOsWeek(slug: string) {
   const s = await get<{ total: { floor_price?: number; floor_price_symbol?: string }; intervals: Interval[] }>(`/collections/${slug}/stats`);
   const week = s.intervals.find((i) => i.interval === "seven_day");
-  return { floor: s.total.floor_price ?? null, symbol: s.total.floor_price_symbol || "", sales7d: week?.sales ?? 0, volume7d: week?.volume ?? 0 };
+  return { floor: s.total.floor_price || null, symbol: s.total.floor_price_symbol || "", sales7d: week?.sales ?? 0, volume7d: week?.volume ?? 0 };
 }
 
 // --- Drops (mints): featured, upcoming and recently minted, across chains ---

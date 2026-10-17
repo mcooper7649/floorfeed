@@ -24,6 +24,7 @@ import { bridgeQuote, bridgeStatus } from "./bridge.ts";
 import { dropDetail, dropMintTx } from "./drops.ts";
 import { marks } from "./marks.ts";
 import { evmCancelBuild, evmCancelSubmit, evmListBuild, evmListQuote, evmListSubmit, evmMyListings, evmWalletListings } from "./list-evm.ts";
+import { background, interactive } from "./opensea.ts";
 import { evmOfferApproveTx, evmOfferBuild, evmOfferQuote, evmOfferSubmit, evmWalletOffers, evmWrapTx, forgetOffers } from "./offer-evm.ts";
 import { EVM_ADDRESS_RE, evmApproveTx, evmBroadcast, evmPrepare, evmBalances, evmBuyTx, evmHoldings, evmNetworks, evmNftTransferTx, evmQuote, evmSellQuote, evmSellTx, evmSendTx, evmTransferFee, evmUnwrapTx, totalEth } from "./trade-evm.ts";
 import { solSendTx } from "./send.ts";
@@ -59,6 +60,11 @@ const tradeSelect = `
 
 const app = Fastify({ logger: { level: "info" } });
 await app.register(cors, { origin: true, methods: ["GET", "HEAD", "POST", "PUT", "DELETE"] });
+// Someone waiting on a trade sheet: their OpenSea calls take the interactive lane (opensea.ts).
+const INTERACTIVE = /^\/trade\/evm\/(quote|buy-tx|sell-quote|sell-tx|approve-tx|list-quote|list-build|list-submit|cancel-build|cancel-submit|offer-quote|offer-build|offer-submit|offer-approve-tx|wrap-tx)(\/|\?|$)/;
+app.addHook("onRequest", (req, _reply, done) => {
+  if (INTERACTIVE.test(req.url)) interactive(done); else done();
+});
 
 app.get("/health", async () => ({
   ok: true,
@@ -769,7 +775,11 @@ app.get("/trade/evm/sell-quote/:symbol", async (req, reply) => {
   const q = z.object({ seller: z.string().regex(EVM_ADDRESS_RE), id: z.string().regex(MINT_RE) }).parse(req.query);
   const [quote, listed] = await Promise.all([
     evmSellQuote(symbol, q.id, q.seller).catch((err) => { req.log.warn({ err }, "evm sell quote"); return null; }),
-    evmMyListings(null, q.seller).catch(() => new Map()),
+    // An extra (is it also listed?): background lane, and the quote doesn't wait more than 3s for it.
+    Promise.race([
+      background(() => evmMyListings(null, q.seller)).catch(() => new Map() as Awaited<ReturnType<typeof evmMyListings>>),
+      new Promise<Awaited<ReturnType<typeof evmMyListings>>>((r) => setTimeout(() => r(new Map()), 3_000)),
+    ]),
   ]);
   if (!quote) return reply.code(404).send({ error: "No quote for this NFT" });
   // Listed too? Selling leaves that listing signed until it expires, so the sheet offers to cancel it.
