@@ -81,8 +81,24 @@ export function usePracticeNfts() {
     bumpPortfolio();
   }, [userId, bumpPortfolio]);
 
+  // Every open position, one sell at a time; `onProgress` gets how many are done.
+  // Stops at the first failure (what sold stays sold) and refreshes either way.
+  const sellAll = useCallback(async (onProgress?: (done: number) => void) => {
+    if (!userId) return;
+    const ids = groups.flatMap((g) => g.positions.map((p) => p.id));
+    try {
+      for (const [i, id] of ids.entries()) {
+        await api.sell(userId, id);
+        onProgress?.(i + 1);
+      }
+      track('paper_sell', { all: ids.length });
+    } finally {
+      bumpPortfolio();
+    }
+  }, [userId, groups, bumpPortfolio]);
+
   return {
-    loaded: positions != null, checkedAt, groups, closed, count, sell,
+    loaded: positions != null, checkedAt, groups, closed, count, sell, sellAll,
     valueUsd, openPnlUsd, openPnlPct: costUsd > 0 ? (openPnlUsd / costUsd) * 100 : null, realizedUsd,
   };
 }
@@ -132,6 +148,8 @@ export function PracticeNftsBody({ nfts, onOpen }: { nfts: PracticeNfts; onOpen?
         })}
       </View>
 
+      {tab === 'open' && count > 1 && <SellAll nfts={nfts} />}
+
       <ScrollView contentContainerStyle={s.list}>
         {tab === 'open'
           ? groups.length
@@ -144,6 +162,42 @@ export function PracticeNftsBody({ nfts, onOpen }: { nfts: PracticeNfts; onOpen?
 
       <Text style={s.foot}>Simulated money at live floors. Values are what selling now would get, after fees.</Text>
     </>
+  );
+}
+
+// Sell every practice holding at today's estimated bid. Two taps (no blocking
+// confirm dialogs on web); the first one arms it for a few seconds.
+function SellAll({ nfts }: { nfts: PracticeNfts }) {
+  const [state, setState] = useState<{ kind: 'idle' | 'armed' | 'error' } | { kind: 'selling'; done: number }>({ kind: 'idle' });
+  useEffect(() => {
+    if (state.kind !== 'armed' && state.kind !== 'error') return;
+    const t = setTimeout(() => setState({ kind: 'idle' }), 4000);
+    return () => clearTimeout(t);
+  }, [state.kind]);
+  const total = nfts.count;
+  const press = () => {
+    if (state.kind === 'selling') return;
+    if (state.kind !== 'armed') return setState({ kind: 'armed' });
+    setState({ kind: 'selling', done: 0 });
+    nfts.sellAll((done) => setState({ kind: 'selling', done }))
+      .then(() => setState({ kind: 'idle' }))
+      .catch(() => setState({ kind: 'error' }));
+  };
+  const label = state.kind === 'selling' ? `Selling ${state.done}/${total}…`
+    : state.kind === 'armed' ? `Tap again to sell all ${total}`
+    : state.kind === 'error' ? 'Some didn’t sell. Tap to retry'
+    : 'Sell all';
+  const hot = state.kind === 'armed' || state.kind === 'error';
+  return (
+    <View style={s.allRow}>
+      <Text style={[s.sub, { flex: 1 }]} numberOfLines={1}>
+        {hot ? `≈ ${usd(nfts.valueUsd)} after fees` : `${total} NFTs across ${nfts.groups.length} collection${nfts.groups.length === 1 ? '' : 's'}`}
+      </Text>
+      <Pressable onPress={press} disabled={state.kind === 'selling'} accessibilityRole="button" accessibilityLabel="Sell all practice NFTs"
+        style={({ hovered }: { hovered?: boolean }) => [s.all, hot && s.allHot, hovered && !hot && s.sellHot]}>
+        <Text style={[s.allTxt, hot && { color: C.down }]}>{label}</Text>
+      </Pressable>
+    </View>
   );
 }
 
@@ -233,6 +287,10 @@ const s = StyleSheet.create({
   sellHot: { borderColor: PURPLE, backgroundColor: '#A78BFA1A' },
   sellTxt: { color: C.text, fontSize: 12, fontWeight: '700' },
   note: { paddingHorizontal: 6, paddingVertical: 10 },
+  allRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 12, marginBottom: 4 },
+  all: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: C.border },
+  allHot: { borderColor: C.down, backgroundColor: '#FF5C7A14' },
+  allTxt: { color: C.text, fontSize: 12, fontWeight: '700' },
   empty: { alignItems: 'center', gap: 8, paddingHorizontal: 20, paddingVertical: 28 },
   emptyIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: '#A78BFA1F' },
   emptyGlyph: { color: PURPLE, fontSize: 20 },
