@@ -9,13 +9,16 @@ import { EvmListSheet } from '@/components/evm-list-sheet';
 import { EvmOfferSheet } from '@/components/evm-offer-sheet';
 import { EvmSellSheet } from '@/components/evm-sell-sheet';
 import { menuProps, useQuickMenu, type MenuItem } from '@/components/quick-menu';
+import { MODE_COLOR } from '@/components/mode-toggle';
 import { networkLines } from '@/components/networks-card';
+import { PracticeNftsBody, usePracticeNfts } from '@/components/practice-nfts';
 import { ListingRows, OfferRows, OrderTabs, useMyOrders, type Filled, type OpenMenu, type PanelAction, type Tab } from '@/components/your-orders';
 import { C } from '@/constants/brand';
 import { T } from '@/constants/type';
 import { api, type Chain, type EvmNetwork, type Holding, type Mark } from '@/lib/api';
 import { announceListing, cancelEvmListing, type ListingChange } from '@/lib/evm-listing';
 import { useEvmWallet } from '@/lib/evm-wallet';
+import { useTradeMode, type TradeMode } from '@/lib/mode';
 import { amt, pct, signedSol, signedUsd, usd } from '@/lib/format';
 import { PANEL_GAP, PANEL_WIDTH, usePanel } from '@/lib/panel';
 import { usePrices } from '@/lib/prices';
@@ -193,18 +196,51 @@ export function useYourNfts() {
 
 export type YourNfts = ReturnType<typeof useYourNfts>;
 
+// Which NFTs the panel shows: Real (your wallets) or Practice (simulated buys).
+// It follows the trade mode until you pick one here, and again when the mode changes.
+export function useNftsKind() {
+  const { mode } = useTradeMode();
+  const [picked, setPicked] = useState<{ forMode: TradeMode; kind: TradeMode } | null>(null);
+  const kind = picked?.forMode === mode ? picked.kind : mode;
+  return { kind, setKind: (k: TradeMode) => setPicked({ forMode: mode, kind: k }) };
+}
+
+// Real | Practice, each with how many NFTs it holds.
+export function NftsKindSwitch({ kind, onKind, counts }: { kind: TradeMode; onKind: (k: TradeMode) => void; counts: Record<TradeMode, number | null> }) {
+  return (
+    <View style={s.kinds} accessibilityRole="tablist">
+      {(['real', 'paper'] as const).map((k) => {
+        const on = kind === k;
+        const n = counts[k];
+        return (
+          <Pressable key={k} accessibilityRole="tab" accessibilityState={{ selected: on }} onPress={() => onKind(k)}
+            style={({ hovered }: { hovered?: boolean }) => [s.kind, on && s.kindOn, !on && hovered && { backgroundColor: C.card }]}>
+            <View style={[s.kindDot, { backgroundColor: on ? MODE_COLOR[k] : C.muted }]} />
+            <Text style={[s.kindTxt, on && { color: C.text }]}>{k === 'real' ? 'Real' : 'Practice'}</Text>
+            {n != null && n > 0 && <Text style={[s.kindCount, on && { color: MODE_COLOR[k] }]}>{n}</Text>}
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 function Panel({ onCollapse }: { onCollapse: () => void }) {
   const nfts = useYourNfts();
+  const practice = usePracticeNfts();
+  const { kind, setKind } = useNftsKind();
+  const checkedAt = kind === 'real' ? nfts.checkedAt : practice.checkedAt;
   return (
     <View style={s.panel}>
       <View style={s.head}>
         <Text style={[T.label, { flex: 1 }]}>Your NFTs</Text>
-        {nfts.checkedAt && <Live at={nfts.checkedAt} />}
+        {checkedAt && <Live at={checkedAt} />}
         <Pressable onPress={onCollapse} accessibilityLabel="Collapse your NFTs panel" hitSlop={8}>
           <Text style={s.collapse}>»</Text>
         </Pressable>
       </View>
-      <YourNftsBody nfts={nfts} />
+      <NftsKindSwitch kind={kind} onKind={setKind} counts={{ real: nfts.wallets ? nfts.rows.length : null, paper: practice.loaded ? practice.count : null }} />
+      {kind === 'real' ? <YourNftsBody nfts={nfts} /> : <PracticeNftsBody nfts={practice} />}
     </View>
   );
 }
@@ -236,9 +272,11 @@ export function YourNftsBody({ nfts, onOpen }: { nfts: YourNfts; onOpen?: () => 
   }, [filled]);
   if (!wallets) {
     return (
-      <View style={s.empty}>
-        <Text style={T.meta}>Connect a wallet to watch what your NFTs are worth, live.</Text>
-        <Pressable onPress={() => { onOpen?.(); router.push('/portfolio'); }}><Text style={s.link}>Go to Portfolio →</Text></Pressable>
+      <View style={s.emptyCard}>
+        <View style={s.emptyIcon}><Text style={s.emptyGlyph}>◆</Text></View>
+        <Text style={T.bodyStrong}>No wallet connected</Text>
+        <Text style={[T.meta, { textAlign: 'center' }]}>Sign in or connect a wallet to watch what your NFTs are worth, live.</Text>
+        <Pressable onPress={() => { onOpen?.(); router.push('/portfolio'); }} style={s.emptyCta}><Text style={s.emptyCtaTxt}>Go to Portfolio</Text></Pressable>
       </View>
     );
   }
@@ -404,7 +442,13 @@ const s = StyleSheet.create({
   rail: { width: 44, alignItems: 'center', paddingTop: 16 },
   railBtn: { width: 28, height: 28, borderRadius: 8, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center' },
   railTxt: { color: C.dim, fontSize: 16, lineHeight: 18 },
-  head: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingTop: 12, paddingBottom: 4 },
+  head: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingTop: 12, paddingBottom: 8 },
+  kinds: { flexDirection: 'row', gap: 4, marginHorizontal: 12, marginBottom: 12, padding: 3, borderRadius: 12, borderWidth: 1, borderColor: C.border },
+  kind: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 7, borderRadius: 9 },
+  kindOn: { backgroundColor: C.cardHi },
+  kindDot: { width: 7, height: 7, borderRadius: 4 },
+  kindTxt: { color: C.dim, fontSize: 13, fontWeight: '700' },
+  kindCount: { color: C.muted, fontSize: 12, fontWeight: '700', fontVariant: ['tabular-nums'] },
   collapse: { color: C.dim, fontSize: 18, lineHeight: 20 },
   live: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   dot: { width: 6, height: 6, borderRadius: 3 },
@@ -425,7 +469,11 @@ const s = StyleSheet.create({
   value: { color: C.text, fontSize: 14, fontWeight: '600', fontVariant: ['tabular-nums'] },
   small: { color: C.dim, fontSize: 12, fontVariant: ['tabular-nums'] },
   empty: { paddingHorizontal: 12, paddingVertical: 12, gap: 8 },
-  link: { ...T.label, color: C.accent },
+  emptyCard: { alignItems: 'center', gap: 8, paddingHorizontal: 20, paddingVertical: 28 },
+  emptyIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: '#B8FF3C1A' },
+  emptyGlyph: { color: C.accent, fontSize: 18 },
+  emptyCta: { marginTop: 6, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 10, backgroundColor: C.accent },
+  emptyCtaTxt: { color: C.accentInk, fontSize: 14, fontWeight: '700' },
   filled: { marginHorizontal: 12, marginBottom: 8, padding: 10, borderRadius: 8, borderWidth: 1, borderColor: C.up, backgroundColor: C.card },
   filledTxt: { color: C.up, fontSize: 12, fontWeight: '600' },
   foot: { color: C.muted, fontSize: 11, paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.border },
