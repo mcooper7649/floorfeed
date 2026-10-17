@@ -304,7 +304,7 @@ export const GUIDE: GuideSection[] = [
         { steps: [
           "Details: name, symbol, network, your earnings on resales (0 to 10%), whether the art is revealed after the mint or right away, and a cover, banner and placeholder image.",
           `Art: pick a folder of images numbered 1, 2, 3… (up to ${MAX_ITEMS.toLocaleString("en-US")}). Traits come from the JSON files most generators write next to each image (1.json), or from one CSV with a "file" column and a column per trait. You see a preview and how rare each trait is before uploading; the files go to IPFS.`,
-          "Mint phases: up to four, each public or allowlist, with its own start and end, price and per-wallet limit. Paste allowlist wallets into the phase.",
+          "Mint phases: up to four, each public, allowlist or FloorFeed members (anyone signed in, with a per-account limit the contract enforces), with its own start and end, price and limit. Paste allowlist wallets into the phase.",
           "Launch: a checklist, then FloorFeed pins your metadata and your wallet sends one transaction. That wallet owns the contract and pays only the network fee to launch.",
           "Manage: follow the mint, withdraw what you've earned any time, reveal when you're ready, and freeze the metadata for good.",
         ] },

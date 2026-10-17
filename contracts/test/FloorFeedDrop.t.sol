@@ -31,10 +31,13 @@ contract FloorFeedDropTest is Test {
     address bob = address(0xB0B);
     uint256 constant FEE = 0.0001 ether;
     uint128 constant PRICE = 0.01 ether;
+    address signer;
+    uint256 signerKey;
 
     function setUp() public {
         store = new FloorFeedStore();
-        factory = new FloorFeedFactory(store, admin, FEE, feeTo);
+        (signer, signerKey) = makeAddrAndKey("pass-signer");
+        factory = new FloorFeedFactory(store, admin, FEE, feeTo, signer);
         vm.deal(alice, 100 ether);
         vm.deal(bob, 100 ether);
         vm.warp(1_800_000_000);
@@ -432,5 +435,113 @@ contract FloorFeedDropTest is Test {
         if (a.length < b.length) return false;
         for (uint256 i; i < b.length; ++i) if (a[i] != b[i]) return false;
         return true;
+    }
+
+    // --- FloorFeed members phases ---
+
+    bytes32 constant ACCT = keccak256("did:privy:alice");
+
+    function _membersDrop() internal returns (FloorFeedDrop d) {
+        FloorFeedDrop.Init memory p = _init(20);
+        FloorFeedDrop.Phase[] memory ph = new FloorFeedDrop.Phase[](1);
+        ph[0] = FloorFeedDrop.Phase(uint64(block.timestamp), 0, 0, 0, keccak256("floorfeed.members"));
+        p.phases = ph;
+        vm.prank(creator);
+        d = FloorFeedDrop(factory.createCollection(bytes32("m1"), p));
+    }
+
+    function _pass(FloorFeedDrop d, uint256 key, address to, uint256 phase, bytes32 acct, uint32 max, uint64 deadline)
+        internal
+        view
+        returns (FloorFeedDrop.Pass memory pass, bytes memory sig)
+    {
+        pass = FloorFeedDrop.Pass(acct, max, deadline);
+        bytes32 typeHash = keccak256("Pass(address to,uint256 phase,bytes32 account,uint32 maxPerAccount,uint64 deadline)");
+        bytes32 domain = keccak256(abi.encode(
+            keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+            keccak256("FloorFeedDrop"), keccak256("1"), block.chainid, address(d)
+        ));
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domain,
+            keccak256(abi.encode(typeHash, to, phase, acct, max, deadline))));
+        (uint8 v, bytes32 r, bytes32 s_) = vm.sign(key, digest);
+        sig = abi.encodePacked(r, s_, v);
+    }
+
+    function test_membersPassMints() public {
+        FloorFeedDrop d = _membersDrop();
+        assertEq(d.factory(), address(factory));
+        (FloorFeedDrop.Pass memory pass, bytes memory sig) = _pass(d, signerKey, alice, 0, ACCT, 1, uint64(block.timestamp + 300));
+        vm.prank(bob); // anyone may pay; the pass is for `to`
+        d.mintWithPass{value: FEE}(alice, 0, 1, pass, sig);
+        assertEq(d.ownerOf(1), alice);
+        assertEq(d.mintedByAccount(0, ACCT), 1);
+    }
+
+    function test_membersPhaseRejectsPlainMint() public {
+        FloorFeedDrop d = _membersDrop();
+        vm.prank(alice);
+        vm.expectRevert(FloorFeedDrop.MembersOnly.selector);
+        d.mint{value: FEE}(alice, 0, 1, new bytes32[](0));
+    }
+
+    function test_accountLimitHoldsAcrossWallets() public {
+        FloorFeedDrop d = _membersDrop();
+        (FloorFeedDrop.Pass memory p1, bytes memory s1) = _pass(d, signerKey, alice, 0, ACCT, 1, uint64(block.timestamp + 300));
+        vm.prank(alice);
+        d.mintWithPass{value: FEE}(alice, 0, 1, p1, s1);
+        // Same account, second wallet: refused on chain.
+        (FloorFeedDrop.Pass memory p2, bytes memory s2) = _pass(d, signerKey, bob, 0, ACCT, 1, uint64(block.timestamp + 300));
+        vm.prank(bob);
+        vm.expectRevert(FloorFeedDrop.AccountLimit.selector);
+        d.mintWithPass{value: FEE}(bob, 0, 1, p2, s2);
+    }
+
+    function test_passBoundToWalletSignerAndTime() public {
+        FloorFeedDrop d = _membersDrop();
+        (FloorFeedDrop.Pass memory pass, bytes memory sig) = _pass(d, signerKey, alice, 0, ACCT, 1, uint64(block.timestamp + 300));
+        // Someone else can't use alice's pass for their own wallet.
+        vm.prank(bob);
+        vm.expectRevert(FloorFeedDrop.BadPass.selector);
+        d.mintWithPass{value: FEE}(bob, 0, 1, pass, sig);
+        // Raising the limit in the pass breaks the signature.
+        FloorFeedDrop.Pass memory forged = FloorFeedDrop.Pass(ACCT, 50, pass.deadline);
+        vm.expectRevert(FloorFeedDrop.BadPass.selector);
+        d.mintWithPass{value: FEE * 2}(alice, 0, 2, forged, sig);
+        // Signed by a key that isn't FloorFeed's.
+        (, uint256 otherKey) = makeAddrAndKey("not-floorfeed");
+        (FloorFeedDrop.Pass memory p3, bytes memory s3) = _pass(d, otherKey, alice, 0, ACCT, 1, uint64(block.timestamp + 300));
+        vm.expectRevert(FloorFeedDrop.BadPass.selector);
+        d.mintWithPass{value: FEE}(alice, 0, 1, p3, s3);
+        // Expired.
+        vm.warp(block.timestamp + 301);
+        vm.expectRevert(FloorFeedDrop.PassExpired.selector);
+        d.mintWithPass{value: FEE}(alice, 0, 1, pass, sig);
+    }
+
+    function test_passSignerRotationAndShutoff() public {
+        FloorFeedDrop d = _membersDrop();
+        (FloorFeedDrop.Pass memory pass, bytes memory sig) = _pass(d, signerKey, alice, 0, ACCT, 0, uint64(block.timestamp + 300));
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, alice));
+        factory.setPassSigner(alice);
+        vm.prank(admin);
+        factory.setPassSigner(address(0));
+        vm.expectRevert(FloorFeedDrop.BadPass.selector);
+        d.mintWithPass{value: FEE}(alice, 0, 1, pass, sig);
+        (address next, uint256 nextKey) = makeAddrAndKey("next-signer");
+        vm.prank(admin);
+        factory.setPassSigner(next);
+        (FloorFeedDrop.Pass memory p2, bytes memory s2) = _pass(d, nextKey, alice, 0, ACCT, 0, uint64(block.timestamp + 300));
+        d.mintWithPass{value: FEE}(alice, 0, 1, p2, s2);
+        assertEq(d.balanceOf(alice), 1);
+    }
+
+    function test_passNotUsableInOtherPhasesOrCollections() public {
+        FloorFeedDrop d = _membersDrop();
+        FloorFeedDrop other = _launch(10); // allowlist + public phases
+        (FloorFeedDrop.Pass memory pass, bytes memory sig) = _pass(d, signerKey, alice, 0, ACCT, 1, uint64(block.timestamp + 300));
+        vm.prank(alice);
+        vm.expectRevert(FloorFeedDrop.BadPhase.selector); // phase 0 there is an allowlist, not members
+        other.mintWithPass{value: PRICE / 2 + FEE}(alice, 0, 1, pass, sig);
     }
 }

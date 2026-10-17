@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { decodeErrorResult, encodeAbiParameters, encodeFunctionData, formatEther, getAddress, keccak256, parseEther, parseEventLogs, type Hex } from "viem";
+import { decodeErrorResult, encodeAbiParameters, encodeFunctionData, formatEther, getAddress, keccak256, parseEther, parseEventLogs, toBytes, type Hex } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import { z } from "zod";
 import { dropAbi, factoryAbi } from "./abi/launchpad.ts";
 import { EVM_CHAINS } from "./config.ts";
@@ -12,8 +13,11 @@ import { evmPublicClient, isTradableChain, simulateEvm } from "./trade-evm.ts";
 // The launchpad: creators set up a PFP collection on FloorFeed (art on IPFS via
 // Pinata, or on chain later), then deploy it from their own wallet through
 // FloorFeedFactory (contracts/). FloorFeed stores the draft, pins metadata,
-// builds the transactions and keeps allowlists for proofs; it never holds keys
-// or funds. Collections then mint here and show in the Mint hub.
+// builds the transactions and keeps allowlists for proofs; it never holds funds
+// or creators' keys. Its one key, LAUNCH_PASS_KEY, only signs short-lived member
+// passes for "FloorFeed members" phases (any signed-in account, a per-account limit
+// enforced on chain); the factory owner can rotate or switch it off.
+// Collections then mint here and show in the Mint hub.
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS launches (
@@ -62,6 +66,10 @@ const GATEWAY = (() => {
 // Checksummed form viem accepts, whatever case the client sent.
 const addr = (a: string) => getAddress(a.toLowerCase()) as Hex;
 export const MAX_ITEMS = 10_000;
+const ZERO32 = ("0x" + "00".repeat(32)) as Hex;
+const MEMBERS = keccak256(toBytes("floorfeed.members")); // FloorFeedDrop.MEMBERS
+const passKey = process.env.LAUNCH_PASS_KEY?.trim();
+const passAccount = passKey && /^0x[0-9a-fA-F]{64}$/.test(passKey) ? privateKeyToAccount(passKey as Hex) : null;
 
 export function launchConfig() {
   return {
@@ -84,6 +92,7 @@ const PhaseIn = z.object({
   price: z.string().regex(/^\d+(\.\d{1,18})?$/), // native coin, decimal
   maxPerWallet: z.number().int().min(0).max(1000),
   allowlist: z.boolean(),
+  members: z.boolean().optional(), // FloorFeed accounts only (mintWithPass); wins over allowlist
 });
 export type PhaseIn = z.infer<typeof PhaseIn>;
 
@@ -134,8 +143,15 @@ function view(r: Row) {
 }
 export type LaunchView = ReturnType<typeof view>;
 
-export function createDraft(userId: string, raw: unknown) {
+// A members phase is never also an allowlist.
+const parseDraft = (raw: unknown) => {
   const b = DraftIn.parse(raw);
+  b.phases = b.phases.map((p) => (p.members ? { ...p, allowlist: false } : { ...p, members: undefined }));
+  return b;
+};
+
+export function createDraft(userId: string, raw: unknown) {
+  const b = parseDraft(raw);
   const id = randomUUID();
   const now = Date.now();
   db.prepare(`INSERT INTO launches (id, user_id, chain, name, symbol, description, website, twitter, royalty_bps, royalty_to, storage, reveal,
@@ -150,7 +166,7 @@ export function createDraft(userId: string, raw: unknown) {
 export function updateDraft(id: string, userId: string, raw: unknown) {
   const r = owned(id, userId);
   if (r.status !== "draft") throw new LaunchError("This collection is already launched; change it from its manage page.");
-  const b = DraftIn.parse(raw);
+  const b = parseDraft(raw);
   db.prepare(`UPDATE launches SET chain=?, name=?, symbol=?, description=?, website=?, twitter=?, royalty_bps=?, royalty_to=?, storage=?, reveal=?,
       cover_cid=?, banner_cid=?, placeholder_cid=?, phases=?, meta_cid=NULL, contract_uri=NULL, placeholder_uri=NULL, updated_at=? WHERE id=?`)
     .run(b.chain, b.name, b.symbol.toUpperCase(), b.description, b.website ?? null, b.twitter ?? null, b.royaltyBps, b.royaltyTo?.toLowerCase() ?? null,
@@ -369,7 +385,7 @@ function initArgs(r: Row, creator: string) {
     placeholderURI: r.placeholder_uri!, provenance: (r.provenance ?? "0x" + "00".repeat(32)) as Hex,
     phases: phases.map((p, i) => ({
       start: BigInt(p.start), end: BigInt(p.end), price: parseEther(p.price), maxPerWallet: p.maxPerWallet,
-      merkleRoot: p.allowlist ? merkle(walletsOf(r.id, i)).root : (("0x" + "00".repeat(32)) as Hex),
+      merkleRoot: p.members ? MEMBERS : p.allowlist ? merkle(walletsOf(r.id, i)).root : ZERO32,
     })),
   };
 }
@@ -396,6 +412,12 @@ export async function deployTx(id: string, userId: string, creator: string) {
   const problems = checkReady(r);
   if (problems.length) throw new LaunchError(problems.join(" "));
   const c = evmPublicClient(r.chain);
+  if ((JSON.parse(r.phases) as PhaseIn[]).some((p) => p.members)) {
+    // Members phases need a factory whose pass signer is this server's key.
+    const signer = await c.readContract({ address: FACTORY, abi: factoryAbi, functionName: "passSigner" }).catch(() => null) as string | null;
+    if (!passAccount || !signer || signer.toLowerCase() !== passAccount.address.toLowerCase())
+      throw new LaunchError("FloorFeed members phases aren't switched on for this network yet.");
+  }
   const init = initArgs(r, creator.toLowerCase());
   const data = encodeFunctionData({ abi: factoryAbi, functionName: "createCollection", args: [salt(id), init] });
   const predicted = (await c.readContract({ address: FACTORY, abi: factoryAbi, functionName: "predictAddress", args: [addr(creator), salt(id)] })) as Hex;
@@ -433,10 +455,19 @@ export async function confirmDeploy(id: string, userId: string, hash: string) {
 }
 
 // Contract error name from a failed simulation ("custom error 0x5426a580" → "WalletLimit").
-function errorName(m: string) {
-  const sel = /custom error (0x[0-9a-fA-F]{8})/.exec(m)?.[1];
-  if (!sel) return m;
-  try { return decodeErrorResult({ abi: dropAbi, data: (sel + "0".repeat(64 * 4)) as Hex }).errorName; } catch { return m; }
+// The drop's custom error behind a failed simulation, else the message. Nodes report reverts
+// differently ("custom error 0x…", or only raw revert data on the error's cause), so try both.
+function errorName(err: unknown) {
+  const m = (err as Error).message ?? String(err);
+  const decode = (data: string) => {
+    try { return decodeErrorResult({ abi: dropAbi, data: (data.length < 10 + 64 * 4 ? data.padEnd(10 + 64 * 4, "0") : data) as Hex }).errorName; } catch { return null; }
+  };
+  for (let e = err as { data?: unknown; cause?: unknown } | undefined, i = 0; e && i < 8; e = e.cause as typeof e, i++) {
+    const d = typeof e.data === "string" ? e.data : (e.data as { data?: unknown } | undefined)?.data;
+    if (typeof d === "string" && /^0x[0-9a-fA-F]{8}/.test(d)) { const n = decode(d); if (n) return n; }
+  }
+  const sel = /custom error (0x[0-9a-fA-F]{8})/.exec(m)?.[1] ?? /signature:?\s*(0x[0-9a-fA-F]{8})/.exec(m)?.[1];
+  return (sel && decode(sel)) || m;
 }
 
 // --- public: launched collections ---
@@ -453,7 +484,7 @@ const byAddress = (chain: string, address: string) =>
   db.prepare(`SELECT * FROM launches WHERE chain = ? AND address = ? AND status = 'live'`).get(chain, address.toLowerCase()) as Row | undefined;
 
 /** A launched collection for its public mint page, with on-chain state. */
-export async function launchedCollection(chain: string, address: string, wallet?: string) {
+export async function launchedCollection(chain: string, address: string, wallet?: string, userId?: string) {
   const r = byAddress(chain, address);
   if (!r) throw new LaunchError("Not found.", 404);
   const c = evmPublicClient(chain);
@@ -469,12 +500,15 @@ export async function launchedCollection(chain: string, address: string, wallet?
   const w = wallet && ADDRESS.test(wallet) ? wallet.toLowerCase() : null;
   const out = await Promise.all(phases.map(async (p, i) => {
     const start = Number(p.start), end = Number(p.end);
-    const allowlist = p.merkleRoot !== "0x" + "00".repeat(32);
-    const eligible = w && allowlist ? merkle(walletsOf(r.id, i)).proof(w) != null : null;
+    const members = p.merkleRoot === MEMBERS;
+    const allowlist = !members && p.merkleRoot !== ZERO32;
+    // Members: any signed-in FloorFeed account (the server checks again when it signs the pass).
+    const eligible = members ? (userId ? userId.startsWith("did:privy:") : null) : w && allowlist ? merkle(walletsOf(r.id, i)).proof(w) != null : null;
     const mintedByWallet = w ? Number(await read<bigint>("mintedInPhase", [BigInt(i), addr(w)])) : null;
+    const mintedByAccount = members && userId ? Number(await read<bigint>("mintedByAccount", [BigInt(i), accountHash(userId)])) : null;
     return {
       index: i, name: names[i]?.name ?? `Phase ${i + 1}`, start, end, price: Number(formatEther(p.price)), maxPerWallet: p.maxPerWallet,
-      allowlist, allowlistSize: allowlist ? walletsOf(r.id, i).length : null, eligible, mintedByWallet,
+      allowlist, allowlistSize: allowlist ? walletsOf(r.id, i).length : null, members, eligible, mintedByWallet, mintedByAccount,
       active: now >= start && (end === 0 || now < end),
     };
   }));
@@ -491,36 +525,60 @@ export async function launchedCollection(chain: string, address: string, wallet?
 }
 
 /** A mint for `minter` in `phase` (proof included for allowlists), simulated first. */
-export async function launchMintTx(chain: string, address: string, b: { minter: string; phase: number; quantity: number }) {
+const accountHash = (userId: string) => keccak256(toBytes(userId));
+
+/** A member pass for `minter` in `phase`, good for 10 minutes; the phase's per-wallet limit is also the per-account limit. */
+async function memberPass(chain: string, address: Hex, minter: string, phase: number, maxPerAccount: number, userId: string) {
+  if (!passAccount) throw new LaunchError("FloorFeed members minting isn't switched on.", 503);
+  const pass = { account: accountHash(userId), maxPerAccount, deadline: BigInt(Math.floor(Date.now() / 1000) + 600) };
+  const signature = await passAccount.signTypedData({
+    domain: { name: "FloorFeedDrop", version: "1", chainId: chainId(chain), verifyingContract: address },
+    types: { Pass: [{ name: "to", type: "address" }, { name: "phase", type: "uint256" }, { name: "account", type: "bytes32" },
+      { name: "maxPerAccount", type: "uint32" }, { name: "deadline", type: "uint64" }] },
+    primaryType: "Pass",
+    message: { to: addr(minter), phase: BigInt(phase), ...pass },
+  });
+  return { pass, signature };
+}
+
+/** `userId` must already be verified as the signed-in account (routes/launch.ts); members phases need it. */
+export async function launchMintTx(chain: string, address: string, b: { minter: string; phase: number; quantity: number; userId?: string }) {
   const r = byAddress(chain, address);
   if (!r) throw new LaunchError("Not found.", 404);
   if (!ADDRESS.test(b.minter)) throw new LaunchError("Connect a wallet to mint.");
   const c = evmPublicClient(chain);
   const a = address as Hex;
-  const phases = (await c.readContract({ address: a, abi: dropAbi, functionName: "phases" })) as readonly { merkleRoot: Hex }[];
+  const phases = (await c.readContract({ address: a, abi: dropAbi, functionName: "phases" })) as readonly { merkleRoot: Hex; maxPerWallet: number }[];
   const ph = phases[b.phase];
   if (!ph) throw new LaunchError("No such phase.");
   let proof: Hex[] = [];
-  if (ph.merkleRoot !== "0x" + "00".repeat(32)) {
+  let data: Hex | undefined;
+  if (ph.merkleRoot === MEMBERS) {
+    if (!b.userId?.startsWith("did:privy:")) throw new LaunchError("This phase is for FloorFeed members. Sign in to mint.", 401);
+    const { pass, signature } = await memberPass(chain, a, b.minter, b.phase, ph.maxPerWallet, b.userId);
+    data = encodeFunctionData({ abi: dropAbi, functionName: "mintWithPass", args: [addr(b.minter), BigInt(b.phase), BigInt(b.quantity), pass, signature] });
+  } else if (ph.merkleRoot !== ZERO32) {
     const tree = merkle(walletsOf(r.id, b.phase));
     if (tree.root !== ph.merkleRoot) throw new LaunchError("The allowlist on FloorFeed doesn't match the contract.");
     const p = tree.proof(b.minter);
     if (!p) throw new LaunchError("This wallet isn't on the list for this phase.");
     proof = p;
   }
+  data ??= encodeFunctionData({ abi: dropAbi, functionName: "mint", args: [addr(b.minter), BigInt(b.phase), BigInt(b.quantity), proof] });
   const value = (await c.readContract({ address: a, abi: dropAbi, functionName: "mintCost", args: [BigInt(b.phase), BigInt(b.quantity)] })) as bigint;
-  const data = encodeFunctionData({ abi: dropAbi, functionName: "mint", args: [addr(b.minter), BigInt(b.phase), BigInt(b.quantity), proof] });
   let gas: bigint;
   try {
     gas = await simulateEvm(chain, { from: addr(b.minter), to: address, data, value });
   } catch (err) {
-    const m = errorName((err as Error).message);
+    const m = errorName(err);
     const native = (EVM_CHAINS as Record<string, { native: string }>)[chain].native;
     throw new LaunchError(/insufficient funds/i.test(m) ? `Not enough ${native} for the mint plus gas.`
       : /PhaseNotActive/.test(m) ? "This phase isn't open right now."
       : /SoldOut/.test(m) ? "Sold out (or not enough left for that many)."
       : /WalletLimit/.test(m) ? "That's more than this wallet can mint in this phase."
       : /NotAllowlisted/.test(m) ? "This wallet isn't on the list for this phase."
+      : /AccountLimit/.test(m) ? "Your FloorFeed account has already minted its limit in this phase."
+      : /BadPass|PassExpired/.test(m) ? "FloorFeed couldn't confirm your membership for this mint. Try again."
       : (console.warn("[launch] mint sim:", m.slice(0, 300)), "The mint would fail right now."));
   }
   return {

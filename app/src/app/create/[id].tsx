@@ -353,7 +353,7 @@ function Mint({ form, set, draft, userId, native, saving, onSave, onAllowlist }:
   };
   return (
     <Card style={{ gap: 14 }}>
-      <Text style={T.meta}>Supply is your artwork count ({draft.items.toLocaleString()}). Phases run in order; an allowlist phase is only for the wallets you list.</Text>
+      <Text style={T.meta}>Supply is your artwork count ({draft.items.toLocaleString()}). Phases run in order; an allowlist phase is only for the wallets you list; a FloorFeed members phase is for anyone signed in to FloorFeed.</Text>
       {phases.map((p, i) => (
         <View key={i} style={s.phase}>
           <View style={s.row}>
@@ -361,8 +361,9 @@ function Mint({ form, set, draft, userId, native, saving, onSave, onAllowlist }:
             {phases.length > 1 && <Pressable onPress={() => set({ phases: phases.filter((_, j) => j !== i) })}><Text style={s.link}>Remove</Text></Pressable>}
           </View>
           <View style={s.chips}>
-            <Chip label="Public" on={!p.allowlist} onPress={() => update(i, { allowlist: false })} />
-            <Chip label="Allowlist" on={p.allowlist} onPress={() => update(i, { allowlist: true })} />
+            <Chip label="Public" on={!p.allowlist && !p.members} onPress={() => update(i, { allowlist: false, members: false })} />
+            <Chip label="Allowlist" on={p.allowlist && !p.members} onPress={() => update(i, { allowlist: true, members: false })} />
+            <Chip label="FloorFeed members" on={!!p.members} onPress={() => update(i, { allowlist: false, members: true })} />
           </View>
           <View style={s.row}>
             <View style={{ flex: 1, gap: 4 }}><Text style={T.label}>Starts</Text><DateTime label="Starts" value={p.start} onChange={(start) => update(i, { start })} /></View>
@@ -374,11 +375,14 @@ function Mint({ form, set, draft, userId, native, saving, onSave, onAllowlist }:
               <TextInput value={p.price} onChangeText={(v) => update(i, { price: v.replace(/[^0-9.]/g, '') })} keyboardType="decimal-pad" style={s.input} />
             </View>
             <View style={{ flex: 1, gap: 4 }}>
-              <Text style={T.label}>Max per wallet (0 = no limit)</Text>
+              <Text style={T.label}>Max per {p.members ? 'account' : 'wallet'} (0 = no limit)</Text>
               <TextInput value={String(p.maxPerWallet)} onChangeText={(v) => update(i, { maxPerWallet: Math.min(1000, Number(v.replace(/\D/g, '')) || 0) })} keyboardType="number-pad" style={s.input} />
             </View>
           </View>
-          {p.allowlist && (
+          {p.members && (
+            <Text style={T.caption}>Anyone signed in to FloorFeed can mint. FloorFeed checks the account at mint time, and the contract enforces the limit per account, even across several wallets.</Text>
+          )}
+          {p.allowlist && !p.members && (
             <View style={{ gap: 6 }}>
               <Text style={T.label}>Allowlist {draft.allowlists[i] ? `(${draft.allowlists[i].toLocaleString()} saved)` : ''}</Text>
               <TextInput value={lists[i] ?? ''} onChangeText={(v) => setLists((l) => ({ ...l, [i]: v }))} multiline placeholder="Paste wallet addresses (0x…), one per line or separated by commas"
@@ -461,7 +465,7 @@ function Launch({ draft, form, userId, config, onChanged, goto }: {
         {draft.phases.map((p, i) => (
           <Text key={i} style={T.caption}>
             {p.name}: {Number(p.price) === 0 ? 'free' : `${p.price} ${config.chains.find((c) => c.id === draft.chain)?.native ?? 'ETH'}`}
-            {p.maxPerWallet ? `, ${p.maxPerWallet} per wallet` : ''}{p.allowlist ? `, ${(draft.allowlists[i] ?? 0).toLocaleString()} wallets` : ', public'}
+            {p.maxPerWallet ? `, ${p.maxPerWallet} per ${p.members ? 'account' : 'wallet'}` : ''}{p.members ? ', FloorFeed members' : p.allowlist ? `, ${(draft.allowlists[i] ?? 0).toLocaleString()} wallets` : ', public'}
             {` · from ${new Date(p.start * 1000).toLocaleString()}`}
           </Text>
         ))}

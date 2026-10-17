@@ -49,9 +49,11 @@ export default function LaunchedMint() {
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
   useTitle(c ? `Mint ${c.name} on ${c.chainName} | FloorFeed` : 'Mint | FloorFeed');
 
+  // Only a signed-in account counts as a FloorFeed member (members phases).
+  const member = auth.userId?.startsWith('did:privy:') ? auth.userId : undefined;
   const load = useCallback(() => {
-    api.launched(chain, address, w.address ?? undefined).then((x) => { setC(x); setError(null); }).catch((e: Error) => setError(e.message));
-  }, [chain, address, w.address]);
+    api.launched(chain, address, w.address ?? undefined, member).then((x) => { setC(x); setError(null); }).catch((e: Error) => setError(e.message));
+  }, [chain, address, w.address, member]);
   useEffect(() => {
     load();
     const t = setInterval(() => { setNow(Math.floor(Date.now() / 1000)); load(); }, 20_000);
@@ -67,7 +69,9 @@ export default function LaunchedMint() {
   const auto = open.find((p) => p.eligible !== false) ?? open[0] ?? c.phases.find((p) => p.start > now) ?? null;
   const phase = (pick != null ? c.phases[pick] : null) ?? auto;
   const left = c.max - c.minted;
-  const walletLeft = phase && phase.maxPerWallet ? Math.max(0, phase.maxPerWallet - (phase.mintedByWallet ?? 0)) : 50;
+  const walletLeft = phase && phase.maxPerWallet
+    ? Math.max(0, phase.maxPerWallet - Math.max(phase.mintedByWallet ?? 0, phase.members ? phase.mintedByAccount ?? 0 : 0)) : 50;
+  const needsSignIn = !!phase?.members && !member;
   const maxQty = Math.max(1, Math.min(50, left, walletLeft || 1));
   const q = Math.min(qty, maxQty);
   const each = phase ? phase.price + c.mintFee : 0;
@@ -75,13 +79,15 @@ export default function LaunchedMint() {
   const totalUsd = toUsd(total, c.native);
   const short = c.balance != null ? total - c.balance : null;
   const blocked = !phase ? 'No mint phase is set.' : c.soldOut ? 'Sold out.' : !phase.active ? (phase.start > now ? `Opens in ${inWords(phase.start - now)}.` : 'This phase has ended.')
-    : phase.eligible === false ? 'This wallet isn’t on the list for this phase.' : walletLeft === 0 && phase.maxPerWallet ? 'You’ve minted the most this phase allows.' : null;
+    : needsSignIn ? 'This phase is for FloorFeed members. Sign in (free) to mint.'
+    : phase.eligible === false ? 'This wallet isn’t on the list for this phase.'
+    : walletLeft === 0 && phase.maxPerWallet ? (phase.members ? 'Your account has minted the most this phase allows.' : 'You’ve minted the most this phase allows.') : null;
 
   const mint = async () => {
     if (!w.address || !w.send || !phase) return;
     setStep({ kind: 'busy', text: 'Checking the mint…' });
     try {
-      const tx = await api.launchMintTx(c.chain, c.address, { minter: w.address, phase: phase.index, quantity: q });
+      const tx = await api.launchMintTx(c.chain, c.address, { minter: w.address, phase: phase.index, quantity: q, userId: phase.members ? member : undefined });
       setStep({ kind: 'busy', text: 'Confirm in your wallet…' });
       const hash = await w.send({ ...tx, description: `Mint ${q} ${c.name} for ${amt(tx.total, tx.unit)} on ${c.chainName}` });
       track('launch_mint', { chain: c.chain, quantity: q });
@@ -107,7 +113,7 @@ export default function LaunchedMint() {
       )}
       {phase && (
         <View style={{ gap: 2 }}>
-          <Text style={T.meta}>{phase.name}{phase.allowlist ? ` · allowlist (${phase.allowlistSize?.toLocaleString() ?? '?'} wallets)` : /public/i.test(phase.name) ? '' : ' · public'}{phase.maxPerWallet ? ` · ${phase.maxPerWallet} per wallet` : ''}</Text>
+          <Text style={T.meta}>{phase.name}{phase.members ? ' · FloorFeed members' : phase.allowlist ? ` · allowlist (${phase.allowlistSize?.toLocaleString() ?? '?'} wallets)` : /public/i.test(phase.name) ? '' : ' · public'}{phase.maxPerWallet ? ` · ${phase.maxPerWallet} per ${phase.members ? 'account' : 'wallet'}` : ''}</Text>
           <Text {...display} style={[T.hero, { color: C.text }]}>{phase.price === 0 ? 'Free' : amt(phase.price, c.native)}</Text>
           {c.mintFee > 0 && <Text style={T.caption}>+ {amt(c.mintFee, c.native)} FloorFeed fee per NFT</Text>}
         </View>
@@ -132,7 +138,10 @@ export default function LaunchedMint() {
           {w.available.map((o) => <Pressable key={o.name} onPress={() => w.connect(o.name)} style={s.secondary}><Text style={s.secondaryTxt}>Connect {o.name}</Text></Pressable>)}
         </View>
       ) : blocked ? (
-        <Text style={[T.body, { color: C.dim }]}>{blocked}</Text>
+        <View style={{ gap: 8 }}>
+          <Text style={[T.body, { color: C.dim }]}>{blocked}</Text>
+          {needsSignIn && phase?.active && auth.supported && <Pressable onPress={() => auth.login()} style={s.primary}><Text style={s.primaryTxt}>Sign in to mint</Text></Pressable>}
+        </View>
       ) : (
         <View style={{ gap: 10 }}>
           <View style={s.qtyRow}>
@@ -213,7 +222,7 @@ function PhaseChip({ p, on, now, unit, onPress }: { p: LaunchedPhase; on: boolea
   return (
     <Pressable onPress={onPress} style={[s.phase, on && { borderColor: C.accent }]}>
       <Text style={T.label}>{p.name}</Text>
-      <Text style={T.caption}>{p.price === 0 ? 'Free' : amt(p.price, unit)} · {status}{p.eligible === false ? ' · not listed' : p.eligible ? ' · you’re listed' : ''}</Text>
+      <Text style={T.caption}>{p.price === 0 ? 'Free' : amt(p.price, unit)} · {status}{p.members ? ' · members' : p.eligible === false ? ' · not listed' : p.eligible ? ' · you’re listed' : ''}</Text>
     </Pressable>
   );
 }

@@ -10,22 +10,28 @@ import {FloorFeedStore} from "./FloorFeedStore.sol";
 /// @notice Launches FloorFeedDrop collections as ERC-1167 clones. The creator's wallet
 /// sends the deploy and owns the collection; FloorFeed only sets the per-token fee that
 /// new collections lock in (existing collections keep the fee they launched with), and which
-/// creators launch fee-free.
+/// creators launch fee-free, and the key that signs FloorFeed member passes (members phases).
 contract FloorFeedFactory is Ownable {
     address public immutable implementation;
     uint256 public mintFee; // native wei per minted token, for collections created from now on
     address public feeRecipient;
     mapping(address creator => bool) public feeExempt; // collections they launch lock in a fee of 0
+    address public passSigner; // signs member passes for every collection from this factory; 0 = members phases closed
 
     event CollectionCreated(address indexed creator, address indexed collection, string name, string symbol, uint256 mintFee);
     event FeeUpdated(uint256 mintFee, address feeRecipient);
     event FeeExemptSet(address indexed creator, bool exempt);
+    event PassSignerSet(address passSigner);
 
     error ZeroRecipient();
 
-    constructor(FloorFeedStore store, address owner_, uint256 mintFee_, address feeRecipient_) Ownable(owner_) {
+    constructor(FloorFeedStore store, address owner_, uint256 mintFee_, address feeRecipient_, address passSigner_)
+        Ownable(owner_)
+    {
         implementation = address(new FloorFeedDrop(store));
         _setFee(mintFee_, feeRecipient_);
+        passSigner = passSigner_;
+        emit PassSignerSet(passSigner_);
     }
 
     function createCollection(bytes32 salt, FloorFeedDrop.Init calldata p) external returns (address collection) {
@@ -51,6 +57,12 @@ contract FloorFeedFactory is Ownable {
             feeExempt[creators[i]] = exempt;
             emit FeeExemptSet(creators[i], exempt);
         }
+    }
+
+    /// @notice Rotate (or, with 0, switch off) the member-pass key for every collection from this factory.
+    function setPassSigner(address passSigner_) external onlyOwner {
+        passSigner = passSigner_;
+        emit PassSignerSet(passSigner_);
     }
 
     function setFee(uint256 mintFee_, address feeRecipient_) external onlyOwner {

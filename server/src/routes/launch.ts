@@ -52,13 +52,16 @@ export function launchRoutes(app: FastifyInstance) {
 
   app.get("/launch/c/:chain/:address", async (req, reply) => {
     const { chain, address } = req.params as { chain: string; address: string };
-    const { wallet } = req.query as { wallet?: string };
-    try { return await launch.launchedCollection(chain, address, wallet); } catch (err) { return launchErr(reply, err); }
+    const { wallet, userId } = req.query as { wallet?: string; userId?: string };
+    try { return await launch.launchedCollection(chain, address, wallet, userId?.slice(0, 100)); } catch (err) { return launchErr(reply, err); }
   });
   app.post("/launch/c/:chain/:address/mint-tx", async (req, reply) => {
     const { chain, address } = req.params as { chain: string; address: string };
     try {
-      const b = z.object({ minter: z.string(), phase: z.number().int().min(0).max(7), quantity: z.number().int().min(1).max(50) }).parse(req.body);
+      const b = z.object({ minter: z.string(), phase: z.number().int().min(0).max(7), quantity: z.number().int().min(1).max(50),
+        userId: z.string().min(1).max(100).optional() }).parse(req.body);
+      // Members phases: the pass is for the signed-in account only.
+      if (b.userId && !(await authorize(req, reply, b.userId))) return;
       return await launch.launchMintTx(chain, address, b);
     } catch (err) { return launchErr(reply, err); }
   });

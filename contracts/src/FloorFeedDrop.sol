@@ -6,9 +6,16 @@ import {ERC2981Upgradeable} from "@openzeppelin/contracts-upgradeable/token/comm
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {Base64} from "@openzeppelin/contracts/utils/Base64.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {FloorFeedStore} from "./FloorFeedStore.sol";
+
+/// The factory that launched a drop names the key that signs FloorFeed member passes.
+interface IPassSigner {
+    function passSigner() external view returns (address);
+}
 
 /// @title FloorFeedDrop
 /// @notice A creator's PFP collection launched on FloorFeed: a fixed set of unique tokens
@@ -22,7 +29,11 @@ import {FloorFeedStore} from "./FloorFeedStore.sol";
 /// - metadata can be frozen for good;
 /// - a reveal shuffles which artwork each token gets with an offset nobody knows in
 ///   advance, so the creator can't steer rare pieces to particular token ids.
-contract FloorFeedDrop is ERC721Upgradeable, ERC2981Upgradeable, OwnableUpgradeable, ReentrancyGuard {
+///
+/// Members phases (merkleRoot == MEMBERS) are open to FloorFeed accounts: FloorFeed's server
+/// checks the account at mint time and signs a short-lived pass (EIP-712) for the wallet;
+/// the pass carries a hash of the account so the per-account limit holds across wallets.
+contract FloorFeedDrop is ERC721Upgradeable, ERC2981Upgradeable, OwnableUpgradeable, ReentrancyGuard, EIP712 {
     using Strings for uint256;
 
     struct Phase {
@@ -30,7 +41,16 @@ contract FloorFeedDrop is ERC721Upgradeable, ERC2981Upgradeable, OwnableUpgradea
         uint64 end; // unix seconds, 0 = open until sold out
         uint128 price; // native wei per token, paid to the creator
         uint32 maxPerWallet; // 0 = no limit
-        bytes32 merkleRoot; // 0 = public; leaf = keccak256(bytes.concat(keccak256(abi.encode(wallet))))
+        bytes32 merkleRoot; // 0 = public; MEMBERS = FloorFeed members (mintWithPass); else allowlist root,
+        // leaf = keccak256(bytes.concat(keccak256(abi.encode(wallet))))
+    }
+
+    /// A FloorFeed member pass: `to` may mint in `phase` for `account`, up to `maxPerAccount`
+    /// across every wallet of that account, until `deadline`.
+    struct Pass {
+        bytes32 account; // keccak256 of the FloorFeed account id
+        uint32 maxPerAccount; // 0 = no account limit
+        uint64 deadline; // unix seconds
     }
 
     struct Init {
@@ -54,6 +74,9 @@ contract FloorFeedDrop is ERC721Upgradeable, ERC2981Upgradeable, OwnableUpgradea
 
     uint256 public constant MAX_PHASES = 8;
     uint256 public constant MAX_PER_TX = 50;
+    bytes32 public constant MEMBERS = keccak256("floorfeed.members");
+    bytes32 private constant PASS_TYPEHASH =
+        keccak256("Pass(address to,uint256 phase,bytes32 account,uint32 maxPerAccount,uint64 deadline)");
 
     FloorFeedStore public immutable STORE;
 
@@ -61,6 +84,7 @@ contract FloorFeedDrop is ERC721Upgradeable, ERC2981Upgradeable, OwnableUpgradea
     uint256 public mintFee; // per token, native wei, to feeRecipient
     address public feeRecipient;
     bytes32 public provenance;
+    address public factory; // signs member passes through passSigner()
 
     uint32 public maxSupply;
     uint32 public totalMinted;
@@ -75,6 +99,7 @@ contract FloorFeedDrop is ERC721Upgradeable, ERC2981Upgradeable, OwnableUpgradea
     Phase[] private _phases;
     mapping(uint256 phase => mapping(address wallet => uint256)) public mintedInPhase;
     mapping(uint256 index => OnChainToken) public onChainToken; // by artwork index (1-based)
+    mapping(uint256 phase => mapping(bytes32 account => uint256)) public mintedByAccount;
 
     event Minted(address indexed payer, address indexed to, uint256 indexed phase, uint256 firstTokenId, uint256 quantity);
     event PhasesUpdated();
@@ -98,8 +123,12 @@ contract FloorFeedDrop is ERC721Upgradeable, ERC2981Upgradeable, OwnableUpgradea
     error NotRevealed();
     error SupplyTooLow();
     error LengthMismatch();
+    error MembersOnly();
+    error BadPass();
+    error PassExpired();
+    error AccountLimit();
 
-    constructor(FloorFeedStore store_) {
+    constructor(FloorFeedStore store_) EIP712("FloorFeedDrop", "1") {
         STORE = store_;
         _disableInitializers();
     }
@@ -116,6 +145,7 @@ contract FloorFeedDrop is ERC721Upgradeable, ERC2981Upgradeable, OwnableUpgradea
         maxSupply = p.maxSupply;
         mintFee = mintFee_;
         feeRecipient = feeRecipient_;
+        factory = msg.sender;
         _setPhases(p.phases);
     }
 
@@ -124,15 +154,44 @@ contract FloorFeedDrop is ERC721Upgradeable, ERC2981Upgradeable, OwnableUpgradea
     /// @notice Mint `quantity` tokens in phase `phase` to `to`. Anyone may pay (so a bridge
     /// or a friend can mint for you); allowlists and wallet limits apply to `to`.
     function mint(address to, uint256 phase, uint256 quantity, bytes32[] calldata proof) external payable nonReentrant {
-        if (phase >= _phases.length) revert BadPhase();
-        Phase memory ph = _phases[phase];
-        if (block.timestamp < ph.start || (ph.end != 0 && block.timestamp >= ph.end)) revert PhaseNotActive();
-        if (quantity == 0 || quantity > MAX_PER_TX) revert BadQuantity();
-        if (uint256(totalMinted) + quantity > maxSupply) revert SoldOut();
+        Phase memory ph = _activePhase(phase, quantity);
+        if (ph.merkleRoot == MEMBERS) revert MembersOnly();
         if (ph.merkleRoot != bytes32(0)) {
             bytes32 leaf = keccak256(bytes.concat(keccak256(abi.encode(to))));
             if (!MerkleProof.verifyCalldata(proof, ph.merkleRoot, leaf)) revert NotAllowlisted();
         }
+        _mintIn(ph, to, phase, quantity);
+    }
+
+    /// @notice Mint in a FloorFeed members phase with a pass signed by FloorFeed's pass signer.
+    function mintWithPass(address to, uint256 phase, uint256 quantity, Pass calldata pass, bytes calldata signature)
+        external
+        payable
+        nonReentrant
+    {
+        Phase memory ph = _activePhase(phase, quantity);
+        if (ph.merkleRoot != MEMBERS) revert BadPhase();
+        if (block.timestamp > pass.deadline) revert PassExpired();
+        bytes32 digest = _hashTypedDataV4(
+            keccak256(abi.encode(PASS_TYPEHASH, to, phase, pass.account, pass.maxPerAccount, pass.deadline))
+        );
+        address signer = IPassSigner(factory).passSigner();
+        if (signer == address(0) || ECDSA.recover(digest, signature) != signer) revert BadPass();
+        uint256 used = mintedByAccount[phase][pass.account] + quantity;
+        if (pass.maxPerAccount != 0 && used > pass.maxPerAccount) revert AccountLimit();
+        mintedByAccount[phase][pass.account] = used;
+        _mintIn(ph, to, phase, quantity);
+    }
+
+    function _activePhase(uint256 phase, uint256 quantity) private view returns (Phase memory ph) {
+        if (phase >= _phases.length) revert BadPhase();
+        ph = _phases[phase];
+        if (block.timestamp < ph.start || (ph.end != 0 && block.timestamp >= ph.end)) revert PhaseNotActive();
+        if (quantity == 0 || quantity > MAX_PER_TX) revert BadQuantity();
+        if (uint256(totalMinted) + quantity > maxSupply) revert SoldOut();
+    }
+
+    function _mintIn(Phase memory ph, address to, uint256 phase, uint256 quantity) private {
         uint256 already = mintedInPhase[phase][to];
         if (ph.maxPerWallet != 0 && already + quantity > ph.maxPerWallet) revert WalletLimit();
         uint256 fee = mintFee * quantity;

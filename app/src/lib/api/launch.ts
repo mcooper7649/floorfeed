@@ -7,7 +7,9 @@ export type LaunchConfig = {
   enabled: boolean; uploads: boolean; chains: { id: string; name: string; native: string }[];
   factory: string | null; maxItems: number; gateway: string;
 };
-export type LaunchPhaseIn = { name: string; start: number; end: number; price: string; maxPerWallet: number; allowlist: boolean };
+export type LaunchPhaseIn = { name: string; start: number; end: number; price: string; maxPerWallet: number; allowlist: boolean;
+  members?: boolean; // FloorFeed members phase: any signed-in account, limit per account
+};
 export type LaunchDraftIn = {
   chain: string; name: string; symbol: string; description: string; website?: string | null; twitter?: string | null;
   royaltyBps: number; royaltyTo?: string | null; storage: 'ipfs' | 'onchain'; reveal: 'instant' | 'later';
@@ -21,7 +23,7 @@ export type LaunchDraft = Omit<LaunchDraftIn, 'storage' | 'reveal'> & {
 export type LaunchItemIn = { idx: number; cid: string; mime?: string; name?: string; attributes?: { trait_type: string; value: string | number }[] };
 export type LaunchedPhase = {
   index: number; name: string; start: number; end: number; price: number; maxPerWallet: number; allowlist: boolean;
-  allowlistSize: number | null; eligible: boolean | null; mintedByWallet: number | null; active: boolean;
+  allowlistSize: number | null; members: boolean; eligible: boolean | null; mintedByWallet: number | null; mintedByAccount: number | null; active: boolean;
 };
 export type LaunchedCollection = {
   id: string; chain: string; chainName: string; native: string; address: string; name: string; symbol: string; description: string;
@@ -57,8 +59,9 @@ export const launchApi = {
   launchManageTx: (userId: string, id: string, action: 'reveal' | 'withdraw' | 'freeze') =>
     send<EvmTxOut & { owner: string }>('POST', draft(id, '/manage-tx'), { userId, action }),
 
-  launched: (chain: string, address: string, wallet?: string) =>
-    req<LaunchedCollection>(path`/launch/c/${chain}/${address}` + qs({ wallet })),
-  launchMintTx: (chain: string, address: string, b: { minter: string; phase: number; quantity: number }) =>
+  launched: (chain: string, address: string, wallet?: string, userId?: string) =>
+    req<LaunchedCollection>(path`/launch/c/${chain}/${address}` + qs({ wallet, userId })),
+  // userId (a signed-in account) is needed for FloorFeed members phases.
+  launchMintTx: (chain: string, address: string, b: { minter: string; phase: number; quantity: number; userId?: string }) =>
     send<EvmTxOut & { total: number; unit: string }>('POST', path`/launch/c/${chain}/${address}/mint-tx`, b),
 };
