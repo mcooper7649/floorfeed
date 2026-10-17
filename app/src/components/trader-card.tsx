@@ -8,6 +8,7 @@ import { C } from '@/constants/brand';
 import { T } from '@/constants/type';
 import type { TraderProfile } from '@/lib/api';
 import { holdTime, pct, shortAddr, signedSol, timeAgo, unitFor } from '@/lib/format';
+import { useSignedUsd, useWithUsd } from '@/lib/prices';
 
 export function TraderCard({ t, rank, following, onToggleFollow }: {
   t: TraderProfile;
@@ -15,11 +16,13 @@ export function TraderCard({ t, rank, following, onToggleFollow }: {
   following: boolean;
   onToggleFollow: () => void;
 }) {
+  const withUsd = useWithUsd();
+  const signedUsdOf = useSignedUsd();
   const up = t.realizedSol >= 0;
   const u = t.unit ?? unitFor(t.wallet);
   const notes = [
-    t.bestFlip && `Best flip ${signedSol(t.bestFlip.pnlSol, 2, u)} on ${t.bestFlip.collection}.`,
-    t.worstFlipSol != null && t.worstFlipSol < 0 && `Worst ${signedSol(t.worstFlipSol, 2, u)}.`,
+    t.bestFlip && `Best flip ${withUsd(signedSol(t.bestFlip.pnlSol, 2, u), t.bestFlip.pnlSol, u, true)} on ${t.bestFlip.collection}.`,
+    t.worstFlipSol != null && t.worstFlipSol < 0 && `Worst ${withUsd(signedSol(t.worstFlipSol, 2, u), t.worstFlipSol, u, true)}.`,
     u === 'SOL'
       ? `${Math.round(t.poolShare * 100)}% of trades through AMM pools.`
       : `${Math.round((t.bidBuyShare ?? 0) * 100)}% of buys filled by accepted bids.`,
@@ -45,7 +48,7 @@ export function TraderCard({ t, rank, following, onToggleFollow }: {
       <View style={[s.row, { alignItems: 'flex-end' }]}>
         <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
           <Text style={T.label}>Realized profit</Text>
-          <Text numberOfLines={1} style={[T.value, { color: up ? C.up : C.down }]}>{signedSol(t.realizedSol, 2, u)}</Text>
+          <Text numberOfLines={1} style={[T.value, { color: up ? C.up : C.down }]}>{signedSol(t.realizedSol, 2, u)}{signedUsdOf(t.realizedSol, u) ? <Text style={[T.meta, { color: C.dim }]}> · {signedUsdOf(t.realizedSol, u)}</Text> : null}</Text>
         </View>
         {t.roiPct != null && (
           <View style={[s.roi, { backgroundColor: (t.roiPct >= 0 ? C.up : C.down) + '22' }]}>
@@ -57,9 +60,9 @@ export function TraderCard({ t, rank, following, onToggleFollow }: {
 
       <View style={s.grid}>
         <Stat tone="inset" style={s.stat} label="Win rate" value={t.winRate == null ? '—' : `${Math.round(t.winRate * 100)}%`} sub={`${t.wins} of ${t.flips}`} />
-        <Stat tone="inset" style={s.stat} label="Per flip" value={t.avgPnlSol == null ? '—' : signedSol(t.avgPnlSol, 2, u)} />
+        <Stat tone="inset" style={s.stat} label="Per flip" value={t.avgPnlSol == null ? '—' : signedSol(t.avgPnlSol, 2, u)} sub={t.avgPnlSol == null ? undefined : signedUsdOf(t.avgPnlSol, u) ?? undefined} />
         <Stat tone="inset" style={s.stat} label="Avg hold" value={t.avgHoldHours == null ? '—' : holdTime(t.avgHoldHours)} />
-        <Stat tone="inset" style={s.stat} label="Holding" value={String(t.openPositions)} sub={t.openPositions ? signedSol(t.unrealizedSol, 2, u) : undefined} />
+        <Stat tone="inset" style={s.stat} label="Holding" value={String(t.openPositions)} sub={t.openPositions ? withUsd(signedSol(t.unrealizedSol, 2, u), t.unrealizedSol, u, true) : undefined} />
       </View>
 
       {t.collections.length > 0 && (
@@ -67,7 +70,7 @@ export function TraderCard({ t, rank, following, onToggleFollow }: {
           {t.collections.map((c) => (
             <View key={c.symbol} style={s.chip}>
               <Text style={[T.label, { color: C.text, flexShrink: 1 }]} numberOfLines={1}>{c.name}</Text>
-              <Text style={T.metaNum}>×{c.flips} <Text style={{ color: c.pnlSol >= 0 ? C.up : C.down }}>{signedSol(c.pnlSol, 1, u)}</Text></Text>
+              <Text style={T.metaNum}>×{c.flips} <Text style={{ color: c.pnlSol >= 0 ? C.up : C.down }}>{withUsd(signedSol(c.pnlSol, 1, u), c.pnlSol, u, true)}</Text></Text>
             </View>
           ))}
         </View>

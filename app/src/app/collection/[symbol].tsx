@@ -22,6 +22,7 @@ import { useEvmWallet } from '@/lib/evm-wallet';
 import { useSession } from '@/lib/session';
 import { useWallet } from '@/lib/wallet';
 import { amt, shortAddr, signedSol, sol, usdCompact } from '@/lib/format';
+import { useUsd } from '@/lib/prices';
 import { columnsFor, useLayout } from '@/lib/layout';
 import { fmtDay, fmtSol } from '@/lib/scale';
 import { useTitle } from '@/lib/use-title';
@@ -37,6 +38,7 @@ const TABS: { key: TabKey; label: string }[] = [
 const web = Platform.OS === 'web';
 
 export default function CollectionScreen() {
+  const toUsd = useUsd();
   const { symbol, tab: tabParam } = useLocalSearchParams<{ symbol: string; tab?: string }>();
   const { wide, pad, maxWidth, contentWidth } = useLayout();
   const [range, setRange] = useState<number>(7);
@@ -116,6 +118,7 @@ export default function CollectionScreen() {
 
   // USD per unit, for the "Min size" overlay filter.
   const usdRate = st.floor && st.floorUsd ? st.floorUsd / st.floor : null;
+  const withUsd = (sub: string | undefined, n: number | null | undefined) => { const d = toUsd(n, cur); return d ? (sub ? `${d} · ${sub}` : d) : sub; };
   const shownMarkers = overlays.minSize && usdRate != null ? markers.filter((m) => m.price * usdRate >= 1000) : markers;
   const priceCard = (
     <Card title="Price" right={
@@ -198,8 +201,8 @@ export default function CollectionScreen() {
       <View style={s.tiles}>
         <Tile label="Floor" value={st.floor != null ? amt(st.floor, cur) : '—'} sub={st.floorUsd != null ? usdCompact(st.floorUsd) : undefined} />
         <Tile label="24h change" value={ch24 == null ? '—' : `${ch24 >= 0 ? '▲' : '▼'} ${Math.abs(ch24).toFixed(1)}%`} color={ch24 == null ? undefined : ch24 >= 0 ? C.up : C.down} />
-        <Tile label="24h volume" value={st.volume24h ? amt(st.volume24h, cur, st.volume24h >= 10 ? 0 : 2) : '—'} sub={`${st.sales24h.toLocaleString()} sales`} />
-        <Tile label="7d volume" value={st.volume7d != null ? amt(st.volume7d, cur, st.volume7d >= 10 ? 0 : 2) : '—'} />
+        <Tile label="24h volume" value={st.volume24h ? amt(st.volume24h, cur, st.volume24h >= 10 ? 0 : 2) : '—'} sub={withUsd(`${st.sales24h.toLocaleString()} sales`, st.volume24h)} />
+        <Tile label="7d volume" value={st.volume7d != null ? amt(st.volume7d, cur, st.volume7d >= 10 ? 0 : 2) : '—'} sub={withUsd(undefined, st.volume7d)} />
         {evm
           ? <Tile label="Owners" value={st.owners != null ? st.owners.toLocaleString() : '—'} sub={st.supply ? `of ${st.supply.toLocaleString()}` : undefined} />
           : <Tile label="Listed" value={st.listed != null ? st.listed.toLocaleString() : '—'} />}
@@ -281,7 +284,7 @@ export default function CollectionScreen() {
                   </NftImage>
                   <View style={s.itemBody}>
                     <Text style={s.itemName} numberOfLines={1}>{l.name ?? shortAddr(l.mint)}</Text>
-                    <Text style={s.itemPrice}>{sol(l.price, 3, cur)}</Text>
+                    <Text style={s.itemPrice}>{sol(l.price, 3, cur)}{toUsd(l.price, cur) ? <Text style={s.rowMeta}> · {toUsd(l.price, cur)}</Text> : null}</Text>
                     {st.floor != null && (
                       <Text style={s.rowMeta}>
                         {l.price <= st.floor * 1.0005 ? 'at floor' : `+${(((l.price - st.floor) / st.floor) * 100).toFixed(1)}% over floor`}

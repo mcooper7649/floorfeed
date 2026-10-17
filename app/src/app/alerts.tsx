@@ -16,6 +16,7 @@ import { shortAddr, signedSol, sol, timeAgo } from '@/lib/format';
 import { useLayout } from '@/lib/layout';
 import { useSession } from '@/lib/session';
 import { useTitle } from '@/lib/use-title';
+import { useUsd, useWithUsd } from '@/lib/prices';
 
 // Trades by wallets the user follows, newest first. Opening the page marks
 // them read.
@@ -75,6 +76,8 @@ export default function AlertsScreen() {
 }
 
 function AlertRow({ a }: { a: Alert }) {
+  const toUsd = useUsd();
+  const withUsd = useWithUsd();
   const who = a.name ?? shortAddr(a.wallet);
   const verb = a.side === 'buy' ? 'bought' : a.pnl == null ? 'sold' : a.pnl >= 0 ? 'flipped' : 'sold at a loss';
   return (
@@ -83,7 +86,8 @@ function AlertRow({ a }: { a: Alert }) {
       title={`${who} ${verb} ${a.collection.name}`}
       meta={`${timeAgo(a.t)} ago${a.read ? '' : ' · new'}`}
       value={sol(a.price, 2, a.currency)}
-      sub={a.pnl != null ? `${signedSol(a.pnl, 2, a.currency)} after fees` : a.side === 'buy' ? 'paid' : 'sold for'}
+      note={toUsd(a.price, a.currency) ?? undefined}
+      sub={a.pnl != null ? `${withUsd(signedSol(a.pnl, 2, a.currency), a.pnl, a.currency, true)} after fees` : a.side === 'buy' ? 'paid' : 'sold for'}
       subColor={a.pnl == null ? undefined : a.pnl >= 0 ? C.up : C.down}
       onPress={() => router.push({ pathname: '/item/[symbol]/[id]', params: { symbol: a.collection.symbol, id: a.mint } })}
     />

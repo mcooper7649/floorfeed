@@ -18,6 +18,7 @@ import { thumb } from '@/lib/img';
 import { alpha, tickFormatter, TV_URL, useLwChart } from '@/lib/lw-chart';
 import { DAY, fmtWhen, priceSeries, type Sale, type Slot } from '@/lib/price-series';
 import { fmtSol } from '@/lib/scale';
+import { useUsd } from '@/lib/prices';
 
 // Web price chart on TradingView Lightweight Charts (native keeps the SVG
 // chart in price-chart.tsx). Two panes on one time axis:
@@ -83,6 +84,7 @@ class SaleDots implements ICustomSeriesPaneView<Time, DotRow, CustomSeriesOption
 type Hover = { slot: Slot; x: number } | null;
 
 export function PriceChart({ sales, buckets, bucketSec, floor, rangeDays, asOf, dimmed, tall, unit = 'SOL', scale = 'auto', markers = [] }: Props) {
+  const toUsd = useUsd();
   const PLOT_H = tall ? 300 : 220;
   const VOL_H = tall ? 80 : 56;
   const H = PLOT_H + VOL_H + 26;
@@ -261,7 +263,7 @@ export function PriceChart({ sales, buckets, bucketSec, floor, rangeDays, asOf, 
         <View style={s.head}>
           {last && (
             <Text style={s.headVal}>
-              {fmtSol(last.roll!)} {unit}{'  '}
+              {fmtSol(last.roll!)} {unit}{toUsd(last.roll!, unit) ? <Text style={[s.headChg, { color: C.dim }]}> · {toUsd(last.roll!, unit)}</Text> : null}{'  '}
               {change != null && (
                 <Text style={[s.headChg, { color: change >= 0 ? C.up : C.down }]}>
                   {change >= 0 ? '▲' : '▼'} {Math.abs(change).toFixed(1)}% {rangeLabel}

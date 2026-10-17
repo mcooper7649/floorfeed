@@ -15,10 +15,14 @@ import { holdTime, isEvmWallet, pct, shortAddr, signedSol, sol, timeAgo, unitFor
 import { useLayout } from '@/lib/layout';
 import { useSession } from '@/lib/session';
 import { useTitle } from '@/lib/use-title';
+import { useSignedUsd, useUsd, useWithUsd } from '@/lib/prices';
 
 const ECOSYSTEM: Record<string, string> = { SOL: 'Solana', ETH: 'Ethereum', HYPE: 'HyperEVM', RON: 'Ronin', APE: 'ApeChain', MON: 'Monad' };
 
 export default function WalletScreen() {
+  const toUsd = useUsd();
+  const withUsd = useWithUsd();
+  const signedUsdOf = useSignedUsd();
   const { address } = useLocalSearchParams<{ address: string }>();
   const { following, toggleFollow } = useSession();
   const [data, setData] = useState<WalletDetail | null>(null);
@@ -70,13 +74,13 @@ export default function WalletScreen() {
               ))]} />
             )}
             <View style={s.grid}>
-              <Stat wide={wide} label="Realized, after fees" value={signedSol(st.realizedSol, 2, u)} color={st.realizedSol >= 0 ? C.up : C.down} />
+              <Stat wide={wide} label="Realized, after fees" value={signedSol(st.realizedSol, 2, u)} sub={signedUsdOf(st.realizedSol, u) ?? undefined} color={st.realizedSol >= 0 ? C.up : C.down} />
               <Stat wide={wide} label="Win rate" value={st.winRate == null ? '—' : `${Math.round(st.winRate * 100)}%`} />
               <Stat wide={wide} label="Flips" value={String(st.flips)} />
               <Stat wide={wide} label="Holding" value={String(st.openPositions)} />
               <Stat wide={wide} label="ROI" value={pf.roiPct == null ? '—' : pct(pf.roiPct)}
                 color={pf.roiPct == null ? undefined : pf.roiPct >= 0 ? C.up : C.down} />
-              <Stat wide={wide} label="Avg / flip" value={pf.avgPnlSol == null ? '—' : signedSol(pf.avgPnlSol, 2, u)} />
+              <Stat wide={wide} label="Avg / flip" value={pf.avgPnlSol == null ? '—' : signedSol(pf.avgPnlSol, 2, u)} sub={pf.avgPnlSol == null ? undefined : signedUsdOf(pf.avgPnlSol, u) ?? undefined} />
               <Stat wide={wide} label="Avg hold" value={pf.avgHoldHours == null ? '—' : holdTime(pf.avgHoldHours)} />
               {isEvmWallet(address)
                 ? <Stat wide={wide} label="Buys via bids" value={`${Math.round((pf.bidBuyShare ?? 0) * 100)}%`} />
@@ -87,7 +91,7 @@ export default function WalletScreen() {
                 {pf.collections.map((c) => (
                   <View key={c.symbol} style={s.chip}>
                     <Text style={s.chipTxt}>{c.name}</Text>
-                    <Text style={s.chipMeta}>×{c.flips} · <Text style={{ color: c.pnlSol >= 0 ? C.up : C.down }}>{signedSol(c.pnlSol, 1, u)}</Text></Text>
+                    <Text style={s.chipMeta}>×{c.flips} · <Text style={{ color: c.pnlSol >= 0 ? C.up : C.down }}>{withUsd(signedSol(c.pnlSol, 1, u), c.pnlSol, u, true)}</Text></Text>
                   </View>
                 ))}
               </View>
@@ -113,6 +117,7 @@ export default function WalletScreen() {
             title={t.collection}
             meta={`${timeAgo(t.blockTime)} ago`}
             value={sol(t.price, 2, t.currency ?? u)}
+            note={toUsd(t.price, t.currency ?? u) ?? undefined}
             sub={t.side === 'buy' ? 'Bought' : 'Sold'}
             subColor={t.side === 'buy' ? C.up : C.down}
           />
@@ -122,8 +127,8 @@ export default function WalletScreen() {
   );
 }
 
-const Stat = ({ label, value, color, wide }: { label: string; value: string; color?: string; wide?: boolean }) => (
-  <UiStat label={label} value={value} color={color} style={{ flexBasis: wide ? '22%' : '45%' }} />
+const Stat = ({ label, value, color, wide, sub }: { label: string; value: string; color?: string; wide?: boolean; sub?: string }) => (
+  <UiStat label={label} value={value} sub={sub} color={color} style={{ flexBasis: wide ? '22%' : '45%' }} />
 );
 
 const s = StyleSheet.create({

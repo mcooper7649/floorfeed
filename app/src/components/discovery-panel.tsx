@@ -14,9 +14,10 @@ import { useAlerts } from '@/lib/alerts';
 import {
   api, type Alert, type Chain, type CollectionSummary, type Drop, type FeedEvent, type HolderRow, type LeaderWindow, type ThesisFeedItem, type Trader, type Unit,
 } from '@/lib/api';
-import { shortAddr, signedSol, sol, timeAgo } from '@/lib/format';
+import { shortAddr, signedSol, sol, timeAgo, usdGlance } from '@/lib/format';
 import { thumb } from '@/lib/img';
 import { useTradeMode } from '@/lib/mode';
+import { useSignedUsd, useUsd } from '@/lib/prices';
 import { PANEL_GAP, PANEL_WIDTH, usePanel } from '@/lib/panel';
 import { useSession } from '@/lib/session';
 
@@ -147,8 +148,9 @@ function Art({ uri, name, chain, round = true }: { uri: string | null; name: str
   );
 }
 
-function Row({ left, title, extra, sub, value, change, changeColor, onPress, watch, count }: {
+function Row({ left, title, extra, sub, value, usd, change, changeColor, onPress, watch, count }: {
   left: ReactNode; title: string; extra?: ReactNode; sub?: string; value?: string; change?: string; changeColor?: string; onPress?: () => void;
+  usd?: string | null; // the value in dollars, dim, ahead of the change ("$35 · ▼ 0.3%")
   watch?: number | null; // flash the row when this moves (e.g. the floor)
   count?: number | null; // pulse "+N sales" when this grows
 }) {
@@ -166,10 +168,14 @@ function Row({ left, title, extra, sub, value, change, changeColor, onPress, wat
         </View>
         {sub ? <Text style={s.sub} numberOfLines={1}>{sub}</Text> : null}
       </View>
-      {(value || change) ? (
+      {(value || change || usd) ? (
         <View style={s.rowEnd}>
           {value ? <Text style={s.value} numberOfLines={1}><TickArrow tick={tick} />{value}</Text> : null}
-          {change ? <Text style={[s.change, { color: changeColor ?? C.dim }]} numberOfLines={1}>{change}</Text> : null}
+          {(change || usd) ? (
+            <Text style={[s.change, { color: changeColor ?? C.dim }]} numberOfLines={1}>
+              {usd ? <Text style={{ color: C.dim }}>{usd}{change ? ' · ' : ''}</Text> : null}{change}
+            </Text>
+          ) : null}
         </View>
       ) : null}
     </Pressable>
@@ -268,6 +274,7 @@ export function CollectionsTab() {
   const collRow = (c: CollectionSummary, sub: string, extra?: ReactNode) => (
     <Row key={c.symbol} left={<Art uri={c.image} name={c.name} chain={c.chain} />} title={c.name} extra={extra} sub={sub}
       value={c.floor != null ? amount(c.floor, c.currency) : '—'}
+      usd={c.floorUsd != null && !/^USD/i.test(c.currency) ? usdGlance(c.floorUsd) : null}
       change={pctText(c.change24hPct)} changeColor={pctColor(c.change24hPct)} onPress={() => toColl(c.symbol)}
       watch={c.floor} count={c.sales24h} />
   );
@@ -346,6 +353,7 @@ function inWords(sec: number) {
 }
 
 function MintingList() {
+  const toUsd = useUsd();
   const { mode, canReal, setMode } = useTradeMode();
   const [loaded, setLoaded] = useState<{ drops: Drop[]; now: number } | null>(null);
   useEffect(() => {
@@ -382,6 +390,7 @@ function MintingList() {
                 extra={d.minting ? <Badge text="Live" tone="buy" /> : soon ? <Badge text="Soon" tone="info" /> : null}
                 sub={`${CHAINS[d.chain as Chain]?.name ?? d.chain} · ${d.stage ? `${d.stage} · ` : ''}${when}`}
                 value={d.price == null ? '—' : d.price === 0 ? 'Free' : `${trimNum(d.price)} ${d.currency}`}
+                usd={d.price ? toUsd(d.price, d.currency) : null}
                 change={d.priceUsd ? `$${d.priceUsd >= 100 ? d.priceUsd.toFixed(0) : d.priceUsd.toFixed(2)}` : undefined}
                 onPress={() => go({ pathname: '/drop/[slug]', params: { slug: d.slug } })} />
             );
@@ -396,6 +405,8 @@ const trimNum = (n: number) => (n >= 1 ? n.toFixed(2) : n.toPrecision(2)).replac
 // --- Alerts --------------------------------------------------------------------------
 
 function AlertsTab() {
+  const toUsd = useUsd();
+  const signedUsdOf = useSignedUsd();
   const { userId, following } = useSession();
   const { unread } = useAlerts();
   const [alerts, setAlerts] = useState<Alert[] | null>(null);
@@ -417,8 +428,8 @@ function AlertsTab() {
             <Row key={a.id} left={<Art uri={a.image} name={a.collection.name} round={false} />}
               title={`${a.name ?? shortAddr(a.wallet)} ${a.side === 'buy' ? 'bought' : a.pnl == null ? 'sold' : a.pnl >= 0 ? 'flipped' : 'sold'}`}
               sub={`${a.collection.name} · ${timeAgo(a.t)}`}
-              value={amount(a.price, a.currency)}
-              change={a.pnl != null ? signedAmount(a.pnl, a.currency) : a.read ? undefined : 'new'}
+              value={amount(a.price, a.currency)} usd={toUsd(a.price, a.currency)}
+              change={a.pnl != null ? (signedUsdOf(a.pnl, a.currency) ?? signedAmount(a.pnl, a.currency)) : a.read ? undefined : 'new'}
               changeColor={a.pnl == null ? C.accent : a.pnl >= 0 ? C.up : C.down}
               onPress={() => go({ pathname: '/item/[symbol]/[id]', params: { symbol: a.collection.symbol, id: a.mint } })} />
           ))}
@@ -464,6 +475,7 @@ const WINDOWS: { key: LeaderWindow; label: string }[] = [{ key: '7', label: '7D'
 const UNITS: { key: Unit; label: string }[] = [{ key: 'SOL', label: 'SOL' }, { key: 'ETH', label: 'ETH' }];
 
 function LeadersTab() {
+  const signedUsdOf = useSignedUsd();
   const [win, setWin] = useState<LeaderWindow>('7');
   const [unit, setUnit] = useState<Unit>('SOL');
   const [rows, setRows] = useState<{ key: string; rows: (Trader & { roiPct?: number | null })[] } | null>(null);
@@ -492,7 +504,7 @@ function LeadersTab() {
                 left={<View style={s.rank}><Text style={s.rankTxt}>{i + 1}</Text><Art uri={t.avatar} name={t.name ?? t.wallet} /></View>}
                 title={t.name ?? shortAddr(t.wallet)}
                 sub={`${t.flips} flips · ${t.winRate == null ? '—' : `${Math.round(t.winRate * 100)}% wins`}`}
-                value={signedAmount(t.realizedSol, unit)} changeColor={(t.roiPct ?? 0) >= 0 ? C.up : C.down}
+                value={signedAmount(t.realizedSol, unit)} usd={signedUsdOf(t.realizedSol, unit)} changeColor={(t.roiPct ?? 0) >= 0 ? C.up : C.down}
                 change={t.roiPct != null ? `${t.roiPct >= 0 ? '+' : '−'}${Math.abs(t.roiPct).toFixed(0)}% ROI` : undefined}
                 onPress={() => toWallet(t.wallet)} />
             ))}
@@ -529,25 +541,27 @@ function Badge({ text, tone }: { text: string; tone: 'buy' | 'sell' | 'info' }) 
 }
 
 function FeedRow({ e }: { e: FeedEvent }) {
+  const toUsd = useUsd();
+  const signedUsdOf = useSignedUsd();
   const cur = e.collection.currency;
   const t = timeAgo(e.t);
   switch (e.kind) {
     case 'buy':
       return <Row left={<Art uri={e.wallet.avatar} name={e.wallet.name ?? e.wallet.wallet} />} title={e.wallet.name ?? shortAddr(e.wallet.wallet)}
-        extra={<Badge text="Buy" tone="buy" />} sub={`${e.collection.name} · ${t}`} value={amount(e.price, cur)}
+        extra={<Badge text="Buy" tone="buy" />} sub={`${e.collection.name} · ${t}`} value={amount(e.price, cur)} usd={toUsd(e.price, cur)}
         onPress={() => go({ pathname: '/item/[symbol]/[id]', params: { symbol: e.collection.symbol, id: e.mint } })} />;
     case 'flip':
       return <Row left={<Art uri={e.wallet.avatar} name={e.wallet.name ?? e.wallet.wallet} />} title={e.wallet.name ?? shortAddr(e.wallet.wallet)}
-        extra={<Badge text={e.pnl >= 0 ? 'Flip' : 'Sell'} tone="sell" />} sub={`${e.collection.name} · ${t}`} value={amount(e.sell, cur)}
-        change={signedAmount(e.pnl, cur)} changeColor={e.pnl >= 0 ? C.up : C.down}
+        extra={<Badge text={e.pnl >= 0 ? 'Flip' : 'Sell'} tone="sell" />} sub={`${e.collection.name} · ${t}`} value={amount(e.sell, cur)} usd={toUsd(e.sell, cur)}
+        change={signedUsdOf(e.pnl, cur) ?? signedAmount(e.pnl, cur)} changeColor={e.pnl >= 0 ? C.up : C.down}
         onPress={() => go({ pathname: '/item/[symbol]/[id]', params: { symbol: e.collection.symbol, id: e.mint } })} />;
     case 'sweep':
       return <Row left={<Art uri={e.wallet.avatar} name={e.wallet.name ?? e.wallet.wallet} />} title={e.wallet.name ?? shortAddr(e.wallet.wallet)}
-        extra={<Badge text={`Swept ${e.count}`} tone="buy" />} sub={`${e.collection.name} · ${t}`} value={amount(e.total, cur)}
+        extra={<Badge text={`Swept ${e.count}`} tone="buy" />} sub={`${e.collection.name} · ${t}`} value={amount(e.total, cur)} usd={toUsd(e.total, cur)}
         onPress={() => toColl(e.collection.symbol)} />;
     case 'cluster':
       return <Row left={<Art uri={e.images[0] ?? null} name={e.collection.name} chain={e.collection.chain} round={false} />} title={e.collection.name}
-        extra={<Badge text={`${e.count} wallets`} tone="info" />} sub={`${e.buys} buys · ${t}`} value={amount(e.avg, cur)} change="avg"
+        extra={<Badge text={`${e.count} wallets`} tone="info" />} sub={`${e.buys} buys · ${t}`} value={amount(e.avg, cur)} usd={toUsd(e.avg, cur)} change="avg"
         onPress={() => toColl(e.collection.symbol)} />;
   }
 }

@@ -6,6 +6,7 @@ import { C } from '@/constants/brand';
 import type { ChartMarker, DailyPoint } from '@/lib/api';
 import { DAY, fmtWhen, priceSeries, type Sale } from '@/lib/price-series';
 import { fmtSol, linear, niceTicks } from '@/lib/scale';
+import { useUsd } from '@/lib/prices';
 
 // Two stacked panels on one time axis (never two y-scales on one plot):
 //  - price: individual sales are gray context, a rolling median (trailing
@@ -49,6 +50,7 @@ const tickLabel = (t: number, step: number) =>
     : new Date(t * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
 
 export function PriceChart({ sales, buckets, bucketSec, floor, rangeDays, asOf, dimmed, tall, unit = 'SOL' }: Props) {
+  const toUsd = useUsd();
   const [width, setWidth] = useState(0);
   const [active, setActive] = useState<number | null>(null);
   const PLOT_H = tall ? 300 : 190;
@@ -101,7 +103,7 @@ export function PriceChart({ sales, buckets, bucketSec, floor, rangeDays, asOf, 
       <View style={s.head}>
         {last && (
           <Text style={s.headVal}>
-            {fmtSol(last.roll)} {unit}{'  '}
+            {fmtSol(last.roll)} {unit}{toUsd(last.roll, unit) ? <Text style={[s.headChg, { color: C.dim }]}> · {toUsd(last.roll, unit)}</Text> : null}{'  '}
             {change != null && (
               <Text style={[s.headChg, { color: change >= 0 ? C.up : C.down }]}>
                 {change >= 0 ? '▲' : '▼'} {Math.abs(change).toFixed(1)}% {rangeLabel}

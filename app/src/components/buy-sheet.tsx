@@ -10,6 +10,7 @@ import { api, type BuyQuote } from '@/lib/api';
 import { sol } from '@/lib/format';
 import { useWallet } from '@/lib/wallet';
 import { track } from '@/lib/analytics';
+import { useWithUsd } from '@/lib/prices';
 
 // Real-mode "buy floor": shows the live cheapest listing, what it costs and
 // whether the wallet can cover it. Until FloorFeed can build marketplace
@@ -20,6 +21,7 @@ export function BuySheet({ symbol, open, onClose, onPaper }: {
   onClose: () => void;
   onPaper?: () => void; // "Paper trade instead"
 }) {
+  const withUsd = useWithUsd();
   const w = useWallet();
   const [quote, setQuote] = useState<{ key: string; q: BuyQuote } | { key: string; error: string } | null>(null);
   const [deposit, setDeposit] = useState(false);
@@ -73,11 +75,11 @@ export function BuySheet({ symbol, open, onClose, onPaper }: {
               {!q.listing && <Text style={s.meta}>Live listings didn&apos;t load, so this uses the floor price.</Text>}
 
               <View style={s.rows}>
-                <Row label="Listing price" value={price != null ? sol(price, 3) : '—'} />
+                <Row label="Listing price" value={price != null ? withUsd(sol(price, 3), price, 'SOL') : '—'} />
                 <Row label="Network fee" value={`~${q.networkFeeSol} SOL`} />
                 <Row label="Marketplace fee and royalty" value="added at checkout" />
-                <Row label="You pay (before fees)" value={total != null ? sol(total, 3) : '—'} strong />
-                <Row label="Your wallet" value={q.balanceSol != null ? sol(q.balanceSol, 3) : '—'} />
+                <Row label="You pay (before fees)" value={total != null ? withUsd(sol(total, 3), total, 'SOL') : '—'} strong />
+                <Row label="Your wallet" value={q.balanceSol != null ? withUsd(sol(q.balanceSol, 3), q.balanceSol, 'SOL') : '—'} />
               </View>
               {short != null && short > 0 && (
                 <>

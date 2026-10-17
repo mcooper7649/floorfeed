@@ -15,6 +15,7 @@ import { api, type CollectionAbout, type CollectionDetail, type Holding, type Pa
 import { amt, shortAddr, signedSol, sol, timeAgo } from '@/lib/format';
 import { useEvmWallet } from '@/lib/evm-wallet';
 import { useTradeMode } from '@/lib/mode';
+import { useWithUsd } from '@/lib/prices';
 import { useSession } from '@/lib/session';
 import { useWallet } from '@/lib/wallet';
 
@@ -43,6 +44,7 @@ export function Panel({ title, right, children }: { title?: string; right?: Reac
 const COUNTS = [1, 3, 5, 10];
 
 export function TradeBox({ data }: { data: CollectionDetail }) {
+  const withUsd = useWithUsd();
   const { mode, canReal, setMode } = useTradeMode();
   const { userId, bumpPortfolio } = useSession();
   const [count, setCount] = useState(1);
@@ -106,9 +108,9 @@ export function TradeBox({ data }: { data: CollectionDetail }) {
         })}
       </View>
       <View style={{ gap: 6 }}>
-        <Line label={n === 1 ? 'Floor price' : `${n} cheapest listings`} value={floor == null ? '—' : amt(subtotal, cur)} />
-        {feeRate > 0 && <Line label={`Fees and royalty (${(feeRate * 100).toFixed(1)}%)`} value={amt(fees, cur)} />}
-        <Line label="Total" value={floor == null ? '—' : amt(subtotal + fees, cur)} strong />
+        <Line label={n === 1 ? 'Floor price' : `${n} cheapest listings`} value={floor == null ? '—' : withUsd(amt(subtotal, cur), subtotal, cur)} />
+        {feeRate > 0 && <Line label={`Fees and royalty (${(feeRate * 100).toFixed(1)}%)`} value={withUsd(amt(fees, cur), fees, cur)} />}
+        <Line label="Total" value={floor == null ? '—' : withUsd(amt(subtotal + fees, cur), subtotal + fees, cur)} strong />
         {short && <Text style={T.caption}>Only {ladder.length} listings loaded; the rest are priced at the highest of them.</Text>}
         {real && <Text style={T.caption}>Real buys are one NFT at a time. Sweeps are paper-only for now.</Text>}
       </View>
@@ -165,6 +167,7 @@ function copy(text: string) {
 }
 
 export function AboutPanel({ data, about }: { data: CollectionDetail; about: CollectionAbout }) {
+  const withUsd = useWithUsd();
   const [more, setMore] = useState(false);
   const [copied, setCopied] = useState(false);
   const cur = data.currency;
@@ -203,7 +206,7 @@ export function AboutPanel({ data, about }: { data: CollectionDetail; about: Col
       <View style={{ gap: 12 }}>
         <View style={s.line}>
           <Text style={T.meta}>24h</Text>
-          <Text style={T.metaNum}><Text style={{ color: C.text, fontWeight: '600' }}>{a.sales.toLocaleString()}</Text> sales · {amt(a.volume, cur, a.volume >= 10 ? 0 : 2)}</Text>
+          <Text style={T.metaNum}><Text style={{ color: C.text, fontWeight: '600' }}>{a.sales.toLocaleString()}</Text> sales · {withUsd(amt(a.volume, cur, a.volume >= 10 ? 0 : 2), a.volume, cur)}</Text>
         </View>
         <Bar left={a.buyers} right={a.sellers} leftLabel="buyers" rightLabel="sellers" />
         <Bar left={a.provenBuys} right={a.provenSells} leftLabel="proven buys" rightLabel="proven sells" />
@@ -251,6 +254,7 @@ const Fact = ({ label, value }: { label: string; value: string }) => (
 // --- Your positions --------------------------------------------------------------------
 
 export function PositionsPanel({ data }: { data: CollectionDetail }) {
+  const withUsd = useWithUsd();
   const { userId, portfolioVersion } = useSession();
   const sw = useWallet();
   const ew = useEvmWallet();
@@ -295,7 +299,7 @@ export function PositionsPanel({ data }: { data: CollectionDetail }) {
             <Pressable key={h.mint} style={s.pos} onPress={() => router.push({ pathname: '/item/[symbol]/[id]', params: { symbol: data.symbol, id: h.mint } })}>
               <View style={s.posArt}><NftImage uri={h.image} name={h.name ?? data.name} radius={8} px={80} /></View>
               <Text style={[T.body, { flex: 1 }]} numberOfLines={1}>{h.name ?? shortAddr(h.mint)}</Text>
-              <Text style={T.metaNum}>{h.boughtAt != null ? `bought ${sol(h.boughtAt, 2, cur)}` : 'held'}</Text>
+              <Text style={T.metaNum}>{h.boughtAt != null ? `bought ${withUsd(sol(h.boughtAt, 2, cur), h.boughtAt, cur)}` : 'held'}</Text>
             </Pressable>
           ))}
         </View>
@@ -308,7 +312,7 @@ export function PositionsPanel({ data }: { data: CollectionDetail }) {
               <Text style={[T.metaNum, { flex: 1 }]}>
                 {sol(p.entryPrice, 3, cur)}{p.exitPrice != null ? ` → ${sol(p.exitPrice, 3, cur)}` : ''} · {timeAgo(Math.floor(p.openedAt / 1000))} ago
               </Text>
-              <Text style={[T.num, { color: p.pnlSol >= 0 ? C.up : C.down }]}>{signedSol(p.pnlSol, 3, cur)}</Text>
+              <Text style={[T.num, { color: p.pnlSol >= 0 ? C.up : C.down }]}>{withUsd(signedSol(p.pnlSol, 3, cur), p.pnlSol, cur, true)}</Text>
             </View>
           ))}
           <Pressable onPress={() => router.push('/portfolio')}><Text style={s.moreTxt}>Manage in Portfolio →</Text></Pressable>

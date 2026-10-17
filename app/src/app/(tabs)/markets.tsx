@@ -13,7 +13,7 @@ import { chainName } from '@/constants/chains';
 import { C } from '@/constants/brand';
 import { T } from '@/constants/type';
 import { api, type Chain, type CollectionSummary, type MarketCategory } from '@/lib/api';
-import { amt, pct, usdCompact } from '@/lib/format';
+import { amt, pct, usdCompact, usdGlance } from '@/lib/format';
 import { columnsFor, useLayout } from '@/lib/layout';
 import { useSession } from '@/lib/session';
 import { useTitle } from '@/lib/use-title';
@@ -286,7 +286,10 @@ function TrendCard({ c, rank, width }: { c: CollectionSummary; rank: number; wid
         <View style={s.trendStats}>
           <View>
             <Text style={s.trendLabel}>Floor</Text>
-            <Text style={s.trendVal}>{c.floor != null ? amt(c.floor, c.currency) : '—'}</Text>
+            <Text style={s.trendVal}>
+              {c.floor != null ? amt(c.floor, c.currency) : '—'}
+              {c.floorUsd != null && !/^USD/i.test(c.currency) ? <Text style={s.meta}> · {usdGlance(c.floorUsd)}</Text> : null}
+            </Text>
           </View>
           <View style={{ alignItems: 'flex-end' }}>
             <Text style={s.trendLabel}>24h vol</Text>

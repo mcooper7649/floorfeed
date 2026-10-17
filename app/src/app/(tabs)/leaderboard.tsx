@@ -12,6 +12,7 @@ import { signedSol } from '@/lib/format';
 import { useLayout } from '@/lib/layout';
 import { useSession } from '@/lib/session';
 import { useTitle } from '@/lib/use-title';
+import { useWithUsd } from '@/lib/prices';
 
 // One board per currency: profits in SOL, ETH, HYPE... can't be added up.
 const BOARDS: { key: Unit; label: string }[] = [
@@ -26,6 +27,7 @@ const SORTS: { key: LeaderSort; label: string }[] = [
 ];
 
 export default function LeaderboardScreen() {
+  const withUsd = useWithUsd();
   const [unit, setUnit] = useState<Unit>('SOL');
   const board = BOARDS.find((b) => b.key === unit)!;
   useTitle(`Top ${board.label} NFT flippers: P&L leaderboard | FloorFeed`);
@@ -65,7 +67,7 @@ export default function LeaderboardScreen() {
       {sm && (
         <Text style={[T.metaNum, s.summary, { paddingHorizontal: pad }]}>
           Ranked in {unit}. {sm.wallets} wallets with 3+ flips made {sm.flips.toLocaleString()} flips; {sm.profitableWallets} are in profit,{' '}
-          <Text style={{ color: sm.realizedSol >= 0 ? C.up : C.down }}>{signedSol(sm.realizedSol, 1, unit)}</Text> combined.
+          <Text style={{ color: sm.realizedSol >= 0 ? C.up : C.down }}>{withUsd(signedSol(sm.realizedSol, 1, unit), sm.realizedSol, unit, true)}</Text> combined.
           {sm.hiddenMarketMakers ? ` ${sm.hiddenMarketMakers} likely ${unit === 'SOL' ? 'market makers' : 'bid bots'} hidden.` : ''}{' '}
           <Text style={{ color: C.accent }} onPress={() => router.push({ pathname: '/how-it-works', params: { s: 'badges' } })}>What the badges mean</Text>
         </Text>

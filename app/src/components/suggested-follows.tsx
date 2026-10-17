@@ -10,6 +10,7 @@ import { track } from '@/lib/analytics';
 import { api, type TraderProfile } from '@/lib/api';
 import { shortAddr, signedSol } from '@/lib/format';
 import { useSession } from '@/lib/session';
+import { useWithUsd } from '@/lib/prices';
 
 type Pick = TraderProfile & { unit: 'SOL' | 'ETH' };
 
@@ -17,6 +18,7 @@ type Pick = TraderProfile & { unit: 'SOL' | 'ETH' };
 // excluded), each one tap from being followed. Used wherever a new visitor
 // would otherwise see an empty list.
 export function SuggestedFollows({ count = 4, from }: { count?: number; from: string }) {
+  const withUsd = useWithUsd();
   const { following, toggleFollow } = useSession();
   const [picks, setPicks] = useState<Pick[] | null>(null);
   useEffect(() => {
@@ -48,7 +50,7 @@ export function SuggestedFollows({ count = 4, from }: { count?: number; from: st
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={T.bodyStrong} numberOfLines={1}>{t.name ?? shortAddr(t.wallet)}</Text>
               <Text style={T.metaNum} numberOfLines={1}>
-                <Text style={{ color: C.up }}>{signedSol(t.realizedSol, 1, t.unit)}</Text>
+                <Text style={{ color: C.up }}>{withUsd(signedSol(t.realizedSol, 1, t.unit), t.realizedSol, t.unit, true)}</Text>
                 {` · ${t.flips} flips · ${t.winRate == null ? '—' : `${Math.round(t.winRate * 100)}% wins`} · 30d`}
               </Text>
             </View>

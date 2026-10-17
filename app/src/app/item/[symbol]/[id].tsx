@@ -19,6 +19,7 @@ import { shortAddr, signedSol, sol, timeAgo } from '@/lib/format';
 import { useEvmWallet } from '@/lib/evm-wallet';
 import { useLayout } from '@/lib/layout';
 import { useTradeMode } from '@/lib/mode';
+import { useUsd, useWithUsd } from '@/lib/prices';
 import { useTitle } from '@/lib/use-title';
 
 // Rarity band from the rank's percentile; the rank itself is always shown too.
@@ -43,6 +44,8 @@ export default function ItemScreen() {
   const error = loaded?.key === key ? loaded.error ?? null : null;
   const { wide, pad, maxWidth } = useLayout();
   const { mode, canReal, setMode } = useTradeMode();
+  const toUsd = useUsd();
+  const withUsd = useWithUsd();
   const [buyOpen, setBuyOpen] = useState(false);
   const [sellOpen, setSellOpen] = useState(false);
   const [listOpen, setListOpen] = useState(false);
@@ -100,10 +103,10 @@ export default function ItemScreen() {
           color={b?.color} />
         <Fact label={data.listing ? 'Listed at' : 'Last sale'}
           value={data.listing ? sol(data.listing.price, 2, u) : data.lastSale ? sol(data.lastSale.price, 2, u) : '—'}
-          sub={data.listing
+          sub={[toUsd(data.listing?.price ?? data.lastSale?.price, u), data.listing
             ? (vsFloor != null ? `${vsFloor >= 0 ? '+' : '−'}${Math.abs(vsFloor).toFixed(1)}% vs floor` : `on ${market}`)
-            : data.lastSale ? `${timeAgo(data.lastSale.t)} ago` : 'not tracked'} />
-        <Fact label="Collection floor" value={data.collection.floor != null ? sol(data.collection.floor, 2, u) : '—'} />
+            : data.lastSale ? `${timeAgo(data.lastSale.t)} ago` : 'not tracked'].filter(Boolean).join(' · ')} />
+        <Fact label="Collection floor" value={data.collection.floor != null ? sol(data.collection.floor, 2, u) : '—'} sub={toUsd(data.collection.floor, u) ?? undefined} />
       </View>}
       {data.drop && <Text style={s.note}>Launched on FloorFeed. Trait shares are out of the collection&apos;s full supply.</Text>}
 
@@ -135,7 +138,7 @@ export default function ItemScreen() {
           </>
         ) : data.listing && data.chain !== 'solana' && mode === 'real' ? (
           <Pressable accessibilityRole="button" onPress={() => setBuyOpen(true)} style={s.primary}>
-            <Text style={s.primaryTxt}>Buy now · {sol(data.listing.price, 2, u)}</Text>
+            <Text style={s.primaryTxt}>Buy now · {withUsd(sol(data.listing.price, 2, u), data.listing.price, u)}</Text>
           </Pressable>
         ) : (
           <Pressable accessibilityRole="link" onPress={() => Linking.openURL(data.listing?.url ?? data.marketUrl)}
@@ -200,10 +203,13 @@ export default function ItemScreen() {
               </Text>
               <Text style={s.meta}>
                 {timeAgo(h.t)} ago
-                {h.flipPnl != null && <Text style={{ color: h.flipPnl >= 0 ? C.up : C.down }}> · seller {h.flipPnl >= 0 ? 'flipped' : 'sold at a loss'} {signedSol(h.flipPnl, 2, u)}</Text>}
+                {h.flipPnl != null && <Text style={{ color: h.flipPnl >= 0 ? C.up : C.down }}> · seller {h.flipPnl >= 0 ? 'flipped' : 'sold at a loss'} {withUsd(signedSol(h.flipPnl, 2, u), h.flipPnl, u, true)}</Text>}
               </Text>
             </View>
-            <Text style={s.salePrice}>{sol(h.price, 2, u)}</Text>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={s.salePrice}>{sol(h.price, 2, u)}</Text>
+              {toUsd(h.price, u) && <Text style={s.note}>{toUsd(h.price, u)}</Text>}
+            </View>
           </View>
         ))}
     </View>

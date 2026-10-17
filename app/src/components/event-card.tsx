@@ -20,6 +20,7 @@ import { thumb } from '@/lib/img';
 import { useTradeMode } from '@/lib/mode';
 import { useSession } from '@/lib/session';
 import { track } from '@/lib/analytics';
+import { useUsd, useWithUsd } from '@/lib/prices';
 
 // One card per feed event. `tile` is the desktop grid card: artwork on top,
 // details below; otherwise a compact list card for phones.
@@ -80,6 +81,7 @@ function statLine(t: Trader) {
 }
 
 function TraderRow({ t }: { t: Trader }) {
+  const withUsd = useWithUsd();
   const { following, toggleFollow } = useSession();
   const on = following.has(t.wallet);
   return (
@@ -94,7 +96,7 @@ function TraderRow({ t }: { t: Trader }) {
             </View>
             <Text style={s.meta} numberOfLines={1}>
               {statLine(t)}
-              {t.flips > 0 && <Text style={{ color: t.realizedSol >= 0 ? C.up : C.down }}> · {signedSol(t.realizedSol, Math.abs(t.realizedSol) >= 10 ? 0 : 1, t.unit ?? unitFor(t.wallet))}</Text>}
+              {t.flips > 0 && <Text style={{ color: t.realizedSol >= 0 ? C.up : C.down }}> · {withUsd(signedSol(t.realizedSol, Math.abs(t.realizedSol) >= 10 ? 0 : 1, t.unit ?? unitFor(t.wallet)), t.realizedSol, t.unit ?? unitFor(t.wallet), true)}</Text>}
             </Text>
           </View>
         </Pressable>
@@ -106,12 +108,20 @@ function TraderRow({ t }: { t: Trader }) {
 
 // --- shared pieces ---------------------------------------------------------
 
+// " · $35" after a big coin amount, smaller and dim.
+function UsdTag({ n, unit, signed }: { n: number; unit: string; signed?: boolean }) {
+  const d = useUsd()(n, unit);
+  if (!d) return null;
+  return <Text style={s.usdTag}> · {signed && !d.startsWith('−') ? `+${d}` : d}</Text>;
+}
+
 function Kicker({ text, color }: { text: string; color: string }) {
   return <Text style={[s.kicker, { color }]}>{text}</Text>;
 }
 
 // Copy = buy the collection's floor (paper or real, per the wallet mode).
 function CopyCta({ coll, copiedFrom }: { coll: FeedEvent['collection']; copiedFrom?: string }) {
+  const withUsd = useWithUsd();
   const { symbol, floor } = coll;
   const { userId, bumpPortfolio } = useSession();
   const { mode } = useTradeMode();
@@ -130,7 +140,7 @@ function CopyCta({ coll, copiedFrom }: { coll: FeedEvent['collection']; copiedFr
       setState((err as Error).message);
     }
   };
-  const f = floor ? ` · ${sol(floor, 2, coll.currency)}` : '';
+  const f = floor ? ` · ${withUsd(sol(floor, 2, coll.currency), floor, coll.currency)}` : '';
   return (
     <>
       <Pressable onPress={() => { track('copy_tap', { mode }); if (mode === 'real') { tap(); setOpen(true); } else void paperBuy(); }}
@@ -230,7 +240,7 @@ function BuyCard({ e, tile }: { e: BuyEvent; tile?: boolean }) {
           <TraderRow t={e.wallet} />
           <View style={{ gap: 2 }}>
             <Text style={s.verb}>bought <Text style={s.coll}>{e.collection.name}</Text></Text>
-            <Text style={s.big}>{sol(e.price, 3, e.collection.currency)}</Text>
+            <Text style={s.big}>{sol(e.price, 3, e.collection.currency)}<UsdTag n={e.price} unit={e.collection.currency} /></Text>
           </View>
           {aiTake}
           <View style={{ flex: 1 }} />
@@ -247,7 +257,7 @@ function BuyCard({ e, tile }: { e: BuyEvent; tile?: boolean }) {
           <CollIcon name={e.collection.name} uri={e.image} size={96} radius={14} />
           <View style={{ flex: 1, gap: 2 }}>
             <Text style={s.verb}>bought <Text style={s.coll}>{e.collection.name}</Text></Text>
-            <Text style={s.big}>{sol(e.price, 3, e.collection.currency)}</Text>
+            <Text style={s.big}>{sol(e.price, 3, e.collection.currency)}<UsdTag n={e.price} unit={e.collection.currency} /></Text>
             <Text style={s.meta}>
               {e.vsFloorPct != null && <Text style={{ color: below ? C.up : C.dim }}>{pct(e.vsFloorPct)} vs floor · </Text>}
               {timeAgo(e.t)} ago
@@ -270,7 +280,7 @@ function FlipCard({ e, tile }: { e: FlipEvent; tile?: boolean }) {
   const detail = (
     <>
       <Text style={s.verb}>{win ? 'flipped' : 'sold at a loss'} <Text style={s.coll}>{e.collection.name}</Text></Text>
-      <Text style={[s.big, { color }]}>{signedSol(e.pnl, 2, e.collection.currency)}</Text>
+      <Text style={[s.big, { color }]}>{signedSol(e.pnl, 2, e.collection.currency)}<UsdTag n={e.pnl} unit={e.collection.currency} signed /></Text>
       <Text style={s.meta}>
         <Text style={{ color }}>{pct(e.pnlPct)}</Text> · {e.buy.toFixed(e.collection.currency === 'ETH' ? 3 : 2)} → {sol(e.sell, 2, e.collection.currency)} · held {holdTime(e.holdHours)} · after fees
       </Text>
@@ -322,13 +332,14 @@ function FlipCard({ e, tile }: { e: FlipEvent; tile?: boolean }) {
 // --- sweep -------------------------------------------------------------------
 
 function SweepCard({ e, tile }: { e: SweepEvent; tile?: boolean }) {
+  const withUsd = useWithUsd();
   const below = e.vsFloorPct != null && e.vsFloorPct <= 0;
   const detail = (
     <View style={{ gap: 2 }}>
       <Text style={s.verb}>swept <Text style={s.coll}>{e.count} × {e.collection.name}</Text></Text>
-      <Text style={s.big}>{sol(e.total, 2, e.collection.currency)}</Text>
+      <Text style={s.big}>{sol(e.total, 2, e.collection.currency)}<UsdTag n={e.total} unit={e.collection.currency} /></Text>
       <Text style={s.meta}>
-        avg {sol(e.avg, 2, e.collection.currency)}
+        avg {withUsd(sol(e.avg, 2, e.collection.currency), e.avg, e.collection.currency)}
         {e.vsFloorPct != null && <Text style={{ color: below ? C.up : C.dim }}> · {pct(e.vsFloorPct)} vs floor</Text>}
         {' '}· {timeAgo(e.t)} ago
       </Text>
@@ -369,6 +380,7 @@ function SweepCard({ e, tile }: { e: SweepEvent; tile?: boolean }) {
 // --- cluster (several wallets, one collection) -------------------------------
 
 function ClusterCard({ e, tile }: { e: ClusterEvent; tile?: boolean }) {
+  const withUsd = useWithUsd();
   const top = e.wallets.filter((w) => w.tier === 'elite' || w.tier === 'pro').length;
   const hours = Math.max(1, Math.round((e.t - e.since) / 3600));
   const below = e.vsFloorPct != null && e.vsFloorPct <= 0;
@@ -395,7 +407,7 @@ function ClusterCard({ e, tile }: { e: ClusterEvent; tile?: boolean }) {
         </Text>
       </View>
       <Text style={s.meta}>
-        {e.buys} buys · avg {sol(e.avg, 2, e.collection.currency)}
+        {e.buys} buys · avg {withUsd(sol(e.avg, 2, e.collection.currency), e.avg, e.collection.currency)}
         {e.vsFloorPct != null && <Text style={{ color: below ? C.up : C.dim }}> · {pct(e.vsFloorPct)} vs floor</Text>}
         {' '}· {timeAgo(e.t)} ago
       </Text>
@@ -449,6 +461,7 @@ const s = StyleSheet.create({
   chev: { color: C.dim, fontSize: 28, fontWeight: '300', paddingHorizontal: 4 },
   coll: { color: C.text, fontWeight: '600' },
   big: T.value,
+  usdTag: { ...T.meta, color: C.dim },
   headline: T.title,
   kicker: { ...T.label, fontWeight: '600', marginBottom: -4 },
   take: { backgroundColor: '#A78BFA14', borderRadius: 12, padding: 10, gap: 4, borderLeftWidth: 3, borderLeftColor: C.ai },

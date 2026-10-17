@@ -51,3 +51,11 @@ export function usd(n: number) {
   return `${n < 0 ? '−' : ''}$${body}`;
 }
 export const signedUsd = (n: number) => (n >= 0 ? `+${usd(n)}` : usd(n));
+
+// A dollar figure to read at a glance next to a coin amount: "$0.42", "$35", "$120", "$14.4K".
+export function usdGlance(n: number) {
+  const a = Math.abs(n);
+  const body = a >= 1000 ? usdCompact(a).slice(1) : a >= 10 ? a.toFixed(0) : a >= 0.01 ? a.toFixed(2) : null;
+  if (body == null) return n < 0 ? '−< $0.01' : '< $0.01';
+  return `${n < 0 ? '−' : ''}$${body}`;
+}

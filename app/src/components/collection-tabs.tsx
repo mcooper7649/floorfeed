@@ -9,6 +9,7 @@ import { T } from '@/constants/type';
 import { api, type CollectionHolder, type CollectionSale, type WalletRef } from '@/lib/api';
 import { holdTime, shortAddr, signedSol, sol, timeAgo } from '@/lib/format';
 import { useLayout } from '@/lib/layout';
+import { useWithUsd } from '@/lib/prices';
 import { useSession } from '@/lib/session';
 
 // Holders and Sales tables on the collection page (FOMO's Holders / Swaps).
@@ -41,6 +42,7 @@ export function HoldersTab({ symbol, currency, filter, onCount }: {
   symbol: string; currency: string; filter: TabFilter; onCount?: (n: number) => void;
 }) {
   const { wide } = useLayout();
+  const withUsd = useWithUsd();
   const { following } = useSession();
   const [rows, setRows] = useState<{ key: string; list: CollectionHolder[] } | null>(null);
   useEffect(() => {
@@ -67,7 +69,7 @@ export function HoldersTab({ symbol, currency, filter, onCount }: {
       {list.slice(0, 100).map((h) => {
         const pnl = (
           <View style={wide ? s.num : s.numNarrow}>
-            <Text style={[s.val, { color: h.pnl == null ? C.dim : h.pnl >= 0 ? C.up : C.down }]}>{h.pnl == null ? '—' : signedSol(h.pnl, 2, currency)}</Text>
+            <Text style={[s.val, { color: h.pnl == null ? C.dim : h.pnl >= 0 ? C.up : C.down }]}>{h.pnl == null ? '—' : withUsd(signedSol(h.pnl, 2, currency), h.pnl, currency, true)}</Text>
             {h.pnlPct != null && <Text style={[s.sub, { color: h.pnlPct >= 0 ? C.up : C.down, textAlign: 'right' }]}>{h.pnlPct >= 0 ? '▲' : '▼'} {Math.abs(h.pnlPct).toFixed(1)}%</Text>}
           </View>
         );
@@ -75,11 +77,11 @@ export function HoldersTab({ symbol, currency, filter, onCount }: {
           <View key={h.wallet} style={s.row}>
             <View style={{ flex: 2.2 }}><Who w={h} sub={`${holdTime(h.avgHoldHours)} avg. hold`} /></View>
             <View style={s.num}>
-              <Text style={s.val}>{h.value != null ? sol(h.value, 2, currency) : '—'}</Text>
+              <Text style={s.val}>{h.value != null ? withUsd(sol(h.value, 2, currency), h.value, currency) : '—'}</Text>
               <Text style={[s.sub, { textAlign: 'right' }]}>{h.items} NFT{h.items === 1 ? '' : 's'}</Text>
             </View>
             {pnl}
-            <View style={s.num}><Text style={s.val}>{sol(h.avgEntry, 3, currency)}</Text></View>
+            <View style={s.num}><Text style={s.val}>{withUsd(sol(h.avgEntry, 3, currency), h.avgEntry, currency)}</Text></View>
           </View>
         ) : (
           <View key={h.wallet} style={s.row}>
@@ -97,6 +99,7 @@ export function HoldersTab({ symbol, currency, filter, onCount }: {
 
 export function SalesTab({ symbol, currency, filter }: { symbol: string; currency: string; filter: TabFilter }) {
   const { wide } = useLayout();
+  const withUsd = useWithUsd();
   const { following } = useSession();
   const [rows, setRows] = useState<{ key: string; list: CollectionSale[] } | null>(null);
   useEffect(() => {
@@ -135,7 +138,7 @@ export function SalesTab({ symbol, currency, filter }: { symbol: string; currenc
             <View style={{ flex: 1.6 }}><Who w={r.buyer} /></View>
             <View style={{ flex: 1.6 }}><Who w={r.seller} /></View>
             <View style={s.num}>
-              <Text style={s.val}>{sol(r.price, 3, currency)}</Text>
+              <Text style={s.val}>{withUsd(sol(r.price, 3, currency), r.price, currency)}</Text>
               {r.kind === 'bid' && <Text style={[s.sub, { textAlign: 'right' }]}>sold into bid/pool</Text>}
             </View>
             <View style={s.num}><Text style={[s.val, { color: C.dim }]}>{vs}</Text></View>
@@ -148,7 +151,7 @@ export function SalesTab({ symbol, currency, filter }: { symbol: string; currenc
               <Text style={s.name} numberOfLines={1}>{r.buyer.name ?? shortAddr(r.buyer.wallet)} <Text style={s.sub}>bought from</Text> {r.seller.name ?? shortAddr(r.seller.wallet)}</Text>
               <Text style={s.sub}>{timeAgo(r.t)} ago · {vs} vs floor{r.kind === 'bid' ? ' · into bid/pool' : ''}</Text>
             </View>
-            <Text style={s.val}>{sol(r.price, 3, currency)}</Text>
+            <Text style={s.val}>{withUsd(sol(r.price, 3, currency), r.price, currency)}</Text>
           </View>
         );
       })}
