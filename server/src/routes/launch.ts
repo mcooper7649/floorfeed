@@ -7,8 +7,7 @@ import * as launch from "../launch.ts";
 
 const launchErr = (reply: FastifyReply, err: unknown) => {
   if (err instanceof launch.LaunchError) return reply.code(err.status).send({ error: err.message });
-  if (err instanceof z.ZodError) return reply.code(400).send({ error: err.issues[0]?.message ?? "Check the form." });
-  throw err;
+  throw err; // zod errors become 400s in index.ts
 };
 const Uid = z.object({ userId: z.string().min(1).max(100) });
 // A creator-only route: userId (from the body or query) must be the signed-in user.

@@ -1,5 +1,6 @@
 import cors from "@fastify/cors";
 import Fastify from "fastify";
+import { ZodError } from "zod";
 import { startAlerts } from "./alerts.ts";
 import { startAnalytics } from "./analytics.ts";
 import { COLLECTIONS, config } from "./config.ts";
@@ -26,6 +27,13 @@ import { startSocial } from "./social.ts";
 const app = Fastify({ logger: { level: "info" } });
 await app.register(cors, { origin: true, methods: ["GET", "HEAD", "POST", "PUT", "DELETE"] });
 app.addHook("onRequest", interactiveLane);
+// A failed zod parse in a route is bad input, not a server error: 400 with the
+// first problem's message (the form error the app shows). Anything else goes
+// on to Fastify's default handler.
+app.setErrorHandler((err, _req, reply) => {
+  if (err instanceof ZodError) return reply.code(400).send({ error: err.issues[0]?.message ?? "Check the form." });
+  throw err;
+});
 
 // Routes live in routes/, one module per area.
 marketRoutes(app);
