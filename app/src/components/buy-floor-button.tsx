@@ -36,8 +36,10 @@ export function BuyOfferRow({ label, price, unit, busy, disabled, onBuy, onOffer
   const { mode } = useTradeMode();
   const color = MODE_COLOR[mode];
   const dollars = price != null ? toUsd(price, unit) : null;
+  // On very narrow bars (small phones) 'Buy floor' becomes 'Buy' so the price is never cut off.
+  const [narrow, setNarrow] = useState(false);
   return (
-    <View style={[s.bar, { borderColor: color + '59' }]}>
+    <View style={[s.bar, { borderColor: color + '59' }]} onLayout={(e) => setNarrow(e.nativeEvent.layout.width < 300)}>
       <View style={s.priceCol}>
         <Text style={[s.price, price == null && { color: C.dim }]} numberOfLines={1}>{price != null ? amt(price, unit) : 'No floor yet'}</Text>
         <View style={s.subRow}>
@@ -55,7 +57,7 @@ export function BuyOfferRow({ label, price, unit, busy, disabled, onBuy, onOffer
       <Pressable accessibilityRole="button" accessibilityLabel={`${label}${price != null ? ` for ${amt(price, unit)}` : ''}, ${mode} mode`}
         onPress={onBuy} disabled={busy || disabled}
         style={({ pressed }) => [s.buy, { backgroundColor: color }, (pressed || busy) && { opacity: 0.85 }, disabled && !busy && { opacity: 0.45 }]}>
-        <Text style={s.buyTxt} numberOfLines={1}>{busy ? 'Buying…' : label}</Text>
+        <Text style={s.buyTxt} numberOfLines={1}>{busy ? 'Buying…' : narrow ? label.replace(/ floor$/, '') : label}</Text>
       </Pressable>
     </View>
   );
@@ -119,8 +121,8 @@ export function BuyFloorButton({ coll, copiedFrom }: { coll: FeedEvent['collecti
 
 const s = StyleSheet.create({
   bar: {
-    flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 60,
-    paddingVertical: 6, paddingRight: 6, paddingLeft: 14, borderRadius: 14, borderWidth: 1, backgroundColor: C.bg,
+    flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 60,
+    paddingVertical: 6, paddingRight: 6, paddingLeft: 12, borderRadius: 14, borderWidth: 1, backgroundColor: C.bg,
   },
   priceCol: { flex: 1, minWidth: 0, gap: 1 },
   price: { fontSize: 17, lineHeight: 22, fontWeight: '700', color: C.text, fontVariant: ['tabular-nums'] },
@@ -128,8 +130,8 @@ const s = StyleSheet.create({
   usd: { fontSize: 13, lineHeight: 17, color: C.dim, fontVariant: ['tabular-nums'], flexShrink: 1 },
   dot: { width: 6, height: 6, borderRadius: 3 },
   modeTxt: { fontSize: 13, lineHeight: 17, fontWeight: '600' },
-  offer: { minHeight: 46, paddingHorizontal: 14, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  offer: { minHeight: 46, paddingHorizontal: 10, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   offerTxt: { ...T.button, color: C.text },
-  buy: { minHeight: 46, paddingHorizontal: 18, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  buy: { minHeight: 46, paddingHorizontal: 14, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   buyTxt: { ...T.button, fontWeight: '700', color: C.accentInk },
 });
