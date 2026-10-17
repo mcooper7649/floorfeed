@@ -25,7 +25,7 @@ export function Stepper({ steps, current, busy, note }: {
                 <View style={[s.dot, done && s.dotDone, now && s.dotNow]}>
                   <Text style={[s.dotTxt, done && { color: C.accentInk }, now && { color: C.accent }]}>{done ? '✓' : i + 1}</Text>
                 </View>
-                <Text style={[s.stepTitle, !done && !now && { color: C.muted }]} numberOfLines={1}>{st.title}</Text>
+                <Text style={[s.stepTitle, !done && !now && { color: C.muted }]} numberOfLines={2}>{st.title}</Text>
               </View>
               <Text style={s.stepSub} numberOfLines={2}>{now && busy ? 'In progress…' : st.sub}</Text>
             </View>

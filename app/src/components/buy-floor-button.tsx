@@ -10,7 +10,7 @@ import { C } from '@/constants/brand';
 import { T } from '@/constants/type';
 import { track } from '@/lib/analytics';
 import { api, type FeedEvent } from '@/lib/api';
-import { amt, sol } from '@/lib/format';
+import { amt } from '@/lib/format';
 import { useTradeMode } from '@/lib/mode';
 import { useUsd } from '@/lib/prices';
 import { useSession } from '@/lib/session';
@@ -84,7 +84,7 @@ export function BuyFloorButton({ coll, copiedFrom }: { coll: FeedEvent['collecti
     try {
       const r = await api.buyFloor(userId, symbol, copiedFrom);
       track('paper_buy', { from: 'feed' });
-      setNote({ text: `Bought on paper at ${sol(r.entryPrice, 2, currency)}. See Portfolio.`, ok: true });
+      setNote({ text: `Bought on paper at ${amt(r.entryPrice, currency)}. See Portfolio.`, ok: true });
       bumpPortfolio();
     } catch (err) {
       setNote({ text: (err as Error).message, ok: false });
