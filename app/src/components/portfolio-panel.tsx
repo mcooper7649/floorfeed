@@ -9,10 +9,11 @@ import { EvmListSheet } from '@/components/evm-list-sheet';
 import { EvmOfferSheet } from '@/components/evm-offer-sheet';
 import { EvmSellSheet } from '@/components/evm-sell-sheet';
 import { menuProps, useQuickMenu, type MenuItem } from '@/components/quick-menu';
+import { networkLines } from '@/components/networks-card';
 import { ListingRows, OfferRows, OrderTabs, useMyOrders, type OpenMenu, type PanelAction, type Tab } from '@/components/your-orders';
 import { C } from '@/constants/brand';
 import { T } from '@/constants/type';
-import { api, type Chain, type Holding, type Mark } from '@/lib/api';
+import { api, type Chain, type EvmNetwork, type Holding, type Mark } from '@/lib/api';
 import { announceListing, cancelEvmListing, type ListingChange } from '@/lib/evm-listing';
 import { useEvmWallet } from '@/lib/evm-wallet';
 import { amt, pct, signedSol, signedUsd, usd } from '@/lib/format';
@@ -28,6 +29,7 @@ import { useWallet } from '@/lib/wallet';
 //   which also tells ingest to refresh those collections' floors every 2 min.
 
 const HOLDINGS_EVERY = 10 * 60_000;
+const CASH_EVERY = 3 * 60_000; // coin balances on every network (RPC reads, cached 15s server-side)
 const MARKS_EVERY = 30_000;
 const visible = () => typeof document === 'undefined' || document.visibilityState === 'visible';
 
@@ -61,12 +63,21 @@ export function useYourNfts() {
   const loadedAt = useRef(0);
   // Listings changed on this page, applied over holdings for a minute (until OpenSea shows them).
   const [listingOverrides, setListingOverrides] = useState<Record<string, ListingChange>>({});
+  // Cash: SOL comes with the Solana holdings; EVM coins (and wrapped ones) from /chain/evm/networks.
+  const [cash, setCash] = useState<{ wallets: string; sol: number | null; nets: EvmNetwork[] | null } | null>(null);
+  const loadCash = useCallback(() => {
+    if (!ew.address) return;
+    api.evmNetworks(ew.address).then((nets) => setCash((c) => ({ wallets, sol: c?.wallets === wallets ? c.sol : null, nets }))).catch(() => {});
+  }, [wallets, ew.address]);
   const loadHoldings = useCallback(() => {
     if (!wallets) return;
     loadedAt.current = Date.now();
     const [sol, evm] = [sw.address, ew.address];
     Promise.all([
-      sol ? api.holdings(sol).then((h) => h.nfts.map((n) => ({ ...n, chain: 'solana' }))) : [],
+      sol ? api.holdings(sol).then((h) => {
+        setCash((c) => ({ wallets, sol: h.sol, nets: c?.wallets === wallets ? c.nets : null }));
+        return h.nfts.map((n) => ({ ...n, chain: 'solana' }));
+      }) : [],
       evm ? api.evmHoldings(evm).then((h) => h.nfts.map((n) => ({ ...n, chain: n.chain ?? 'ethereum' }))) : [],
     ].map((p) => Promise.resolve(p).catch(() => null))).then(([a, b]) => {
       if (a == null && b == null) { setError('Couldn’t load your NFTs. Retrying soon.'); return; }
@@ -77,6 +88,21 @@ export function useYourNfts() {
       setListingOverrides((o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v.at > cutoff)));
     });
   }, [wallets, sw.address, ew.address]);
+
+  useEffect(() => {
+    loadCash();
+    const t = setInterval(() => { if (visible()) loadCash(); }, CASH_EVERY);
+    // A trade, bridge, wrap or deposit moves coins: check again once the chain has it.
+    const soon = () => { setTimeout(loadCash, 8_000); setTimeout(loadCash, 30_000); };
+    const onShow = () => { if (visible()) loadCash(); };
+    window.addEventListener?.('floorfeed:activity', soon);
+    document.addEventListener?.('visibilitychange', onShow);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener?.('floorfeed:activity', soon);
+      document.removeEventListener?.('visibilitychange', onShow);
+    };
+  }, [loadCash]);
 
   useEffect(() => {
     loadHoldings();
@@ -157,7 +183,12 @@ export function useYourNfts() {
   const totalChange = before > 0 && rows.some((r) => r.change != null) ? ((totalUsd - before) / before) * 100 : null;
 
   const priced = rows.some((r) => r.usd != null);
-  return { wallets, list, error, checkedAt, rows, totalUsd, priced, plUsd, plPct, totalChange };
+  // Coins in dollars across every network; null until both wallets' balances are in.
+  const c = cash?.wallets === wallets ? cash : null;
+  const cashReady = !!c && (!sw.address || c.sol != null) && (!ew.address || c.nets != null);
+  const cashLines = cashReady ? networkLines(c!.sol, c!.nets, toUsd) : [];
+  const cashUsd = cashReady ? cashLines.reduce<number | null>((a, l) => (a == null || l.usd == null ? null : a + l.usd), 0) : null;
+  return { wallets, list, error, checkedAt, rows, totalUsd, priced, plUsd, plPct, totalChange, cashUsd, cashNetworks: cashLines.length };
 }
 
 export type YourNfts = ReturnType<typeof useYourNfts>;
@@ -197,17 +228,31 @@ export function YourNftsBody({ nfts, onOpen }: { nfts: YourNfts; onOpen?: () => 
     );
   }
   if (list == null) return error ? <Text style={[T.meta, s.empty]}>{error}</Text> : <ActivityIndicator color={C.accent} style={{ marginTop: 24 }} />;
+  const { cashUsd, cashNetworks } = nfts;
+  const nftUsd = priced || rows.length === 0 ? totalUsd : null;
+  const grand = cashUsd != null && nftUsd != null ? cashUsd + nftUsd : null;
   return (
     <>
-      <View style={s.total}>
-        <Text style={s.totalNum}>{priced ? usd(totalUsd) : '—'}</Text>
-        <Text style={T.metaNum}>
-          {rows.length} NFT{rows.length === 1 ? '' : 's'}
-          {plPct != null
-            ? <Text style={{ color: plUsd >= 0 ? C.up : C.down }}> · {signedUsd(plUsd)} ({pct(plPct)}) since bought</Text>
-            : totalChange != null && <Text style={{ color: totalChange >= 0 ? C.up : C.down }}> · {pct(totalChange)} 24h</Text>}
-        </Text>
-      </View>
+      {/* Everything you have, always in view: total, then coins and NFTs. Tap for Portfolio. */}
+      <Pressable onPress={() => { onOpen?.(); router.push('/portfolio'); }} accessibilityRole="link" accessibilityLabel="Open Portfolio"
+        style={({ hovered }: { hovered?: boolean }) => [s.total, hovered && { opacity: 0.85 }]}>
+        <Text style={s.totalLbl}>Total</Text>
+        <Text style={s.totalNum}>{grand != null ? usd(grand) : '…'}</Text>
+        <View style={s.split}>
+          <View style={s.splitCol}>
+            <Text style={s.splitLbl}>Cash</Text>
+            <Text style={s.splitVal}>{cashUsd != null ? usd(cashUsd) : '…'}</Text>
+            <Text style={s.small} numberOfLines={1}>{cashNetworks ? `${cashNetworks} network${cashNetworks === 1 ? '' : 's'}` : cashUsd != null ? 'no coins yet' : ' '}</Text>
+          </View>
+          <View style={s.splitCol}>
+            <Text style={s.splitLbl}>NFTs · {rows.length}</Text>
+            <Text style={s.splitVal}>{nftUsd != null ? usd(nftUsd) : '—'}</Text>
+            {plPct != null
+              ? <Text style={[s.small, { color: plUsd >= 0 ? C.up : C.down }]} numberOfLines={1}>{signedUsd(plUsd)} ({pct(plPct)})</Text>
+              : <Text style={[s.small, totalChange != null && { color: totalChange >= 0 ? C.up : C.down }]} numberOfLines={1}>{totalChange != null ? `${pct(totalChange)} 24h` : ' '}</Text>}
+          </View>
+        </View>
+      </Pressable>
       {/* Listings and offers are OpenSea orders, so only with an Ethereum wallet. */}
       {ew.address && (
         <OrderTabs tab={tab} onTab={setTab}
@@ -345,7 +390,12 @@ const s = StyleSheet.create({
   dot: { width: 6, height: 6, borderRadius: 3 },
   liveTxt: { color: C.dim, fontSize: 11, fontWeight: '600' },
   total: { paddingHorizontal: 12, paddingBottom: 10, gap: 2 },
-  totalNum: { ...T.title, fontVariant: ['tabular-nums'] },
+  totalLbl: { color: C.muted, fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4 },
+  totalNum: { ...T.title, fontSize: 24, fontVariant: ['tabular-nums'] },
+  split: { flexDirection: 'row', gap: 8, marginTop: 8 },
+  splitCol: { flex: 1, gap: 1, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8, backgroundColor: C.card },
+  splitLbl: { color: C.dim, fontSize: 11, fontWeight: '600' },
+  splitVal: { color: C.text, fontSize: 15, fontWeight: '700', fontVariant: ['tabular-nums'] },
   list: { paddingHorizontal: 6, paddingBottom: 8 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 6, paddingVertical: 7, borderRadius: 8 },
   name: { color: C.text, fontSize: 14, fontWeight: '600' },
