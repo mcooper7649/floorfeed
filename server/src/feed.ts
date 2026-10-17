@@ -350,8 +350,11 @@ export function feedEvents(opts: {
   const before = opts.before ?? now + 1;
   // A +0.3% "win" is noise (and under fees a loss): wins start at +2%.
   const winsOnly = opts.view === "wins" ? "AND b.price IS NOT NULL AND t.price >= b.price * 1.02" : "";
+  // Filtered pages need more trades behind them: only ~1 trade in 10 is a
+  // flip (fewer without bots), so read further back to fill a page.
+  const depth = Math.min(1_000, opts.limit * (opts.kinds === "flips" && opts.view !== "wins" ? 12 : opts.kinds === "buys" || opts.hideBots ? 3 : 2));
   const rows = db.prepare(`${rowSelect} WHERE t.block_time < ? ${winsOnly} ${who} ORDER BY t.block_time DESC LIMIT ?`)
-    .all(before, ...fargs, opts.limit * 2) as Row[];
+    .all(before, ...fargs, depth) as Row[];
   if (!rows.length) return { view: opts.view, events: [], next: null };
   let events = build(rows, false);
   // Wins: profitable flips by people, not AMM pool bots.
@@ -361,7 +364,7 @@ export function feedEvents(opts: {
   events.sort((a, b) => b.t - a.t);
   // Don't cut a page inside the oldest second we loaded (it may be partial).
   const oldest = rows[rows.length - 1].block_time;
-  const full = rows.length === opts.limit * 2;
+  const full = rows.length === depth;
   const page = full ? events.filter((e) => e.t > oldest) : events;
   return { view: opts.view, events: page, next: full ? oldest + 1 : null };
 }
