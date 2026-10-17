@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { ModeChip } from '@/components/mode-toggle';
 import { NftImage } from '@/components/nft-image';
@@ -11,6 +11,7 @@ import { T } from '@/constants/type';
 import { recordTx } from '@/lib/activity';
 import { track } from '@/lib/analytics';
 import { api, type EvmOfferQuote } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import { cancelEvmListing, daysLeft } from '@/lib/evm-listing';
 import { useEvmWallet } from '@/lib/evm-wallet';
 import { sol, usd } from '@/lib/format';
@@ -27,6 +28,9 @@ type Step = { kind: 'idle' } | { kind: 'wrapping'; hash?: string } | { kind: 'ap
 
 const cancelledMsg = (m: string) => /reject|denied|cancel/i.test(m) && !/didn't cancel|can't cancel/i.test(m);
 const trim = (n: number) => String(Number(n.toPrecision(3)));
+// OpenSea takes bids in steps of 0.0001: suggestions snap to that (up when beating an offer).
+const snap = (n: number, up = false) => String((up ? Math.ceil(n * 1e4 - 1e-6) : Math.floor(n * 1e4 + 1e-6)) / 1e4);
+const offStep = (n: number) => n > 0 && Math.abs(Math.round(n * 1e4) - n * 1e4) > 1e-6;
 export const announceOffer = () => globalThis.dispatchEvent?.(new CustomEvent('floorfeed:offer'));
 
 export function EvmOfferSheet({ symbol, id, listedAt, open, onClose, onBuy }: {
@@ -38,6 +42,7 @@ export function EvmOfferSheet({ symbol, id, listedAt, open, onClose, onBuy }: {
   onBuy?: () => void; // the offer reaches the listing: buy instead
 }) {
   const w = useEvmWallet();
+  const auth = useAuth();
   const { toUsd } = usePrices();
   const [quote, setQuote] = useState<{ key: string; q?: EvmOfferQuote; error?: string } | null>(null);
   const [price, setPrice] = useState('');
@@ -68,6 +73,7 @@ export function EvmOfferSheet({ symbol, id, listedAt, open, onClose, onBuy }: {
   const needWrap = value > 0 ? Math.max(0, value - wrapped) : 0;
   const canWrap = !!q?.wrappable && needWrap > 0 && (q?.nativeBalance ?? 0) > needWrap;
   const needApprove = value > 0 && q?.allowance != null && q.allowance < value;
+  const cur = needWrap > 0 ? 0 : needApprove ? 1 : 2; // the step the user is on
   const floor = q?.collection.floor ?? null;
   const best = q?.bestOffer ?? null;
   const mine = q?.mine ?? [];
@@ -164,7 +170,7 @@ export function EvmOfferSheet({ symbol, id, listedAt, open, onClose, onBuy }: {
     floor && { label: '5% under floor', v: floor * 0.95 },
     floor && { label: '10% under', v: floor * 0.9 },
     floor && { label: '20% under', v: floor * 0.8 },
-  ].filter((x): x is Idea => !!x && x.v > 0);
+  ].filter((x): x is Idea => !!x && x.v >= 0.0001);
   const vsFloor = floor && value > 0 ? value / floor - 1 : null;
   const reachesListing = listedAt != null && value >= listedAt;
 
@@ -179,7 +185,22 @@ export function EvmOfferSheet({ symbol, id, listedAt, open, onClose, onBuy }: {
           </View>
 
           {!w.address ? (
-            <Text style={s.meta}>Connect an Ethereum wallet, or sign in for a free FloorFeed one, to make offers.</Text>
+            <View style={{ gap: 10 }}>
+              <Text style={s.meta}>Offers need an Ethereum wallet. Sign in for a free FloorFeed wallet, or connect one you have.</Text>
+              {auth.supported && !auth.userId && (
+                <Pressable accessibilityRole="button" onPress={() => { close(); auth.login(); }} style={s.primary}>
+                  <Text style={s.primaryTxt}>Sign in</Text>
+                </Pressable>
+              )}
+              {w.available.map((o) => (
+                <Pressable accessibilityRole="button" key={o.name} onPress={() => w.connect(o.name)} style={s.option}>
+                  <Image source={{ uri: o.icon }} style={s.icon} />
+                  <Text style={s.optionTxt}>{o.name}</Text>
+                  <Text style={s.meta}>{w.connecting ? 'Check your wallet…' : 'Connect'}</Text>
+                </Pressable>
+              ))}
+              {auth.userId && !w.available.length && <Text style={s.meta}>Your FloorFeed Ethereum wallet is being set up. Try again in a moment.</Text>}
+            </View>
           ) : step.kind === 'placed' ? (
             <View style={{ gap: 10 }}>
               <Text style={s.ok}>✓ Offer placed on OpenSea</Text>
@@ -242,7 +263,7 @@ export function EvmOfferSheet({ symbol, id, listedAt, open, onClose, onBuy }: {
                 )}
                 {ideas.length > 0 && (
                   <View style={s.chips}>
-                    {ideas.map((x) => <Chip key={x.label} label={`${x.label} ${trim(x.v)}`} on={value === Number(trim(x.v))} onPress={() => setPrice(trim(x.v))} />)}
+                    {ideas.map((x) => { const v = snap(x.v, x.label === 'Top best offer'); return <Chip key={x.label} label={`${x.label} ${v}`} on={value === Number(v)} onPress={() => setPrice(v)} />; })}
                   </View>
                 )}
               </View>
@@ -281,17 +302,30 @@ export function EvmOfferSheet({ symbol, id, listedAt, open, onClose, onBuy }: {
               {step.kind === 'error' && <Text style={s.err}>{step.message}</Text>}
               {step.kind === 'error' && <ReportLink topic="trade" detail={step.message} from="evm-offer" onLeave={onClose} />}
 
+              {value > 0 && !offStep(value) && (needWrap === 0 || canWrap) && (
+                <View style={{ gap: 8 }}>
+                  <Text style={s.meta}>One offer, three steps. Steps 1 and 2 only set up your wallet; nothing is bought until someone accepts.</Text>
+                  <Stepper current={cur} busy={busy} steps={[
+                    { title: `Get ${token}`, sub: cur > 0 ? `You have ${sol(wrapped, 4, token)}` : `Wrap ${sol(needWrap, 4, native)}` },
+                    { title: `Allow ${token}`, sub: cur > 1 ? 'Allowed' : 'Once per network' },
+                    { title: 'Sign offer', sub: 'Free, no gas' },
+                  ]} />
+                </View>
+              )}
+
               {!(value > 0) ? (
                 <View style={[s.primary, { opacity: 0.6 }]}><Text style={s.primaryTxt}>Enter an offer</Text></View>
+              ) : offStep(value) ? (
+                <Text style={s.err}>OpenSea takes offers in steps of 0.0001. Try {snap(value)} or {snap(value, true)}.</Text>
               ) : needWrap > 0 ? (
                 canWrap ? (
                   <View style={{ gap: 8 }}>
                     <Text style={s.meta}>
-                      Offers are made in {token}, wrapped {native} (always worth the same). You have {sol(wrapped, 4, token)}, so wrap {sol(needWrap, 4, native)} first.
+                      Offers are made in {token}, wrapped {native}, worth exactly the same. You can unwrap it back any time.
                     </Text>
                     <Pressable accessibilityRole="button" onPress={wrap} disabled={busy} style={[s.primary, busy && { opacity: 0.7 }]}>
                       <Text style={s.primaryTxt}>
-                        {step.kind === 'wrapping' ? (step.hash ? 'Waiting for the wrap to confirm…' : 'Confirm in your wallet…') : `Wrap ${sol(needWrap, 4, native)} into ${token}`}
+                        {step.kind === 'wrapping' ? (step.hash ? 'Waiting for the wrap to confirm…' : 'Confirm in your wallet…') : `Step 1 of 3 · Wrap ${sol(needWrap, 4, native)} into ${token}`}
                       </Text>
                     </Pressable>
                   </View>
@@ -304,15 +338,15 @@ export function EvmOfferSheet({ symbol, id, listedAt, open, onClose, onBuy }: {
                 )
               ) : needApprove ? (
                 <View style={{ gap: 8 }}>
-                  <Text style={s.meta}>One time on {chainName(q.chain)}: let OpenSea use your {token} when someone accepts an offer. A small network fee; nothing is spent now.</Text>
+                  <Text style={s.meta}>Lets OpenSea take the {token} only if someone accepts your offer. Once on {chainName(q.chain)}, small network fee, nothing is spent now.</Text>
                   <Pressable accessibilityRole="button" onPress={approve} disabled={busy} style={[s.primary, busy && { opacity: 0.7 }]}>
-                    <Text style={s.primaryTxt}>{step.kind === 'approving' ? (step.hash ? 'Waiting for the approval to confirm…' : 'Confirm in your wallet…') : `Allow ${token} for offers`}</Text>
+                    <Text style={s.primaryTxt}>{step.kind === 'approving' ? (step.hash ? 'Waiting for the approval to confirm…' : 'Confirm in your wallet…') : `Step 2 of 3 · Allow ${token}`}</Text>
                   </Pressable>
                 </View>
               ) : (
                 <Pressable accessibilityRole="button" onPress={place} disabled={busy || !w.signTypedData}
                   style={[s.primary, busy && { opacity: 0.7 }]}>
-                  <Text style={s.primaryTxt}>{step.kind === 'signing' ? 'Sign the offer in your wallet…' : `Offer ${sol(value, 4, token)}`}</Text>
+                  <Text style={s.primaryTxt}>{step.kind === 'signing' ? 'Sign the offer in your wallet…' : `Step 3 of 3 · Sign offer for ${sol(value, 4, token)}`}</Text>
                 </Pressable>
               )}
               <Text style={s.fine}>
@@ -328,6 +362,29 @@ export function EvmOfferSheet({ symbol, id, listedAt, open, onClose, onBuy }: {
         </Pressable>
       </Pressable>
     </Modal>
+  );
+}
+
+// The three steps of an offer, done ✓ / current / next, so it reads as one flow.
+function Stepper({ steps, current, busy }: { steps: { title: string; sub: string }[]; current: number; busy: boolean }) {
+  return (
+    <View style={s.stepper}>
+      {steps.map((st, i) => {
+        const done = i < current, now = i === current;
+        return (
+          <View key={st.title} style={s.stepCol}>
+            <View style={[s.stepBar, (done || now) && { backgroundColor: C.accent }, now && busy && { opacity: 0.6 }]} />
+            <View style={s.stepHead}>
+              <View style={[s.dot, done && s.dotDone, now && s.dotNow]}>
+                <Text style={[s.dotTxt, done && { color: C.accentInk }, now && { color: C.accent }]}>{done ? '✓' : i + 1}</Text>
+              </View>
+              <Text style={[s.stepTitle, !done && !now && { color: C.muted }]} numberOfLines={1}>{st.title}</Text>
+            </View>
+            <Text style={s.stepSub} numberOfLines={2}>{now && busy ? 'In progress…' : st.sub}</Text>
+          </View>
+        );
+      })}
+    </View>
   );
 }
 
@@ -369,4 +426,17 @@ const s = StyleSheet.create({
   primaryTxt: { ...T.button, color: C.accentInk },
   secondary: { borderRadius: 12, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: C.border, backgroundColor: C.cardHi },
   secondaryTxt: { ...T.button, color: C.text },
+  stepper: { flexDirection: 'row', gap: 8 },
+  stepCol: { flex: 1, gap: 6 },
+  stepBar: { height: 4, borderRadius: 2, backgroundColor: C.border },
+  stepHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  dot: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.border },
+  dotDone: { backgroundColor: C.accent, borderColor: C.accent },
+  dotNow: { borderColor: C.accent, borderWidth: 2 },
+  dotTxt: { ...T.caption, color: C.muted, fontWeight: '700' },
+  stepTitle: { ...T.label, color: C.text, flexShrink: 1 },
+  stepSub: { ...T.caption, color: C.muted },
+  option: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: C.border, backgroundColor: C.cardHi },
+  icon: { width: 28, height: 28, borderRadius: 6 },
+  optionTxt: { ...T.bodyStrong, flex: 1 },
 });

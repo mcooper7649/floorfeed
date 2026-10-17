@@ -4,6 +4,7 @@ import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-nati
 
 import { BuySheet } from '@/components/buy-sheet';
 import { EvmBuySheet } from '@/components/evm-buy-sheet';
+import { EvmOfferSheet } from '@/components/evm-offer-sheet';
 import { MODE_COLOR, ModeToggle } from '@/components/mode-toggle';
 import { NftImage } from '@/components/nft-image';
 import { C } from '@/constants/brand';
@@ -42,12 +43,13 @@ export function Panel({ title, right, children }: { title?: string; right?: Reac
 const COUNTS = [1, 3, 5, 10];
 
 export function TradeBox({ data }: { data: CollectionDetail }) {
-  const { mode } = useTradeMode();
+  const { mode, canReal, setMode } = useTradeMode();
   const { userId, bumpPortfolio } = useSession();
   const [count, setCount] = useState(1);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [sheet, setSheet] = useState(false);
+  const [offering, setOffering] = useState(false);
   const cur = data.currency;
   const floor = data.stats.floor;
   const evm = data.chain !== 'solana';
@@ -115,7 +117,17 @@ export function TradeBox({ data }: { data: CollectionDetail }) {
           {busy ? 'Buying…' : real ? `Buy floor${floor != null ? ` · ${sol(floor, 3, cur)}` : ''}` : `Paper buy ${n === 1 ? 'floor' : `×${n}`}`}
         </Text>
       </Pressable>
+      {evm && (
+        <Pressable accessibilityRole="button" onPress={() => { if (!real && canReal) setMode('real'); setOffering(true); }}
+          style={({ pressed }) => [s.offerBtn, pressed && { opacity: 0.8 }]}>
+          <Text style={s.offerTxt}>Make a collection offer</Text>
+        </Pressable>
+      )}
       {msg && <Text style={T.meta}>{msg}</Text>}
+      {evm && offering && (
+        <EvmOfferSheet symbol={data.symbol} listedAt={floor} open onClose={() => setOffering(false)}
+          onBuy={() => { setOffering(false); setSheet(true); }} />
+      )}
       {!evm && <BuySheet symbol={data.symbol} open={sheet} onClose={() => setSheet(false)} onPaper={paper} />}
       {evm && <EvmBuySheet symbol={data.symbol} open={sheet} onClose={() => setSheet(false)} onPaper={paper} />}
     </Panel>
@@ -318,6 +330,8 @@ const s = StyleSheet.create({
   line: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   cta: { borderRadius: 12, paddingVertical: 13, alignItems: 'center' },
   ctaTxt: { ...T.button, color: C.accentInk },
+  offerBtn: { borderRadius: 12, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: C.border, backgroundColor: C.cardHi },
+  offerTxt: { ...T.button, color: C.text },
   secondary: { borderRadius: 12, paddingVertical: 11, alignItems: 'center', borderWidth: 1, borderColor: C.border, backgroundColor: C.cardHi },
   secondaryTxt: { ...T.button, color: C.text },
   tiles: { flexDirection: 'row', gap: 6 },

@@ -1,6 +1,7 @@
 import { encodeFunctionData, formatEther, formatUnits, maxUint256, parseAbiItem, parseUnits, type Hex } from "viem";
 import { EVM_CHAINS, EVM_SALES } from "./config.ts";
 import { db } from "./db.ts";
+import { decimalString } from "./units.ts";
 import { CONDUIT_KEYS, PREFERS_SECOND, SEAPORT, SEAPORT_TYPES, SIGNED_ZONE, domain, requiredFees } from "./list-evm.ts";
 import {
   buildOsCollectionOffer, fromOsChain, getOsBestCollectionOffer, getOsBestOffer, getOsMyOffers, getOsNft, getOsOrder,
@@ -137,7 +138,7 @@ export async function evmWrapTx(b: { symbol: string; owner: string; amount: numb
   const cfg = EVM_CHAINS[t.chain as keyof typeof EVM_CHAINS];
   if (token!.symbol.toUpperCase() !== `W${cfg.native.toUpperCase()}`) throw new Error(`Offers here are in ${token!.symbol}, which can't be wrapped from ${cfg.native}.`);
   if (!(b.amount > 0) || b.amount > 1e6) throw new Error("Enter an amount.");
-  const value = parseUnits(b.amount.toFixed(token!.decimals), token!.decimals);
+  const value = parseUnits(decimalString(b.amount, token!.decimals), token!.decimals);
   const c = evmPublicClient(t.chain);
   const data = encodeFunctionData({ abi: [DEPOSIT], functionName: "deposit" });
   const gas = await c.estimateGas({ account: b.owner as Hex, to: token!.address as Hex, data, value }).catch((err: Error) => {
@@ -180,10 +181,12 @@ export async function evmOfferBuild(p: { symbol: string; id?: string | null; buy
   const t = parseTarget(p.symbol, p.id);
   if (!isTradableChain(t.chain)) throw new Error("Offers aren't available on this network yet.");
   if (!(p.price > 0) || p.price > 1e6) throw new Error("Enter an offer.");
+  // OpenSea only takes bids in steps of 0.0001.
+  if (Math.abs(Math.round(p.price * 1e4) - p.price * 1e4) > 1e-6) throw new Error("OpenSea takes offers in steps of 0.0001. Round your offer to 4 decimals.");
   if (!DAYS.includes(p.days as never)) throw new Error("Pick how long the offer lasts.");
   const fees = await offerToken(p.symbol);
   const token = fees.offerCurrency!;
-  const amount = parseUnits(p.price.toFixed(token.decimals), token.decimals);
+  const amount = parseUnits(decimalString(p.price, token.decimals), token.decimals);
   const c = evmPublicClient(t.chain);
   const buyer = p.buyer.toLowerCase();
   const [balance, conduit, counter] = await Promise.all([

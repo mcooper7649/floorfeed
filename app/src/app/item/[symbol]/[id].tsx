@@ -42,7 +42,7 @@ export default function ItemScreen() {
   const data = loaded?.key === key ? loaded.d ?? null : null;
   const error = loaded?.key === key ? loaded.error ?? null : null;
   const { wide, pad, maxWidth } = useLayout();
-  const { mode } = useTradeMode();
+  const { mode, canReal, setMode } = useTradeMode();
   const [buyOpen, setBuyOpen] = useState(false);
   const [sellOpen, setSellOpen] = useState(false);
   const [listOpen, setListOpen] = useState(false);
@@ -70,8 +70,9 @@ export default function ItemScreen() {
   // The connected Ethereum wallet holds this NFT: offer the in-app sale (the quote re-checks ownership on chain).
   // (Not for launchpad drops yet: in-app selling needs a tracked market.)
   const mine = !data.drop && data.chain !== 'solana' && !!evmWallet.address && data.owner?.wallet?.toLowerCase() === evmWallet.address;
-  // Offers on someone else's NFT (EVM, Real mode), listed or not.
-  const canOffer = !mine && !data.drop && data.chain !== 'solana' && mode === 'real';
+  // Offers on someone else's NFT (EVM), listed or not. Offers are real, so opening one leaves Paper mode.
+  const canOffer = !mine && !data.drop && data.chain !== 'solana';
+  const openOffer = () => { if (mode !== 'real' && canReal) setMode('real'); setOfferOpen(true); };
   const vsFloor = data.listing && data.collection.floor
     ? ((data.listing.price - data.collection.floor) / data.collection.floor) * 100 : null;
 
@@ -145,7 +146,7 @@ export default function ItemScreen() {
           </Pressable>
         )}
         {canOffer && (
-          <Pressable accessibilityRole="button" onPress={() => setOfferOpen(true)} style={data.listing ? s.secondary : s.primary}>
+          <Pressable accessibilityRole="button" onPress={openOffer} style={data.listing ? s.secondary : s.primary}>
             <Text style={data.listing ? s.secondaryTxt : s.primaryTxt}>Make an offer</Text>
           </Pressable>
         )}

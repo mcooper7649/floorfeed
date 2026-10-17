@@ -4,7 +4,7 @@ import {
 } from "viem";
 import { abstract, apeChain, arbitrum, base, hyperEvm, ink, mainnet, monad, polygon, robinhood, ronin } from "viem/chains";
 import { EVM_CHAINS, EVM_SALES, config, normalizeUnit } from "./config.ts";
-import { unitOf } from "./units.ts";
+import { decimalString, unitOf } from "./units.ts";
 import { db } from "./db.ts";
 import type Database from "better-sqlite3";
 import { getOsAccountNfts, getOsBestListing, getOsBestListings, getOsBestOffer, getOsFulfillment, getOsOfferFulfillment } from "./opensea.ts";
@@ -567,7 +567,7 @@ export async function evmUnwrapTx(b: { chain: string; owner: string; token: stri
   if (!t || !t.unwrappable) throw new Error("That token can't be unwrapped here.");
   const c = clients[b.chain] as unknown as PublicClient;
   const bal = await c.readContract({ address: t.address, abi: [ERC20_BALANCE], functionName: "balanceOf", args: [b.owner as Hex] });
-  const wad = b.amount != null ? parseEther(b.amount.toFixed(18)) : bal;
+  const wad = b.amount != null ? parseEther(decimalString(b.amount)) : bal;
   if (wad <= 0n || wad > bal) throw new Error(`You have ${formatEther(bal)} ${t.symbol} on ${EVM_CHAINS[b.chain].name}.`);
   const data = encodeFunctionData({ abi: [WETH_WITHDRAW], functionName: "withdraw", args: [wad] });
   const gas = await c.estimateGas({ account: b.owner as Hex, to: t.address, data }).catch((err: Error) => {

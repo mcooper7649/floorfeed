@@ -1,6 +1,7 @@
 import { formatEther, parseAbiItem, parseEther, type Hex } from "viem";
 import { EVM_CHAINS, EVM_SALES } from "./config.ts";
 import { db } from "./db.ts";
+import { decimalString } from "./units.ts";
 import { noteCancelled, noteListed } from "./history.ts";
 import { cancelOsOrder, getOsBestOffer, getOsFees, getOsMyListings, getOsNft, getOsOrder, postOsListing, type OsOrderParams } from "./opensea.ts";
 import { evmHolds, evmPublicClient, isTradableChain, osConduit } from "./trade-evm.ts";
@@ -180,7 +181,7 @@ export async function evmListBuild(p: { symbol: string; id: string; seller: stri
   const zoneCode = await c.getCode({ address: SIGNED_ZONE }).catch(() => undefined);
   const zone = (fees.requiredZone && /^0x[0-9a-fA-F]{40}$/.test(fees.requiredZone)) ? fees.requiredZone.toLowerCase()
     : zoneCode && zoneCode !== "0x" ? SIGNED_ZONE : ZERO;
-  const price = parseEther(p.price.toFixed(18));
+  const price = parseEther(decimalString(p.price));
   const now = Math.floor(Date.now() / 1000);
   const salt = BigInt(`0x${[...crypto.getRandomValues(new Uint8Array(32))].map((b) => b.toString(16).padStart(2, "0")).join("")}`);
   const parameters = {
