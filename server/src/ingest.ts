@@ -392,7 +392,8 @@ export function startIngest() {
   every(HOT_EVERY, refreshHot);
   every(config.statsPollMs, refreshPrices);
   every(24 * 3_600_000, discoverEvm);
-  every(3 * 3_600_000, discoverFresh); // newly minted projects that already trade
+  // Newly minted projects that already trade; after the daily pass has claimed what it tracks.
+  setTimeout(() => every(3 * 3_600_000, discoverFresh), 10 * 60_000).unref();
   every(config.statsPollMs, refreshEvmStats);
   every(config.activityPollMs, refreshEvmSales);
   // After the first backfill has had time to run.

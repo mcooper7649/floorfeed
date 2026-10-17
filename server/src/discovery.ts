@@ -1,4 +1,4 @@
-import { EVM_CHAINS, knownNames, normalizeUnit, syncEvmLists, type Category, type Chain, type EvmCollection } from "./config.ts";
+import { EVM_CHAINS, EVM_COLLECTIONS, knownNames, normalizeUnit, syncEvmLists, type Category, type Chain, type EvmCollection } from "./config.ts";
 import { db } from "./db.ts";
 import { fromOsChain, getOsCollectionMeta, getOsDrops, getOsTopCollections, getOsWeek, hasOsKey } from "./opensea.ts";
 import { refreshPrices, toUsd, usdPrice } from "./prices.ts";
@@ -85,6 +85,7 @@ export async function discoverEvm() {
 // like any discovered collection: 7 days after they stop qualifying.
 const FRESH_MIN_SALES_7D = 15;
 const FRESH_RANK = 100; // after each chain's top-volume picks
+const rowOf = db.prepare(`SELECT rank, seen_at FROM evm_discovered WHERE slug = ?`);
 
 export async function discoverFresh() {
   if (!hasOsKey()) return;
@@ -96,6 +97,10 @@ export async function discoverFresh() {
     const chain = fromOsChain(d.chain) as Chain;
     const cfg = (EVM_CHAINS as Record<string, (typeof EVM_CHAINS)[keyof typeof EVM_CHAINS]>)[chain];
     if (d.is_minting || !cfg?.discover) continue;
+    // Already tracked by hand or by the daily top-volume pass: that owns its row (category, rank).
+    const row = rowOf.get(d.collection_slug) as { rank: number; seen_at: number } | undefined;
+    if (EVM_COLLECTIONS.some((c) => c.slug === d.collection_slug && !c.auto)
+        || (row && row.rank < FRESH_RANK && row.seen_at >= now - KEEP_MS)) continue;
     const week = await getOsWeek(d.collection_slug).catch(() => null);
     const unit = normalizeUnit(week?.symbol);
     const floorUsd = week?.floor && unit ? toUsd(week.floor, unit) : null;
