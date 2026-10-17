@@ -3,9 +3,10 @@ import { useEffect, useState } from 'react';
 import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { BuySheet } from '@/components/buy-sheet';
+import { BuyOfferRow } from '@/components/buy-floor-button';
 import { EvmBuySheet } from '@/components/evm-buy-sheet';
 import { EvmOfferSheet } from '@/components/evm-offer-sheet';
-import { MODE_COLOR, ModeToggle } from '@/components/mode-toggle';
+import { ModeToggle } from '@/components/mode-toggle';
 import { NftImage } from '@/components/nft-image';
 import { C } from '@/constants/brand';
 import { CHAINS } from '@/constants/chains';
@@ -100,8 +101,8 @@ export function TradeBox({ data }: { data: CollectionDetail }) {
         {COUNTS.map((c) => {
           const disabled = real && c > 1;
           return (
-            <Pressable key={c} disabled={disabled} onPress={() => setCount(c)}
-              style={[s.count, n === c && { borderColor: MODE_COLOR[mode], backgroundColor: C.cardHi }, disabled && { opacity: 0.35 }]}>
+            <Pressable key={c} disabled={disabled} onPress={() => setCount(c)} accessibilityRole="tab" accessibilityState={{ selected: n === c, disabled }}
+              style={[s.count, n === c && s.countOn, disabled && { opacity: 0.35 }]}>
               <Text style={[s.countTxt, n === c && { color: C.text }]}>{c === 1 ? 'Floor' : `×${c}`}</Text>
             </Pressable>
           );
@@ -114,18 +115,10 @@ export function TradeBox({ data }: { data: CollectionDetail }) {
         {short && <Text style={T.caption}>Only {ladder.length} listings loaded; the rest are priced at the highest of them.</Text>}
         {real && <Text style={T.caption}>Real buys are one NFT at a time. Sweeps are paper-only for now.</Text>}
       </View>
-      <Pressable disabled={busy || floor == null || !userId} onPress={() => (real ? setSheet(true) : paper())}
-        style={({ pressed }) => [s.cta, { backgroundColor: MODE_COLOR[mode] }, (pressed || busy) && { opacity: 0.8 }]}>
-        <Text style={s.ctaTxt}>
-          {busy ? 'Buying…' : real ? `Buy floor${floor != null ? ` · ${sol(floor, 3, cur)}` : ''}` : `Paper buy ${n === 1 ? 'floor' : `×${n}`}`}
-        </Text>
-      </Pressable>
-      {evm && (
-        <Pressable accessibilityRole="button" onPress={() => { if (!real && canReal) setMode('real'); setOffering(true); }}
-          style={({ pressed }) => [s.offerBtn, pressed && { opacity: 0.8 }]}>
-          <Text style={s.offerTxt}>Make a collection offer</Text>
-        </Pressable>
-      )}
+      {/* The same buy row as the feed cards. Paper sweeps buy ×N at the total; real buys one at the floor. */}
+      <BuyOfferRow label={n === 1 ? 'Buy floor' : `Buy ${n}`} price={floor == null ? null : real ? floor : subtotal + fees} unit={cur}
+        busy={busy} disabled={floor == null || !userId} onBuy={() => (real ? setSheet(true) : void paper())}
+        onOffer={evm ? () => { if (!real && canReal) setMode('real'); setOffering(true); } : undefined} />
       {msg && <Text style={T.meta}>{msg}</Text>}
       {evm && offering && (
         <EvmOfferSheet symbol={data.symbol} listedAt={floor} open onClose={() => setOffering(false)}
@@ -329,14 +322,11 @@ export function PositionsPanel({ data }: { data: CollectionDetail }) {
 const s = StyleSheet.create({
   panel: { backgroundColor: C.card, borderRadius: 16, borderWidth: 1, borderColor: C.border, padding: 16, gap: 14 },
   panelHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  counts: { flexDirection: 'row', gap: 8 },
-  count: { flex: 1, borderRadius: 10, borderWidth: 1, borderColor: C.border, paddingVertical: 9, alignItems: 'center' },
-  countTxt: { ...T.label, fontWeight: '600' },
+  counts: { flexDirection: 'row', padding: 3, gap: 3, borderRadius: 10, backgroundColor: C.card, borderWidth: 1, borderColor: C.border },
+  count: { flex: 1, borderRadius: 7, paddingVertical: 7, alignItems: 'center' },
+  countOn: { backgroundColor: C.cardHi },
+  countTxt: { color: C.dim, fontSize: 13, fontWeight: '600' },
   line: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
-  cta: { borderRadius: 12, paddingVertical: 13, alignItems: 'center' },
-  ctaTxt: { ...T.button, color: C.accentInk },
-  offerBtn: { borderRadius: 12, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: C.border, backgroundColor: C.cardHi },
-  offerTxt: { ...T.button, color: C.text },
   secondary: { borderRadius: 12, paddingVertical: 11, alignItems: 'center', borderWidth: 1, borderColor: C.border, backgroundColor: C.cardHi },
   secondaryTxt: { ...T.button, color: C.text },
   tiles: { flexDirection: 'row', gap: 6 },

@@ -19,6 +19,48 @@ const tap = () => {
   if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 };
 
+// The buy row itself, shared by feed cards and the collection Trade box:
+// a mode-coloured buy button (label, PAPER tag, price with its dollars
+// stacked on the right) and an outlined Offer beside it.
+export function BuyOfferRow({ label, price, unit, busy, disabled, onBuy, onOffer }: {
+  label: string;           // 'Buy floor', 'Buy 3', …
+  price: number | null;    // what the button pays (in `unit`)
+  unit: string;
+  busy?: boolean;
+  disabled?: boolean;
+  onBuy: () => void;
+  onOffer?: () => void;    // shown when given (EVM chains)
+}) {
+  const toUsd = useUsd();
+  const { mode } = useTradeMode();
+  const paper = mode === 'paper';
+  const dollars = price != null ? toUsd(price, unit) : null;
+  return (
+    <View style={s.row}>
+      <Pressable accessibilityRole="button" accessibilityLabel={`${label}${price != null ? ` for ${amt(price, unit)}` : ''}`}
+        onPress={onBuy} disabled={busy || disabled}
+        style={({ pressed }) => [s.buy, { backgroundColor: MODE_COLOR[mode] }, (pressed || busy) && { opacity: 0.85 }, disabled && !busy && { opacity: 0.5 }]}>
+        <View style={s.buyLeft}>
+          <Text style={s.buyTxt} numberOfLines={1}>{busy ? 'Buying…' : label}</Text>
+          {paper && !busy && <Text style={s.tag}>PAPER</Text>}
+        </View>
+        {price != null && (
+          <View style={s.priceCol}>
+            <Text style={s.price} numberOfLines={1}>{amt(price, unit)}</Text>
+            {dollars && <Text style={s.priceUsd} numberOfLines={1}>{dollars}</Text>}
+          </View>
+        )}
+      </Pressable>
+      {onOffer && (
+        <Pressable accessibilityRole="button" accessibilityLabel="Make a collection offer" onPress={onOffer}
+          style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [s.offer, (pressed || hovered) && { backgroundColor: C.cardHi }]}>
+          <Text style={s.offerTxt}>Offer</Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
 // The one buy control for a collection, the same on desktop tiles and phone
 // cards: "Buy floor" with the floor price (and its dollars) in the mode's
 // colour, and Offer beside it on Ethereum-family chains. Paper mode buys the
@@ -26,7 +68,6 @@ const tap = () => {
 // Offer switches to Real first when it can.
 export function BuyFloorButton({ coll, copiedFrom }: { coll: FeedEvent['collection']; copiedFrom?: string }) {
   const { symbol, floor, currency } = coll;
-  const toUsd = useUsd();
   const { userId, bumpPortfolio } = useSession();
   const { mode, canReal, setMode } = useTradeMode();
   const [busy, setBusy] = useState(false);
@@ -62,31 +103,9 @@ export function BuyFloorButton({ coll, copiedFrom }: { coll: FeedEvent['collecti
     setSheet('offer');
   };
 
-  const dollars = floor != null ? toUsd(floor, currency) : null;
   return (
     <View style={{ gap: 6 }}>
-      <View style={s.row}>
-        <Pressable accessibilityRole="button" accessibilityLabel={`Buy floor${floor != null ? ` for ${amt(floor, currency)}` : ''}`}
-          onPress={buy} disabled={busy}
-          style={({ pressed }) => [s.buy, { backgroundColor: MODE_COLOR[mode] }, (pressed || busy) && { opacity: 0.85 }]}>
-          <View style={s.buyLeft}>
-            <Text style={s.buyTxt} numberOfLines={1}>{busy ? 'Buying…' : 'Buy floor'}</Text>
-            {paper && !busy && <Text style={s.tag}>PAPER</Text>}
-          </View>
-          {floor != null && (
-            <View style={s.priceCol}>
-              <Text style={s.price} numberOfLines={1}>{amt(floor, currency)}</Text>
-              {dollars && <Text style={s.priceUsd} numberOfLines={1}>{dollars}</Text>}
-            </View>
-          )}
-        </Pressable>
-        {evm && (
-          <Pressable accessibilityRole="button" accessibilityLabel="Make a collection offer" onPress={offer}
-            style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [s.offer, (pressed || hovered) && { backgroundColor: C.cardHi }]}>
-            <Text style={s.offerTxt}>Offer</Text>
-          </Pressable>
-        )}
-      </View>
+      <BuyOfferRow label="Buy floor" price={floor} unit={currency} busy={busy} onBuy={buy} onOffer={evm ? offer : undefined} />
       {note && <Text style={[T.caption, { color: note.ok ? C.up : C.down }]} numberOfLines={2}>{note.text}</Text>}
       {sheet === 'buy' && (coll.chain === 'solana'
         ? <BuySheet symbol={symbol} open onClose={() => setSheet(null)} onPaper={paperBuy} />
