@@ -366,5 +366,9 @@ export function feedEvents(opts: {
   const oldest = rows[rows.length - 1].block_time;
   const full = rows.length === depth;
   const page = full ? events.filter((e) => e.t > oldest) : events;
+  // A deep read can find more than a page's worth: send two pages' worth and
+  // continue from the last one sent (its second again; the app drops repeats).
+  const cap = opts.limit * 2;
+  if (page.length > cap) return { view: opts.view, events: page.slice(0, cap), next: page[cap - 1].t + 1 };
   return { view: opts.view, events: page, next: full ? oldest + 1 : null };
 }
