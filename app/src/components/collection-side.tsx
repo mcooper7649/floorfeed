@@ -115,8 +115,8 @@ export function TradeBox({ data }: { data: CollectionDetail }) {
         {short && <Text style={T.caption}>Only {ladder.length} listings loaded; the rest are priced at the highest of them.</Text>}
         {real && <Text style={T.caption}>Real buys are one NFT at a time. Sweeps are paper-only for now.</Text>}
       </View>
-      {/* The same buy row as the feed cards. Paper sweeps buy ×N at the total; real buys one at the floor. */}
-      <BuyOfferRow label={n === 1 ? 'Buy floor' : `Buy ${n}`} price={floor == null ? null : real ? floor : subtotal + fees} unit={cur}
+      {/* The same buy row as the feed cards, showing the Total above (real buys are one NFT: n = 1). */}
+      <BuyOfferRow label={n === 1 ? 'Buy floor' : `Buy ${n}`} price={floor == null ? null : subtotal + fees} unit={cur}
         busy={busy} disabled={floor == null || !userId} onBuy={() => (real ? setSheet(true) : void paper())}
         onOffer={evm ? () => { if (!real && canReal) setMode('real'); setOffering(true); } : undefined} />
       {msg && <Text style={T.meta}>{msg}</Text>}

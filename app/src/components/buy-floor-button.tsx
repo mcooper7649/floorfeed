@@ -19,9 +19,10 @@ const tap = () => {
   if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 };
 
-// The buy row itself, shared by feed cards and the collection Trade box:
-// a mode-coloured buy button (label, PAPER tag, price with its dollars
-// stacked on the right) and an outlined Offer beside it.
+// The buy row itself, shared by feed cards and the collection Trade box. One
+// bar, tinted in the mode's colour: the price and its dollars on the left in
+// plain text on dark (readable in both modes), then Offer (EVM chains) and the
+// filled Buy button. Only the short Buy label sits on the colour.
 export function BuyOfferRow({ label, price, unit, busy, disabled, onBuy, onOffer }: {
   label: string;           // 'Buy floor', 'Buy 3', …
   price: number | null;    // what the button pays (in `unit`)
@@ -33,30 +34,29 @@ export function BuyOfferRow({ label, price, unit, busy, disabled, onBuy, onOffer
 }) {
   const toUsd = useUsd();
   const { mode } = useTradeMode();
-  const paper = mode === 'paper';
+  const color = MODE_COLOR[mode];
   const dollars = price != null ? toUsd(price, unit) : null;
   return (
-    <View style={s.row}>
-      <Pressable accessibilityRole="button" accessibilityLabel={`${label}${price != null ? ` for ${amt(price, unit)}` : ''}`}
-        onPress={onBuy} disabled={busy || disabled}
-        style={({ pressed }) => [s.buy, { backgroundColor: MODE_COLOR[mode] }, (pressed || busy) && { opacity: 0.85 }, disabled && !busy && { opacity: 0.5 }]}>
-        <View style={s.buyLeft}>
-          <Text style={s.buyTxt} numberOfLines={1}>{busy ? 'Buying…' : label}</Text>
-          {paper && !busy && <Text style={s.tag}>PAPER</Text>}
+    <View style={[s.bar, { borderColor: color + '59' }]}>
+      <View style={s.priceCol}>
+        <Text style={[s.price, price == null && { color: C.dim }]} numberOfLines={1}>{price != null ? amt(price, unit) : 'No floor yet'}</Text>
+        <View style={s.subRow}>
+          {dollars && <Text style={s.usd} numberOfLines={1}>{dollars}</Text>}
+          <View style={[s.dot, { backgroundColor: color }]} />
+          <Text style={[s.modeTxt, { color }]}>{mode === 'real' ? 'Real' : 'Paper'}</Text>
         </View>
-        {price != null && (
-          <View style={s.priceCol}>
-            <Text style={s.price} numberOfLines={1}>{amt(price, unit)}</Text>
-            {dollars && <Text style={s.priceUsd} numberOfLines={1}>{dollars}</Text>}
-          </View>
-        )}
-      </Pressable>
+      </View>
       {onOffer && (
-        <Pressable accessibilityRole="button" accessibilityLabel="Make a collection offer" onPress={onOffer}
+        <Pressable accessibilityRole="button" accessibilityLabel="Make an offer" onPress={onOffer}
           style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [s.offer, (pressed || hovered) && { backgroundColor: C.cardHi }]}>
           <Text style={s.offerTxt}>Offer</Text>
         </Pressable>
       )}
+      <Pressable accessibilityRole="button" accessibilityLabel={`${label}${price != null ? ` for ${amt(price, unit)}` : ''}, ${mode} mode`}
+        onPress={onBuy} disabled={busy || disabled}
+        style={({ pressed }) => [s.buy, { backgroundColor: color }, (pressed || busy) && { opacity: 0.85 }, disabled && !busy && { opacity: 0.45 }]}>
+        <Text style={s.buyTxt} numberOfLines={1}>{busy ? 'Buying…' : label}</Text>
+      </Pressable>
     </View>
   );
 }
@@ -118,17 +118,18 @@ export function BuyFloorButton({ coll, copiedFrom }: { coll: FeedEvent['collecti
 }
 
 const s = StyleSheet.create({
-  row: { flexDirection: 'row', gap: 8, alignItems: 'stretch' },
-  buy: {
-    flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10,
-    borderRadius: 12, paddingVertical: 8, paddingHorizontal: 14, minHeight: 48,
+  bar: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 60,
+    paddingVertical: 6, paddingRight: 6, paddingLeft: 14, borderRadius: 14, borderWidth: 1, backgroundColor: C.bg,
   },
-  buyLeft: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 },
-  buyTxt: { ...T.button, color: C.accentInk },
-  tag: { fontSize: 9, fontWeight: '800', letterSpacing: 0.6, color: C.accentInk, opacity: 0.7, borderWidth: 1, borderColor: C.accentInk, borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 },
-  priceCol: { alignItems: 'flex-end', flexShrink: 1, minWidth: 0 },
-  price: { ...T.button, color: C.accentInk, fontVariant: ['tabular-nums'], lineHeight: 18 },
-  priceUsd: { fontSize: 11, lineHeight: 13, fontWeight: '600', color: C.accentInk, opacity: 0.7, fontVariant: ['tabular-nums'] },
-  offer: { borderRadius: 12, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.border, backgroundColor: C.card },
+  priceCol: { flex: 1, minWidth: 0, gap: 1 },
+  price: { fontSize: 17, lineHeight: 22, fontWeight: '700', color: C.text, fontVariant: ['tabular-nums'] },
+  subRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  usd: { fontSize: 13, lineHeight: 17, color: C.dim, fontVariant: ['tabular-nums'], flexShrink: 1 },
+  dot: { width: 6, height: 6, borderRadius: 3 },
+  modeTxt: { fontSize: 13, lineHeight: 17, fontWeight: '600' },
+  offer: { minHeight: 46, paddingHorizontal: 14, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   offerTxt: { ...T.button, color: C.text },
+  buy: { minHeight: 46, paddingHorizontal: 18, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  buyTxt: { ...T.button, fontWeight: '700', color: C.accentInk },
 });
