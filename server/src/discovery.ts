@@ -1,6 +1,6 @@
 import { EVM_CHAINS, knownNames, normalizeUnit, syncEvmLists, type Category, type Chain, type EvmCollection } from "./config.ts";
 import { db } from "./db.ts";
-import { getOsTopCollections, getOsWeek, hasOsKey } from "./opensea.ts";
+import { fromOsChain, getOsCollectionMeta, getOsDrops, getOsTopCollections, getOsWeek, hasOsKey } from "./opensea.ts";
 import { refreshPrices, toUsd, usdPrice } from "./prices.ts";
 
 // Keeps each EVM chain's busiest collections in FloorFeed automatically,
@@ -76,4 +76,39 @@ export async function discoverEvm() {
   }
   const n = loadDiscovered();
   console.log(`[discover] ${found} top collections this run, ${n} kept across EVM chains`);
+}
+
+// New projects reach the 7-day top lists days after they start trading, if
+// ever. Every few hours, OpenSea's recently minted drops that have finished
+// minting and already trade (the same floor and currency rules, a lower
+// sales bar) are added too, so "New" shows them within hours. They're kept
+// like any discovered collection: 7 days after they stop qualifying.
+const FRESH_MIN_SALES_7D = 15;
+const FRESH_RANK = 100; // after each chain's top-volume picks
+
+export async function discoverFresh() {
+  if (!hasOsKey()) return;
+  if (!usdPrice("ETH")) await refreshPrices();
+  const drops = await getOsDrops("recently_minted", 50).catch(() => []);
+  const now = Date.now();
+  let added = 0;
+  for (const d of drops) {
+    const chain = fromOsChain(d.chain) as Chain;
+    const cfg = (EVM_CHAINS as Record<string, (typeof EVM_CHAINS)[keyof typeof EVM_CHAINS]>)[chain];
+    if (d.is_minting || !cfg?.discover) continue;
+    const week = await getOsWeek(d.collection_slug).catch(() => null);
+    const unit = normalizeUnit(week?.symbol);
+    const floorUsd = week?.floor && unit ? toUsd(week.floor, unit) : null;
+    if (!week || !unit || !cfg.units.includes(unit) || !week.floor || week.sales7d < FRESH_MIN_SALES_7D
+        || (floorUsd != null && floorUsd < MIN_FLOOR_USD)) continue;
+    const meta = await getOsCollectionMeta(d.collection_slug).catch(() => null);
+    if (!meta || meta.disabled || meta.nsfw || SKIP_CATEGORIES.has(meta.category ?? "")) continue;
+    upsert.run({
+      slug: d.collection_slug, name: d.collection_name || d.collection_slug, chain,
+      category: CATEGORY[meta.category ?? ""] ?? "Utility", rank: FRESH_RANK + added, seen: now,
+    });
+    added++;
+  }
+  const n = loadDiscovered();
+  console.log(`[discover] ${added} freshly minted collections this run, ${n} kept across EVM chains`);
 }

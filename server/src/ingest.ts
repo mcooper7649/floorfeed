@@ -2,7 +2,7 @@ import { COLLECTIONS, EVM_CHAINS, EVM_COLLECTIONS, EVM_SALES, LIVE_TIER_SIZE, co
 import { invalidateUnits } from "./units.ts";
 import { db } from "./db.ts";
 import { PRIORITY, getCollectionMeta, getSales, getStats, type MeActivity } from "./magiceden.ts";
-import { discoverEvm } from "./discovery.ts";
+import { discoverEvm, discoverFresh } from "./discovery.ts";
 import { enrichFees } from "./fees.ts";
 import { getOsInfo, getOsSales, getOsStats, hasOsKey, type OsSale } from "./opensea.ts";
 import { refreshPrices, usdPrice } from "./prices.ts";
@@ -392,6 +392,7 @@ export function startIngest() {
   every(HOT_EVERY, refreshHot);
   every(config.statsPollMs, refreshPrices);
   every(24 * 3_600_000, discoverEvm);
+  every(3 * 3_600_000, discoverFresh); // newly minted projects that already trade
   every(config.statsPollMs, refreshEvmStats);
   every(config.activityPollMs, refreshEvmSales);
   // After the first backfill has had time to run.

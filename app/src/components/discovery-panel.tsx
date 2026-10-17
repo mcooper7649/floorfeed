@@ -6,6 +6,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { CollIcon } from '@/components/coll-icon';
 import { FlashBg, SalePulse, TickArrow, useBump, useTick } from '@/components/flash';
 import { PushCard } from '@/components/push-card';
+import { useQuickMenu } from '@/components/quick-menu';
 import { ThesisFeedRow } from '@/components/thesis';
 import { C } from '@/constants/brand';
 import { CHAINS } from '@/constants/chains';
@@ -36,6 +37,34 @@ const LISTS: { key: List; label: string }[] = [
   { key: 'smart', label: 'Smart money' }, { key: 'new', label: 'New' }, { key: 'minting', label: 'Minting' },
   { key: 'breakouts', label: 'Breakouts' }, { key: 'following', label: 'Following' },
 ];
+
+// How a list is ordered. 'default' is the list's own ranking (trending score,
+// newest first for New...); the rest re-sort whatever the list picked.
+type Sort = 'default' | 'vol24' | 'vol7' | 'sales' | 'change24' | 'change7' | 'floorHigh' | 'floorLow' | 'newest' | 'owners';
+const SORTS: { key: Exclude<Sort, 'default'>; label: string; by: (r: CollectionSummary) => number | null; asc?: boolean }[] = [
+  { key: 'vol24', label: 'Volume 24h', by: (r) => r.volume24hUsd },
+  { key: 'vol7', label: 'Volume 7d', by: (r) => r.volume7dUsd },
+  { key: 'sales', label: 'Sales 24h', by: (r) => r.sales24h },
+  { key: 'change24', label: 'Floor change 24h', by: (r) => r.change24hPct },
+  { key: 'change7', label: 'Floor change 7d', by: (r) => r.change7dPct },
+  { key: 'floorHigh', label: 'Floor: high to low', by: (r) => r.floorUsd },
+  { key: 'floorLow', label: 'Floor: low to high', by: (r) => r.floorUsd, asc: true },
+  { key: 'newest', label: 'Newest', by: (r) => (r.createdAt ? Date.parse(r.createdAt) : null) },
+  { key: 'owners', label: 'Most holders', by: (r) => r.owners },
+];
+const DEFAULT_SORT: Partial<Record<List, string>> = {
+  blue: 'Biggest 7d volume', trending: 'Trending score', new: 'Newest', breakouts: 'Biggest floor gain', smart: 'Most proven holders', following: 'Most followed holders',
+};
+// Collections without the value (no floor yet, no creation date) go last either way.
+function sortBy(rows: CollectionSummary[], sort: Sort) {
+  const sp = SORTS.find((x) => x.key === sort);
+  if (!sp) return rows;
+  return [...rows].sort((a, b) => {
+    const x = sp.by(a), y = sp.by(b);
+    if (x == null || y == null) return x == null ? (y == null ? 0 : 1) : -1;
+    return sp.asc ? x - y : y - x;
+  });
+}
 
 const ageDays = (date: string) => (Date.now() - Date.parse(`${date}T00:00:00Z`)) / 86_400_000;
 const usd = (n: number | null | undefined) =>
@@ -201,6 +230,9 @@ function useCollections() {
 // Also the phone's Discover view (Markets tab).
 export function CollectionsTab() {
   const [list, setList] = useState<List>('trending');
+  const [sorts, setSorts] = useState<Partial<Record<List, Sort>>>({});
+  const sort = sorts[list] ?? 'default';
+  const sortMenu = useQuickMenu();
   const rows = useCollections();
   const { watchlist, userId } = useSession();
   const [holders, setHolders] = useState<{ smart: HolderRow[]; following: HolderRow[] } | null>(null);
@@ -213,7 +245,8 @@ export function CollectionsTab() {
 
   const bySymbol = useMemo(() => new Map((rows ?? []).map((r) => [r.symbol, r])), [rows]);
 
-  const ranked = useMemo(() => {
+  const ranked = useMemo(() => sortBy(pick(), sort).slice(0, 40), [rows, list, watchlist, sort]); // eslint-disable-line react-hooks/exhaustive-deps
+  function pick(): CollectionSummary[] {
     if (!rows) return [];
     const vol24 = (r: CollectionSummary) => r.volume24hUsd ?? 0;
     switch (list) {
@@ -223,14 +256,14 @@ export function CollectionsTab() {
       case 'trending': return rows.filter((r) => vol24(r) >= 5_000 && (r.volume7dUsd ?? 0) > 0)
         .map((r) => ({ r, x: vol24(r) / ((r.volume7dUsd ?? 1) / 7) }))
         .sort((a, b) => b.x - a.x).slice(0, 40).map((v) => v.r);
-      // New & hot: created in the last 30 days and already in a chain's top-volume list.
+      // Created in the last 30 days and already trading (top-volume or freshly minted out), newest first.
       case 'new': return rows.filter((r) => r.createdAt && ageDays(r.createdAt) <= 30)
-        .sort((a, b) => (b.volume7dUsd ?? 0) - (a.volume7dUsd ?? 0)).slice(0, 40);
+        .sort((a, b) => Date.parse(b.createdAt!) - Date.parse(a.createdAt!));
       case 'breakouts': return rows.filter((r) => (r.change24hPct ?? 0) > 0 && (vol24(r) >= 2_000 || (r.volume7dUsd ?? 0) >= 20_000))
         .sort((a, b) => (b.change24hPct ?? 0) - (a.change24hPct ?? 0)).slice(0, 40);
       default: return [];
     }
-  }, [rows, list, watchlist]);
+  }
 
   const collRow = (c: CollectionSummary, sub: string, extra?: ReactNode) => (
     <Row key={c.symbol} left={<Art uri={c.image} name={c.name} chain={c.chain} />} title={c.name} extra={extra} sub={sub}
@@ -238,10 +271,14 @@ export function CollectionsTab() {
       change={pctText(c.change24hPct)} changeColor={pctColor(c.change24hPct)} onPress={() => toColl(c.symbol)}
       watch={c.floor} count={c.sales24h} />
   );
-  const holderRows = (hs: HolderRow[], what: string) => hs.flatMap((h) => {
-    const c = bySymbol.get(h.symbol);
-    return c ? [collRow(c, `${h.holders} ${what}`, <Faces wallets={h.wallets} total={h.holders} />)] : [];
-  });
+  const holderRows = (hs: HolderRow[], what: string) => {
+    const bySym = new Map(hs.map((h) => [h.symbol, h]));
+    const cs = hs.map((h) => bySymbol.get(h.symbol)).filter((c): c is CollectionSummary => !!c);
+    return sortBy(cs, sort).map((c) => {
+      const h = bySym.get(c.symbol)!;
+      return collRow(c, `${h.holders} ${what}`, <Faces wallets={h.wallets} total={h.holders} />);
+    });
+  };
 
   let body: ReactNode;
   if (list === 'minting') {
@@ -267,7 +304,7 @@ export function CollectionsTab() {
           ? <Notice tone="caution" title="Floors move fast" text="Biggest 24h floor gains among collections with real volume. Thin books can drop as quickly as they rise." />
           : null}
         {list === 'new' && ranked.length
-          ? <Notice tone="caution" title="Young collections" text="Created in the last 30 days and already among the busiest on their chain. New projects are the riskiest kind." />
+          ? <Notice tone="caution" title="Young collections" text="Created in the last 30 days and already trading: the busiest on their chain, plus projects that just minted out. New projects are the riskiest kind." />
           : null}
         {ranked.length ? ranked.map((c) => collRow(c, list === 'new'
           ? `🌱 ${Math.max(1, Math.round(ageDays(c.createdAt!)))}d old · ${usd(c.volume7dUsd)} vol 7d`
@@ -281,6 +318,21 @@ export function CollectionsTab() {
   return (
     <>
       <Chips items={LISTS} value={list} onChange={setList} />
+      {list !== 'minting' && (
+        <View style={s.sortRow}>
+          <Text style={s.sortLbl}>Sort</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="Sort this list" style={s.sortBtn}
+            onPress={(e) => sortMenu.open(e as never, [
+              { label: `${sort === 'default' ? '✓ ' : ''}${DEFAULT_SORT[list] ?? 'Default'}`, onPress: () => setSorts((x) => ({ ...x, [list]: 'default' })) },
+              'sep',
+              ...SORTS.map((o) => ({ label: `${sort === o.key ? '✓ ' : ''}${o.label}`, onPress: () => setSorts((x) => ({ ...x, [list]: o.key })) })),
+            ], 'Sort by')}>
+            <Text style={s.sortVal} numberOfLines={1}>{sort === 'default' ? DEFAULT_SORT[list] ?? 'Default' : SORTS.find((o) => o.key === sort)!.label}</Text>
+            <Text style={s.sortCaret}>▾</Text>
+          </Pressable>
+        </View>
+      )}
+      {sortMenu.node}
       {body}
     </>
   );
@@ -518,6 +570,11 @@ const s = StyleSheet.create({
   chip: { height: 24, paddingHorizontal: 8, borderRadius: 6, borderWidth: 1, borderColor: C.card, justifyContent: 'center' },
   chipOn: { backgroundColor: C.card },
   chipTxt: { color: C.dim, fontSize: 12, fontWeight: '700' },
+  sortRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingBottom: 8 },
+  sortLbl: { color: C.muted, fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4 },
+  sortBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, height: 24, paddingHorizontal: 8, borderRadius: 6, backgroundColor: C.card, flexShrink: 1 },
+  sortVal: { color: C.text, fontSize: 12, fontWeight: '600', flexShrink: 1 },
+  sortCaret: { color: C.dim, fontSize: 10 },
   list: { paddingHorizontal: 6, paddingBottom: 12 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 8, borderRadius: 8 },
   rowMid: { flex: 1, minWidth: 0, gap: 2 },

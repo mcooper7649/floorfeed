@@ -395,6 +395,12 @@ export async function getOsFees(slug: string) {
   };
 }
 
+// A collection's OpenSea category and flags (for discovery of new collections).
+export async function getOsCollectionMeta(slug: string) {
+  const c = await get<{ category?: string | null; is_disabled?: boolean; is_nsfw?: boolean }>(`/collections/${slug}`);
+  return { category: c.category ?? null, disabled: !!c.is_disabled, nsfw: !!c.is_nsfw };
+}
+
 // --- making offers (offer-evm.ts) ---
 
 // An offer on one NFT is posted like a listing; a collection offer is built
