@@ -208,7 +208,7 @@ const s = StyleSheet.create({
   },
   inputOpen: { borderColor: C.dim },
   menu: {
-    position: 'absolute', top: 46, left: 0, right: 0, minWidth: 340, maxHeight: 520, overflow: 'scroll',
+    position: 'absolute', top: 46, left: 0, right: 0, minWidth: 340, maxHeight: 520, overflow: 'auto',
     backgroundColor: C.card, borderRadius: 14, borderWidth: 1, borderColor: C.border, paddingVertical: 6,
     shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 24, shadowOffset: { width: 0, height: 12 },
   },

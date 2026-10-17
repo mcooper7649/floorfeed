@@ -47,6 +47,14 @@
         flex: 1;
       }
     </style>
+    <!-- Thin dark scrollbars to match the theme (Firefox: scrollbar-*; Chromium/Safari: ::-webkit-scrollbar). -->
+    <style>
+      * { scrollbar-width: thin; scrollbar-color: #33333F transparent; }
+      ::-webkit-scrollbar { width: 8px; height: 8px; }
+      ::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: #33333F; border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
+      ::-webkit-scrollbar-thumb:hover { background-color: #4A4A58; }
+    </style>
     <!-- Plain-HTML page summary the server puts in #root for crawlers; the app replaces it on boot. -->
     <style>
       #ssr { color: #F4F4F6; font: 15px/1.55 "Geist", system-ui, -apple-system, "Segoe UI", sans-serif; max-width: 860px; margin: 0 auto; padding: 24px 16px; overflow: auto; }
